@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "TourGo",
+    "slug": "tourgo-application",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#22C55E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tourgo.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#22C55E"
+      },
+      "package": "com.tourgo.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "scheme": "tourgo"
+  }
+}
