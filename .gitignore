@@ -10,3 +10,7 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Credentials and Local Configs
+src/config/env.ts
+test_photos_only.js

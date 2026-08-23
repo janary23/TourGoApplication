@@ -1,15 +1,94 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, RefreshControl, ImageBackground, Animated, Dimensions, Modal, Easing } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, RefreshControl, Animated, Dimensions, Modal } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockService, Trip, UserProfile } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
 import { useTheme } from '../../context/ThemeContext';
-import { useIsFocused } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
+import { getTrips, TripWithRole } from '../../services/tripService';
+import { supabase } from '../../services/supabase';
+import MascotGreeting from '../../components/home/MascotGreeting';
+import CalendarWidget from '../../components/home/CalendarWidget';
+import WeatherWidget from '../../components/home/WeatherWidget';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+interface DiscoveryItem {
+  id: string;
+  destination: string;
+  title: string;
+  badge: string;
+  distance: string;
+  location: string;
+  highlights: string[];
+  color: string;
+  image: string;
+  rating: number;
+}
+
+const DISCOVERIES: DiscoveryItem[] = [
+  {
+    id: 'disc-la-union',
+    rating: 4.7,
+    destination: 'La Union',
+    title: 'Surf, Sunsets & Coffee',
+    badge: 'Weekend escape',
+    distance: '2h 15m away',
+    location: 'San Juan, La Union',
+    highlights: ['Surf', 'Beach', 'Food'],
+    color: '#22C55E',
+    image: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'disc-el-nido',
+    rating: 4.9,
+    destination: 'El Nido, Palawan',
+    title: 'Island Hopping Adventure',
+    badge: 'Most popular',
+    distance: '1h 20m flight',
+    location: 'El Nido, Palawan',
+    highlights: ['Islands', 'Lagoon', 'Snorkel'],
+    color: '#38BDF8',
+    image: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'disc-siargao',
+    rating: 4.8,
+    destination: 'Siargao',
+    title: 'Surf & Island Life',
+    badge: 'Trending',
+    distance: '1h 30m flight',
+    location: 'General Luna, Siargao',
+    highlights: ['Surf', 'Islands', 'Nights'],
+    color: '#F59E0B',
+    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'disc-boracay',
+    rating: 4.6,
+    destination: 'Boracay',
+    title: 'White Sand & Sunset Sails',
+    badge: 'Beach party',
+    distance: '1h 15m flight',
+    location: 'Boracay, Aklan',
+    highlights: ['Beach', 'Water', 'Nightlife'],
+    color: '#EC4899',
+    image: 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'disc-baguio',
+    rating: 4.5,
+    destination: 'Baguio',
+    title: 'Mountain Retreat & Strawberries',
+    badge: 'Cool getaway',
+    distance: '4h drive',
+    location: 'Baguio City, Benguet',
+    highlights: ['Mountains', 'Cold', 'Coffee'],
+    color: '#A78BFA',
+    image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+  },
+];
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.60;
@@ -17,161 +96,56 @@ const CARD_SPACING = 8;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_SPACING;
 const HORIZONTAL_PADDING = (SCREEN_WIDTH - CARD_WIDTH) / 2 - CARD_SPACING / 2;
 
-
-interface TypingTextProps {
-  text: string;
-  delay?: number;
-  speed?: number;
-  onComplete?: () => void;
-  style?: any;
-  startTrigger?: boolean;
-}
-
-const TypingText: React.FC<TypingTextProps> = ({
-  text,
-  delay = 0,
-  speed = 50,
-  onComplete,
-  style,
-  startTrigger = false,
-}) => {
-  const [displayedText, setDisplayedText] = useState('');
-  const [complete, setComplete] = useState(false);
-
-  useEffect(() => {
-    if (!startTrigger) {
-      setDisplayedText('');
-      setComplete(false);
-      return;
-    }
-
-    let currentText = '';
-    let charIndex = 0;
-    let intervalId: any;
-
-    const timeoutId = setTimeout(() => {
-      intervalId = setInterval(() => {
-        if (charIndex < text.length) {
-          currentText += text[charIndex];
-          setDisplayedText(currentText);
-          charIndex++;
-        } else {
-          clearInterval(intervalId);
-          setComplete(true);
-          if (onComplete) onComplete();
-        }
-      }, speed);
-    }, delay);
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [text, startTrigger, delay, speed]);
-
-  return (
-    <Text style={style}>
-      {displayedText}
-      {!complete && displayedText.length > 0 && <Text style={{ fontWeight: '300' }}>|</Text>}
-    </Text>
-  );
-};
-
 export default function HomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const [profile, setProfile] = useState<UserProfile>(mockService.getCurrentUser());
-  const [trips, setTrips] = useState<Trip[]>(mockService.getTrips());
+  const { session, profile } = useAuth();
+  const [trips, setTrips] = useState<TripWithRole[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Widget state
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
-  const [calendarDate, setCalendarDate] = useState(new Date()); // Tracks month/year of expanded calendar
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date()); // Tracks tapped date in expanded calendar
-  const [isWeatherExpanded, setIsWeatherExpanded] = useState(false);
-  const [weatherTab, setWeatherTab] = useState<'home' | 'trip'>('trip');
   const hoverAnim = useRef(new Animated.Value(0)).current;
 
-  // Generates 42 days for calendar month grid (including padding from adjacent months)
-  const getDaysInMonthGrid = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const startDayOfWeek = firstDay.getDay(); // 0 (Sunday) to 6 (Saturday)
-    
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    const prevMonthTotalDays = new Date(year, month, 0).getDate();
-    
-    const grid = [];
-    
-    // Padding from previous month
-    for (let i = startDayOfWeek - 1; i >= 0; i--) {
-      grid.push({
-        day: prevMonthTotalDays - i,
-        month: month === 0 ? 11 : month - 1,
-        year: month === 0 ? year - 1 : year,
-        isCurrentMonth: false,
-      });
+  const loadData = async () => {
+    try {
+      const userTrips = await getTrips();
+      setTrips(userTrips);
+
+      if (session?.user?.id) {
+        const { data: tasks, error } = await supabase
+          .from('checklist_items')
+          .select('*, trips(title)')
+          .eq('is_completed', false)
+          .eq('assigned_to', session.user.id);
+
+        if (!error && tasks) {
+          setPendingTasks(tasks);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load home screen data:', e);
+    } finally {
+      setIsLoading(false);
     }
-    
-    // Days of current month
-    for (let i = 1; i <= totalDays; i++) {
-      grid.push({
-        day: i,
-        month: month,
-        year: year,
-        isCurrentMonth: true,
-      });
-    }
-    
-    // Padding from next month to fill 42 cells (6 rows of 7 days)
-    const remaining = 42 - grid.length;
-    for (let i = 1; i <= remaining; i++) {
-      grid.push({
-        day: i,
-        month: month === 11 ? 0 : month + 1,
-        year: month === 11 ? year + 1 : year,
-        isCurrentMonth: false,
-      });
-    }
-    
-    return grid;
   };
 
-  // Find if a specific date falls within any of the user's trips
-  const getTripForDate = (day: number, month: number, year: number) => {
-    const targetDate = new Date(year, month, day);
-    targetDate.setHours(0, 0, 0, 0);
-    
-    return trips.find(trip => {
-      const start = new Date(trip.startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(trip.endDate);
-      end.setHours(0, 0, 0, 0);
-      return targetDate >= start && targetDate <= end;
-    });
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-  useEffect(() => {
-    const unsubscribe = mockService.subscribe(() => {
-      setProfile(mockService.getCurrentUser());
-      setTrips(mockService.getTrips());
-    });
-    return unsubscribe;
-  }, []);
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+    await loadData();
+    setRefreshing(false);
   };
 
   const scrollX = useRef(new Animated.Value(0)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
 
-  const getUpcomingTrips = (): Trip[] => {
+  const getUpcomingTrips = (): TripWithRole[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return trips
@@ -180,75 +154,86 @@ export default function HomeScreen() {
   };
 
   const upcomingTrips = getUpcomingTrips();
+  const homeCityName = profile?.home_city || "Manila, Philippines";
 
-  // Dynamic Weather Database mapping (Home vs. Trip Destination)
-  const homeCityName = profile.homeCity || "Manila, Philippines";
-  const upcomingTrip = upcomingTrips[0];
-  const tripDestName = upcomingTrip ? upcomingTrip.destination : "El Nido, Palawan";
+  const [mascotClickCount, setMascotClickCount] = useState(0);
+  const [showAllForYou, setShowAllForYou] = useState(false);
 
-  interface CityWeather {
-    city: string;
-    temp: number;
-    condition: string;
-    conditionText: string;
-    icon: string;
-    humidity: number;
-    windSpeed: number;
-    uvIndex: string;
-    forecast: {
-      day: string;
-      tempMin: number;
-      tempMax: number;
-      condition: string;
+  const getForYouTodayItems = () => {
+    const list: {
+      id: string;
+      tripId?: string;
+      title: string;
+      description: string;
+      color: string;
       icon: string;
-    }[];
-  }
+      destinationUrl: string;
+    }[] = [];
 
-  const weatherData: Record<'home' | 'trip', CityWeather> = {
-    home: {
-      city: homeCityName,
-      temp: 29,
-      condition: 'rainy',
-      conditionText: 'Thunderstorms',
-      icon: 'thunderstorm-outline',
-      humidity: 85,
-      windSpeed: 16,
-      uvIndex: 'Low',
-      forecast: [
-        { day: 'Mon', tempMin: 25, tempMax: 30, condition: 'rainy', icon: 'thunderstorm-outline' },
-        { day: 'Tue', tempMin: 26, tempMax: 31, condition: 'cloudy', icon: 'cloudy-outline' },
-        { day: 'Wed', tempMin: 26, tempMax: 32, condition: 'sunny', icon: 'sunny-outline' },
-        { day: 'Thu', tempMin: 25, tempMax: 30, condition: 'rainy', icon: 'rain-outline' },
-        { day: 'Fri', tempMin: 26, tempMax: 31, condition: 'cloudy', icon: 'partly-sunny-outline' },
-      ]
-    },
-    trip: {
-      city: tripDestName,
-      temp: 28,
-      condition: 'sunny',
-      conditionText: 'Partly Sunny',
-      icon: 'partly-sunny-outline',
-      humidity: 72,
-      windSpeed: 12,
-      uvIndex: 'Very High',
-      forecast: [
-        { day: 'Mon', tempMin: 24, tempMax: 29, condition: 'sunny', icon: 'sunny-outline' },
-        { day: 'Tue', tempMin: 25, tempMax: 30, condition: 'sunny', icon: 'sunny-outline' },
-        { day: 'Wed', tempMin: 25, tempMax: 30, condition: 'sunny', icon: 'partly-sunny-outline' },
-        { day: 'Thu', tempMin: 24, tempMax: 29, condition: 'cloudy', icon: 'cloudy-outline' },
-        { day: 'Fri', tempMin: 25, tempMax: 30, condition: 'rainy', icon: 'rain-outline' },
-      ]
-    }
+    pendingTasks.forEach(task => {
+      list.push({
+        id: `action-${task.id}`,
+        tripId: task.trip_id,
+        title: task.trips?.title || 'Trip Task',
+        description: task.text,
+        color: '#22C55E',
+        icon: 'checkbox-outline',
+        destinationUrl: `/trip/${task.trip_id}`
+      });
+    });
+
+    return list;
   };
 
-  const activeWeather = weatherData[weatherTab];
-  const [activeIndex, setActiveIndex] = useState(0);
-  const loopData = React.useMemo(() => {
-    if (upcomingTrips.length === 0) return [];
-    return Array.from({ length: 30 }).flatMap(() => upcomingTrips);
-  }, [upcomingTrips]);
+  const getAgilitoText = () => {
+    const hour = now.getHours();
+    let timeGreeting = "Good morning";
+    if (hour >= 12 && hour < 17) timeGreeting = "Good afternoon";
+    else if (hour >= 17) timeGreeting = "Good evening";
 
-  const initialIndex = upcomingTrips.length > 0 ? upcomingTrips.length * 12 : 0;
+    const userName = profile?.name ? profile.name.split(' ')[0] : "traveler";
+    const line1 = `${timeGreeting}, ${userName} 👋`;
+
+    const totalPendingTasks = pendingTasks.length;
+    const messages = [];
+
+    const actionCount = getForYouTodayItems().length;
+    if (actionCount > 0) {
+      messages.push(`${timeGreeting}! You have ${actionCount} things to take care of today.`);
+    }
+
+    const activeTrip = upcomingTrips[0];
+    if (activeTrip) {
+      const tripName = activeTrip.destination.split(',')[0];
+      const start = new Date(activeTrip.startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const countdownDays = diffDays === 0 ? 'starts today' : (diffDays < 0 ? 'is in progress' : `${diffDays} days away`);
+      messages.push(`Your ${tripName} trip is ${countdownDays}.`);
+    }
+
+    if (totalPendingTasks > 0) {
+      const taskWord = totalPendingTasks === 1 ? 'one unfinished task' : `${totalPendingTasks} unfinished tasks`;
+      messages.push(`You have ${taskWord} across your trips.`);
+    }
+
+    messages.push("Everything looks good. You're ready for your next adventure.");
+
+    const messageIndex = mascotClickCount % messages.length;
+    const line2 = messages[messageIndex];
+
+    return { line1, line2 };
+  };
+
+  const { line1: agilitoLine1, line2: agilitoLine2 } = getAgilitoText();
+
+  const loopData = React.useMemo(() => {
+    if (DISCOVERIES.length === 0) return [];
+    return Array.from({ length: 30 }).flatMap(() => DISCOVERIES);
+  }, []);
+
+  const initialIndex = DISCOVERIES.length > 0 ? DISCOVERIES.length * 12 : 0;
 
   const snapOffsets = React.useMemo(() => {
     return loopData.map((_, index) => index * SNAP_INTERVAL);
@@ -256,62 +241,13 @@ export default function HomeScreen() {
 
   const flatListRef = useRef<any>(null);
   const [isPositioned, setIsPositioned] = useState(false);
-  const isFocused = useIsFocused();
-  const [isLanded, setIsLanded] = useState(false);
-  const [line1Complete, setLine1Complete] = useState(false);
-
-  useEffect(() => {
-    if (isFocused) {
-      setIsLanded(false);
-      setLine1Complete(false);
-
-      // Subscribe global callback to start typing when the global eagle lands
-      (global as any).onMascotLand = () => {
-        setIsLanded(true);
-      };
-    } else {
-      (global as any).onMascotLand = null;
-    }
-    return () => {
-      (global as any).onMascotLand = null;
-    };
-  }, [isFocused]);
-
-  useEffect(() => {
-    let hoverAnimation: Animated.CompositeAnimation | null = null;
-
-    if (isLanded) {
-      hoverAnimation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(hoverAnim, {
-            toValue: 1,
-            duration: 1600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(hoverAnim, {
-            toValue: 0,
-            duration: 1600,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      hoverAnimation.start();
-    } else {
-      hoverAnim.setValue(0);
-    }
-
-    return () => {
-      if (hoverAnimation) {
-        hoverAnimation.stop();
-      }
-    };
-  }, [isLanded]);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const listenerId = scrollX.addListener(({ value }) => {
       const idx = Math.round(value / SNAP_INTERVAL);
-      if (upcomingTrips.length > 0) {
-        const newActiveIndex = ((idx % upcomingTrips.length) + upcomingTrips.length) % upcomingTrips.length;
+      if (DISCOVERIES.length > 0) {
+        const newActiveIndex = ((idx % DISCOVERIES.length) + DISCOVERIES.length) % DISCOVERIES.length;
         setActiveIndex((current) => {
           if (newActiveIndex !== current) {
             return newActiveIndex;
@@ -326,7 +262,7 @@ export default function HomeScreen() {
   }, [upcomingTrips, SNAP_INTERVAL]);
 
   const handleLayout = () => {
-    if (!isPositioned && flatListRef.current && upcomingTrips.length > 0) {
+    if (!isPositioned && flatListRef.current && DISCOVERIES.length > 0) {
       const targetOffset = initialIndex * SNAP_INTERVAL;
       scrollX.setValue(targetOffset);
       setTimeout(() => {
@@ -337,103 +273,6 @@ export default function HomeScreen() {
       }, 100);
       setIsPositioned(true);
     }
-  };
-
-  const getCountdown = (startDateStr: string) => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const start = new Date(startDateStr); start.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Starts Today!';
-    if (diffDays < 0) return 'In Progress';
-    return `${diffDays} days to go`;
-  };
-
-  const getTripStats = (trip: Trip) => ({
-    pendingTasks: trip.checklist.filter(c => !c.completed).length,
-    announcements: trip.announcements.length,
-    expensesTotal: trip.expenses.reduce((sum, exp) => sum + exp.amount, 0),
-  });
-
-  // Build visible months: show 6 months centered around current
-  const getVisibleMonths = () => {
-    const result = [];
-    for (let i = -2; i <= 3; i++) {
-      const idx = ((now.getMonth() + i) % 12 + 12) % 12;
-      result.push(idx);
-    }
-    return result;
-  };
-  const visibleMonths = getVisibleMonths();
-
-  const hasTripInMonth = (mIdx: number) => {
-    return trips.some(t => {
-      const tripMonth = new Date(t.startDate).getMonth();
-      const tripYear = new Date(t.startDate).getFullYear();
-      return tripMonth === mIdx && tripYear === now.getFullYear();
-    });
-  };
-
-  const renderMiniCalendar = () => {
-    const year = now.getFullYear();
-    const daysInMonth = new Date(year, selectedMonth + 1, 0).getDate();
-    const firstDayIndex = new Date(year, selectedMonth, 1).getDay();
-
-    const cells = [];
-    // Add empty cells for padding
-    for (let i = 0; i < firstDayIndex; i++) {
-      cells.push({ id: `empty-${i}`, day: null });
-    }
-    // Add days of the month
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({ id: `day-${d}`, day: d });
-    }
-
-    // Chunk into rows of 7
-    const rows = [];
-    for (let i = 0; i < cells.length; i += 7) {
-      rows.push(cells.slice(i, i + 7));
-    }
-
-    return (
-      <View style={wStyles.calendarGrid}>
-        {/* Day rows containing dots only */}
-        {rows.map((row, rowIdx) => (
-          <View key={rowIdx} style={wStyles.dayRow}>
-            {row.map((cell) => {
-              if (cell.day === null) {
-                return <View key={cell.id} style={wStyles.dayCell} />;
-              }
-
-              const dayNum = cell.day;
-              // Check if day has a trip
-              const hasTrip = trips.some(t => {
-                const start = new Date(t.startDate); start.setHours(0, 0, 0, 0);
-                const end = new Date(t.endDate); end.setHours(0, 0, 0, 0);
-                const current = new Date(year, selectedMonth, dayNum); current.setHours(0, 0, 0, 0);
-                return current >= start && current <= end;
-              });
-
-              return (
-                <View key={cell.id} style={wStyles.dayCell}>
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: hasTrip ? '#22C55E' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)'),
-                    }}
-                  />
-                </View>
-              );
-            })}
-            {/* Fill trailing empty cells if row has less than 7 elements */}
-            {row.length < 7 && Array.from({ length: 7 - row.length }).map((_, idx) => (
-              <View key={`fill-${idx}`} style={wStyles.dayCell} />
-            ))}
-          </View>
-        ))}
-      </View>
-    );
   };
 
   return (
@@ -456,664 +295,241 @@ export default function HomeScreen() {
       </View>
 
       <Animated.ScrollView
-        style={{ zIndex: 1, overflow: 'visible' }}
+        style={{ zIndex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
         removeClippedSubviews={false}
       >
-        <View style={[styles.flatGreetingContainer, { overflow: 'visible', position: 'relative' }]}>
-          <View style={[styles.mascotImage, { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }]}>
-            {isLanded && (
-              <Animated.View
-                style={{
-                  transform: [
-                    {
-                      translateY: hoverAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -6],
-                      }),
-                    },
-                  ],
-                }}
-              >
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    if (typeof (global as any).openAiChat === 'function') {
-                      (global as any).openAiChat();
-                    }
-                  }}
-                >
-                  <Image
-                    source={require('../../../assets/images/EagleMascotS5.png')}
-                    style={{ width: 130, height: 130, resizeMode: 'contain' }}
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </View>
-
-          {isLanded ? (
-            <View
-              style={[
-                styles.greetingTextContainer,
-                {
-                  backgroundColor: colors.card,
-                  borderRadius: 16,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderWidth: 1,
-                  borderColor: colors.cardBorder,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 3,
-                  elevation: 1,
-                  position: 'relative',
-                  marginLeft: 10,
-                }
-              ]}
-            >
-              {/* Speech bubble arrow pointing left */}
-              <View
-                style={{
-                  position: 'absolute',
-                  left: -6,
-                  top: 24,
-                  width: 12,
-                  height: 12,
-                  backgroundColor: colors.card,
-                  transform: [{ rotate: '45deg' }],
-                  borderLeftWidth: 1,
-                  borderBottomWidth: 1,
-                  borderColor: colors.cardBorder,
-                  zIndex: 1,
-                }}
-              />
-              <TypingText
-                text="I'm Agilito."
-                startTrigger={isLanded}
-                speed={60}
-                onComplete={() => setLine1Complete(true)}
-                style={[styles.greetingUserText, { color: colors.text, fontSize: 24 }]}
-              />
-              <TypingText
-                text="Tap me to ask anything if you need help!"
-                startTrigger={line1Complete}
-                speed={40}
-                style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 4, fontWeight: '600' }]}
-              />
-            </View>
-          ) : (
-            <View style={styles.greetingTextContainer} />
-          )}
-        </View>
+        <MascotGreeting
+          colors={colors}
+          agilitoLine1={agilitoLine1}
+          agilitoLine2={agilitoLine2}
+          onMascotClick={() => {
+            setMascotClickCount(prev => prev + 1);
+            if (typeof (global as any).openAiChat === 'function') {
+              (global as any).openAiChat();
+            }
+          }}
+        />
 
         <View style={wStyles.widgetsRow}>
-          {/* Calendar Widget */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setIsCalendarExpanded(true)}
-            style={[wStyles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-          >
-            {/* Month Scroller */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ height: 28 }} contentContainerStyle={wStyles.monthScroller}>
-              {visibleMonths.map((mIdx) => {
-                const isSelected = mIdx === selectedMonth;
-                const showDot = hasTripInMonth(mIdx);
-                return (
+          <CalendarWidget
+            trips={trips}
+            colors={colors}
+            isDark={isDark}
+            router={router}
+          />
+          <WeatherWidget
+            upcomingTrips={upcomingTrips}
+            homeCityName={homeCityName}
+            colors={colors}
+            isDark={isDark}
+          />
+        </View>
+
+        {/* Section 1: For You Today */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <View style={[styles.sectionAccentBar, { backgroundColor: '#22C55E' }]} />
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>For You Today</Text>
+          </View>
+          {(() => {
+            const todayItems = getForYouTodayItems();
+            if (todayItems.length === 0) {
+              return (
+                <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.divider }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', color: colors.textMuted }}>All caught up! No pending tasks today.</Text>
+                </View>
+              );
+            }
+            const visibleItems = showAllForYou ? todayItems : todayItems.slice(0, 1);
+            return (
+              <View style={{ gap: 10 }}>
+                {visibleItems.map((item) => (
                   <TouchableOpacity
-                    key={mIdx}
-                    activeOpacity={0.7}
-                    onPress={() => setSelectedMonth(mIdx)}
+                    key={item.id}
+                    activeOpacity={0.8}
+                    onPress={() => router.push(item.destinationUrl as any)}
                     style={[
-                      wStyles.monthPill,
-                      isSelected && wStyles.monthPillSelected,
-                      { backgroundColor: isSelected ? '#22C55E' : 'transparent' },
+                      styles.attentionItemCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.cardBorder,
+                        borderLeftWidth: 3,
+                        borderLeftColor: item.color,
+                      }
                     ]}
                   >
-                    <View style={{ alignItems: 'center' }}>
-                      <Text style={[wStyles.monthPillText, { color: isSelected ? '#FFFFFF' : (isDark ? '#8E8E93' : '#6B7B8F') }]}>
-                        {MONTHS[mIdx]}
-                      </Text>
-                      {showDot && (
-                        <View
-                          style={{
-                            width: 4,
-                            height: 4,
-                            borderRadius: 2,
-                            backgroundColor: isSelected ? '#FFFFFF' : '#22C55E',
-                            marginTop: 2,
-                          }}
-                        />
-                      )}
+                    <View style={[styles.attentionIconContainer, { backgroundColor: item.color + '15' }]}>
+                      <Ionicons name={item.icon as any} size={20} color={item.color} />
                     </View>
+                    <View style={styles.attentionContent}>
+                      <Text style={[styles.attentionTripTitle, { color: colors.brand }]} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={[styles.attentionTitle, { color: colors.text }]} numberOfLines={1}>
+                        {item.description}
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
                   </TouchableOpacity>
+                ))}
+                {todayItems.length > 1 && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setShowAllForYou(prev => !prev)}
+                    style={styles.showAllBtn}
+                  >
+                    <Text style={[styles.showAllBtnText, { color: colors.brand }]}>
+                      {showAllForYou ? 'Show less' : `Show all (${todayItems.length})`}
+                    </Text>
+                    <Ionicons
+                      name={showAllForYou ? 'chevron-up' : 'chevron-down'}
+                      size={14}
+                      color={colors.brand}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })()}
+        </View>
+        {/* Section 3: You Might Like This (carousel) */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <View style={[styles.sectionAccentBar, { backgroundColor: '#A78BFA' }]} />
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>You Might Like This</Text>
+          </View>
+          <View style={{ width: SCREEN_WIDTH, marginHorizontal: -20 }}>
+            <Animated.FlatList
+              ref={flatListRef}
+              onLayout={handleLayout}
+              data={loopData}
+              keyExtractor={(item, index) => `${item.id}-${index}`}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: HORIZONTAL_PADDING,
+                paddingVertical: 10,
+              }}
+              getItemLayout={(data, index) => ({
+                length: SNAP_INTERVAL,
+                offset: HORIZONTAL_PADDING + SNAP_INTERVAL * index,
+                index,
+              })}
+              snapToOffsets={snapOffsets}
+              snapToAlignment="center"
+              decelerationRate="fast"
+              disableIntervalMomentum={true}
+              scrollEventThrottle={16}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                { useNativeDriver: true }
+              )}
+              onMomentumScrollEnd={(e) => {
+                const offset = e.nativeEvent.contentOffset.x;
+                const idx = Math.round(offset / SNAP_INTERVAL);
+                if (DISCOVERIES.length > 0) {
+                  setActiveIndex(idx % DISCOVERIES.length);
+                }
+              }}
+              renderItem={({ item, index }) => {
+                const inputRange = [
+                  (index - 1) * SNAP_INTERVAL,
+                  index * SNAP_INTERVAL,
+                  (index + 1) * SNAP_INTERVAL,
+                ];
+
+                const scale = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.8, 1, 0.8],
+                  extrapolate: 'clamp',
+                });
+
+                const opacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.45, 1, 0.45],
+                  extrapolate: 'clamp',
+                });
+
+                const translateY = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [24, 0, 24],
+                  extrapolate: 'clamp',
+                });
+
+                const rotateY = scrollX.interpolate({
+                  inputRange,
+                  outputRange: ['35deg', '0deg', '-35deg'],
+                  extrapolate: 'clamp',
+                });
+
+                return (
+                  <Animated.View
+                    style={{
+                      width: CARD_WIDTH,
+                      marginHorizontal: CARD_SPACING / 2,
+                      transform: [
+                        { perspective: 1000 },
+                        { scale },
+                        { translateY },
+                        { rotateY },
+                      ],
+                      opacity,
+                    }}
+                  >
+                    <Card onPress={() => router.push('/explore' as any)} style={StyleSheet.flatten([styles.heroCard, { marginVertical: 0, backgroundColor: colors.card, borderColor: colors.cardBorder }])}>
+                      <Image source={{ uri: item.image }} style={styles.heroImage} />
+                      <View style={styles.heroOverlay}>
+                        <View style={[styles.countdownBadge, { backgroundColor: item.color }]}>
+                          <Text style={styles.countdownText}>{item.badge}</Text>
+                        </View>
+                        <View style={[styles.ratingBadge, { backgroundColor: 'rgba(0,0,0,0.65)' }]}>
+                          <Ionicons name="star" size={13} color="#FBBF24" />
+                          <Text style={styles.ratingText}>{item.rating}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.heroDetails, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.heroDest, { color: item.color }]}>{item.destination}</Text>
+                        <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                        <View style={styles.dateContainer}>
+                          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+                          <Text style={[styles.heroDate, { color: colors.textMuted }]} numberOfLines={1}>{item.location}</Text>
+                          <Text style={[styles.distanceText, { color: colors.textMuted }]}> · {item.distance}</Text>
+                        </View>
+                        <View style={[styles.statsBanner, { backgroundColor: colors.surface }]}>
+                          {item.highlights.map((highlight, i) => (
+                            <View key={i} style={styles.statItem}>
+                              <Text style={[styles.statLbl, { color: item.color, fontSize: 11 }]}>{highlight}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    </Card>
+                  </Animated.View>
+                );
+              }}
+            />
+
+            <View style={styles.paginationContainer}>
+              {DISCOVERIES.map((_, index) => {
+                const isActive = activeIndex === index;
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.paginationDot,
+                      {
+                        backgroundColor: '#A78BFA',
+                        opacity: isActive ? 1 : 0.4,
+                        width: isActive ? 20 : 8,
+                      },
+                    ]}
+                  />
                 );
               })}
-            </ScrollView>
-
-            {/* Mini Calendar Grid */}
-            {renderMiniCalendar()}
-          </TouchableOpacity>
-
-          {/* Weather Widget */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-              // Default weather tab to trip if there's any upcoming trips
-              setWeatherTab(upcomingTrips.length > 0 ? 'trip' : 'home');
-              setIsWeatherExpanded(true);
-            }}
-            style={[wStyles.weatherWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-          >
-            <Text style={[wStyles.weatherLabel, { color: isDark ? '#8E8E93' : '#6B7B8F' }]}>Today</Text>
-            <Ionicons
-              name={activeWeather.icon as any}
-              size={24}
-              color={activeWeather.condition === 'sunny' ? '#F59E0B' : (activeWeather.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
-              style={{ marginVertical: 2 }}
-            />
-            <Text style={[wStyles.weatherTemp, { color: isDark ? '#F5F5F5' : '#2A3C57' }]}>{activeWeather.temp}°</Text>
-            <Text style={[wStyles.weatherLocation, { color: isDark ? '#8E8E93' : '#6B7B8F' }]} numberOfLines={1}>
-              {activeWeather.city.split(',')[0]}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Calendar Expansion Modal */}
-        <Modal
-          visible={isCalendarExpanded}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setIsCalendarExpanded(false)}
-        >
-          <TouchableOpacity
-            style={wStyles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsCalendarExpanded(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              style={[wStyles.modalContent, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-            >
-              <View style={wStyles.expandedContent}>
-                {/* Modal Title Header */}
-                <View style={wStyles.expandedHeader}>
-                  <Text style={[wStyles.expandedTitle, { color: colors.text }]}>Travel Calendar</Text>
-                  <TouchableOpacity onPress={() => setIsCalendarExpanded(false)} style={{ padding: 4 }}>
-                    <Ionicons name="close" size={22} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Calendar Navigation Header */}
-                <View style={wStyles.calendarNavHeader}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
-                    }}
-                    style={[wStyles.navBtn, { borderColor: colors.cardBorder }]}
-                  >
-                    <Ionicons name="chevron-back" size={18} color={colors.text} />
-                  </TouchableOpacity>
-                  
-                  <Text style={[wStyles.calendarMonthTitle, { color: colors.text }]}>
-                    {calendarDate.toLocaleString('default', { month: 'long' })} {calendarDate.getFullYear()}
-                  </Text>
-                  
-                  <TouchableOpacity
-                    onPress={() => {
-                      setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
-                    }}
-                    style={[wStyles.navBtn, { borderColor: colors.cardBorder }]}
-                  >
-                    <Ionicons name="chevron-forward" size={18} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Weekday Titles Row */}
-                <View style={wStyles.weekdayRow}>
-                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day, idx) => (
-                    <Text key={idx} style={[wStyles.weekdayLabel, { color: colors.textMuted }]}>
-                      {day}
-                    </Text>
-                  ))}
-                </View>
-
-                {/* Calendar Days Grid */}
-                <View style={wStyles.daysGridContainer}>
-                  {getDaysInMonthGrid(calendarDate).map((cell, idx) => {
-                    const hasTrip = getTripForDate(cell.day, cell.month, cell.year);
-                    const isSelected = selectedDate.getDate() === cell.day &&
-                                       selectedDate.getMonth() === cell.month &&
-                                       selectedDate.getFullYear() === cell.year;
-                    const isToday = now.getDate() === cell.day &&
-                                    now.getMonth() === cell.month &&
-                                    now.getFullYear() === cell.year;
-
-                    return (
-                      <TouchableOpacity
-                        key={idx}
-                        activeOpacity={0.8}
-                        onPress={() => {
-                          setSelectedDate(new Date(cell.year, cell.month, cell.day));
-                        }}
-                        style={[
-                          wStyles.dayCellWrapper,
-                          isSelected && [wStyles.selectedDayCell, { backgroundColor: '#22C55E' }],
-                          !isSelected && hasTrip && [wStyles.tripDayCell, { backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#E8FDF0' }],
-                          !isSelected && !hasTrip && isToday && [wStyles.todayDayCell, { borderColor: colors.brand }]
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            wStyles.dayCellText,
-                            {
-                              color: isSelected
-                                ? '#FFFFFF'
-                                : hasTrip
-                                  ? '#22C55E'
-                                  : cell.isCurrentMonth
-                                    ? colors.text
-                                    : (isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)')
-                            },
-                            isToday && !isSelected && { fontWeight: 'bold' }
-                          ]}
-                        >
-                          {cell.day}
-                        </Text>
-                        {hasTrip && !isSelected && (
-                          <View style={[wStyles.tripIndicatorDot, { backgroundColor: '#22C55E' }]} />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Selected Day Details Section */}
-                <View style={[wStyles.detailsContainer, { borderTopColor: colors.cardBorder }]}>
-                  <Text style={[wStyles.detailsDateHeader, { color: colors.textSecondary }]}>
-                    {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                  </Text>
-                  
-                  {(() => {
-                    const selectedTrip = getTripForDate(selectedDate.getDate(), selectedDate.getMonth(), selectedDate.getFullYear());
-                    if (selectedTrip) {
-                      return (
-                        <View style={[wStyles.tripDetailCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                          <Image source={{ uri: selectedTrip.image }} style={wStyles.tripDetailImage} />
-                          <View style={wStyles.tripDetailInfo}>
-                            <Text style={[wStyles.tripDetailDest, { color: colors.brand }]}>{selectedTrip.destination}</Text>
-                            <Text style={[wStyles.tripDetailTitle, { color: colors.text }]} numberOfLines={1}>
-                              {selectedTrip.title}
-                            </Text>
-                            <Text style={[wStyles.tripDetailDates, { color: colors.textMuted }]}>
-                              {new Date(selectedTrip.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{' '}
-                              {new Date(selectedTrip.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => {
-                              setIsCalendarExpanded(false);
-                              router.push(`/trip/${selectedTrip.id}`);
-                            }}
-                            style={wStyles.tripDetailGoBtn}
-                          >
-                            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    } else {
-                      return (
-                        <View style={wStyles.noTripsContainer}>
-                          <Ionicons name="calendar-outline" size={24} color={colors.textMuted} style={{ marginBottom: 4 }} />
-                          <Text style={[wStyles.noTripsText, { color: colors.textMuted }]}>No trips scheduled for this day</Text>
-                        </View>
-                      );
-                    }
-                  })()}
-                </View>
-              </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Weather Details Modal */}
-        <Modal
-          visible={isWeatherExpanded}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setIsWeatherExpanded(false)}
-        >
-          <TouchableOpacity
-            style={wStyles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsWeatherExpanded(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              style={[wStyles.modalContent, { backgroundColor: colors.card, borderColor: colors.cardBorder, height: 500 }]}
-            >
-              <View style={wStyles.expandedContent}>
-                {/* Modal Title Header */}
-                <View style={wStyles.expandedHeader}>
-                  <Text style={[wStyles.expandedTitle, { color: colors.text }]}>Destination Weather</Text>
-                  <TouchableOpacity onPress={() => setIsWeatherExpanded(false)} style={{ padding: 4 }}>
-                    <Ionicons name="close" size={22} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Weather Tabs Switcher */}
-                <View style={[wStyles.weatherTabContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setWeatherTab('home')}
-                    style={[
-                      wStyles.weatherTabBtn,
-                      weatherTab === 'home' && [wStyles.weatherTabBtnActive, { backgroundColor: colors.card }]
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        wStyles.weatherTabBtnText,
-                        { color: weatherTab === 'home' ? colors.brand : colors.textMuted }
-                      ]}
-                    >
-                      Home
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => setWeatherTab('trip')}
-                    style={[
-                      wStyles.weatherTabBtn,
-                      weatherTab === 'trip' && [wStyles.weatherTabBtnActive, { backgroundColor: colors.card }]
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        wStyles.weatherTabBtnText,
-                        { color: weatherTab === 'trip' ? colors.brand : colors.textMuted }
-                      ]}
-                    >
-                      Trip
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Current Weather Details Card */}
-                <View style={[wStyles.weatherMainCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                  <View style={wStyles.weatherMainInfo}>
-                    <Text style={[wStyles.weatherCityName, { color: colors.text }]} numberOfLines={1}>
-                      {activeWeather.city}
-                    </Text>
-                    <Text style={[wStyles.weatherMainCondText, { color: colors.textSecondary }]}>
-                      {activeWeather.conditionText}
-                    </Text>
-                    <Text style={[wStyles.weatherMainTempText, { color: colors.text }]}>
-                      {activeWeather.temp}°C
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={activeWeather.icon as any}
-                    size={60}
-                    color={activeWeather.condition === 'sunny' ? '#F59E0B' : (activeWeather.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
-                    style={wStyles.weatherMainIcon}
-                  />
-                </View>
-
-                {/* Quick Weather Metrics Grid */}
-                <View style={wStyles.weatherMetricsContainer}>
-                  <View style={[wStyles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                    <Ionicons name="water-outline" size={15} color="#38BDF8" />
-                    <Text style={[wStyles.weatherMetricVal, { color: colors.text }]}>{activeWeather.humidity}%</Text>
-                    <Text style={[wStyles.weatherMetricLabel, { color: colors.textMuted }]}>Humidity</Text>
-                  </View>
-                  <View style={[wStyles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                    <Ionicons name="speedometer-outline" size={15} color="#22C55E" />
-                    <Text style={[wStyles.weatherMetricVal, { color: colors.text }]}>{activeWeather.windSpeed} km/h</Text>
-                    <Text style={[wStyles.weatherMetricLabel, { color: colors.textMuted }]}>Wind Speed</Text>
-                  </View>
-                  <View style={[wStyles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                    <Ionicons name="sunny-outline" size={15} color="#F59E0B" />
-                    <Text style={[wStyles.weatherMetricVal, { color: colors.text }]}>{activeWeather.uvIndex}</Text>
-                    <Text style={[wStyles.weatherMetricLabel, { color: colors.textMuted }]}>UV Index</Text>
-                  </View>
-                </View>
-
-                {/* 5-Day Forecast Header */}
-                <Text style={[wStyles.forecastHeaderTitle, { color: colors.text }]}>5-Day Forecast</Text>
-
-                {/* 5-Day Forecast List */}
-                <View style={wStyles.forecastList}>
-                  {activeWeather.forecast.map((fc, index) => (
-                    <View key={index} style={wStyles.forecastRow}>
-                      <Text style={[wStyles.forecastDayName, { color: colors.textSecondary }]}>{fc.day}</Text>
-                      <View style={wStyles.forecastMidSection}>
-                        <Ionicons
-                          name={fc.icon as any}
-                          size={16}
-                          color={fc.condition === 'sunny' ? '#F59E0B' : (fc.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text style={[wStyles.forecastCondText, { color: colors.textMuted }]}>
-                          {fc.condition === 'sunny' ? 'Sunny' : (fc.condition === 'rainy' ? 'Rainy' : 'Cloudy')}
-                        </Text>
-                      </View>
-                      <View style={wStyles.forecastTempRange}>
-                        <Text style={[wStyles.forecastTempText, { color: colors.textMuted, textAlign: 'right', width: 22 }]}>
-                          {fc.tempMin}°
-                        </Text>
-                        {/* Custom temperature slide track */}
-                        <View style={[wStyles.forecastTempBarTrack, { backgroundColor: colors.divider }]}>
-                          <View style={[wStyles.forecastTempBarFill, { backgroundColor: '#22C55E' }]} />
-                        </View>
-                        <Text style={[wStyles.forecastTempText, { color: colors.text, fontWeight: 'bold', width: 22 }]}>
-                          {fc.tempMax}°
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
-
-        {upcomingTrips.length > 0 ? (
-          <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Upcoming Trips</Text>
-            <View style={{ width: SCREEN_WIDTH, marginHorizontal: -20 }}>
-              <Animated.FlatList
-                ref={flatListRef}
-                onLayout={handleLayout}
-                data={loopData}
-                keyExtractor={(item, index) => `${item.id}-${index}`}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingHorizontal: HORIZONTAL_PADDING,
-                  paddingVertical: 10,
-                }}
-                getItemLayout={(data, index) => ({
-                  length: SNAP_INTERVAL,
-                  offset: HORIZONTAL_PADDING + SNAP_INTERVAL * index,
-                  index,
-                })}
-                snapToOffsets={snapOffsets}
-                snapToAlignment="center"
-                decelerationRate="fast"
-                disableIntervalMomentum={true}
-                scrollEventThrottle={16}
-                onScroll={Animated.event(
-                  [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                  { useNativeDriver: true }
-                )}
-                onMomentumScrollEnd={(e) => {
-                  const offset = e.nativeEvent.contentOffset.x;
-                  const idx = Math.round(offset / SNAP_INTERVAL);
-                  if (upcomingTrips.length > 0) {
-                    setActiveIndex(idx % upcomingTrips.length);
-                  }
-                }}
-                renderItem={({ item, index }) => {
-                  const inputRange = [
-                    (index - 1) * SNAP_INTERVAL,
-                    index * SNAP_INTERVAL,
-                    (index + 1) * SNAP_INTERVAL,
-                  ];
-
-                  const scale = scrollX.interpolate({
-                    inputRange,
-                    outputRange: [0.8, 1, 0.8],
-                    extrapolate: 'clamp',
-                  });
-
-                  const opacity = scrollX.interpolate({
-                    inputRange,
-                    outputRange: [0.45, 1, 0.45],
-                    extrapolate: 'clamp',
-                  });
-
-                  const translateY = scrollX.interpolate({
-                    inputRange,
-                    outputRange: [24, 0, 24],
-                    extrapolate: 'clamp',
-                  });
-
-                  const rotateY = scrollX.interpolate({
-                    inputRange,
-                    outputRange: ['35deg', '0deg', '-35deg'],
-                    extrapolate: 'clamp',
-                  });
-
-                  return (
-                    <Animated.View
-                      style={{
-                        width: CARD_WIDTH,
-                        marginHorizontal: CARD_SPACING / 2,
-                        transform: [
-                          { perspective: 1000 },
-                          { scale },
-                          { translateY },
-                          { rotateY },
-                        ],
-                        opacity,
-                      }}
-                    >
-                      <Card onPress={() => router.push(`/trip/${item.id}`)} style={StyleSheet.flatten([styles.heroCard, { marginVertical: 0 }])}>
-                        <Image source={{ uri: item.image }} style={styles.heroImage} />
-                        <View style={styles.heroOverlay}>
-                          <View style={styles.countdownBadge}>
-                            <Text style={styles.countdownText}>{getCountdown(item.startDate)}</Text>
-                          </View>
-                          <View style={styles.roleBadge}>
-                            <Text style={styles.roleText}>{item.role === 'organizer' ? 'Organizer' : 'Member'}</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.heroDetails, { backgroundColor: colors.card }]}>
-                          <Text style={[styles.heroDest, { color: colors.brand }]}>{item.destination}</Text>
-                          <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                          <View style={styles.dateContainer}>
-                            <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-                            <Text style={[styles.heroDate, { color: colors.textMuted }]}>
-                              {new Date(item.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{' '}
-                              {new Date(item.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </Text>
-                          </View>
-                          <View style={[styles.statsBanner, { backgroundColor: colors.surface }]}>
-                            {item.features.announcements && (
-                              <View style={styles.statItem}>
-                                <Ionicons name="megaphone-outline" size={18} color={colors.brand} />
-                                <Text style={[styles.statVal, { color: colors.text }]}>{getTripStats(item).announcements}</Text>
-                                <Text style={[styles.statLbl, { color: colors.textMuted }]}>Alerts</Text>
-                              </View>
-                            )}
-                            {item.features.checklist && (
-                              <View style={styles.statItem}>
-                                <Ionicons name="checkbox-outline" size={18} color="#38BDF8" />
-                                <Text style={[styles.statVal, { color: colors.text }]}>{getTripStats(item).pendingTasks}</Text>
-                                <Text style={[styles.statLbl, { color: colors.textMuted }]}>Tasks</Text>
-                              </View>
-                            )}
-                            {item.features.split_expenses && (
-                              <View style={styles.statItem}>
-                                <Ionicons name="wallet-outline" size={18} color="#38BDF8" />
-                                <Text style={[styles.statVal, { color: colors.text }]}>₱{(getTripStats(item).expensesTotal / 1000).toFixed(0)}k</Text>
-                                <Text style={[styles.statLbl, { color: colors.textMuted }]}>Expenses</Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      </Card>
-                    </Animated.View>
-                  );
-                }}
-              />
-
-              <View style={styles.paginationContainer}>
-                {upcomingTrips.map((_, index) => {
-                  const isActive = activeIndex === index;
-                  return (
-                    <View
-                      key={index}
-                      style={[
-                        styles.paginationDot,
-                        {
-                          backgroundColor: '#22C55E',
-                          opacity: isActive ? 1 : 0.4,
-                          width: isActive ? 20 : 8,
-                        },
-                      ]}
-                    />
-                  );
-                })}
-              </View>
             </View>
-          </View>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Image source={require('../../../assets/images/EagleMascotS5.png')} style={{ width: 140, height: 140, resizeMode: 'contain' }} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips planned yet</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-              Start organizing a new adventure or join your group's trip right away!
-            </Text>
-            <View style={styles.emptyActions}>
-              <Button title="Create a Trip" onPress={() => router.push('/trip/create')} style={styles.actionBtn} />
-              <Button title="Join a Trip" onPress={() => router.push('/trip/join')} variant="outline" style={styles.actionBtn} />
-            </View>
-          </View>
-        )}
-
-        <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Overview</Text>
-          <View style={styles.overviewRow}>
-            <Card style={StyleSheet.flatten([styles.overviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }])} shadow={true}>
-              <Ionicons name="ribbon-outline" size={24} color={colors.brand} />
-              <Text style={[styles.overviewCount, { color: colors.text }]}>{trips.filter(t => t.role === 'organizer').length}</Text>
-              <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Trips Organized</Text>
-            </Card>
-            <Card style={StyleSheet.flatten([styles.overviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }])} shadow={true}>
-              <Ionicons name="people-outline" size={24} color="#38BDF8" />
-              <Text style={[styles.overviewCount, { color: colors.text }]}>{trips.filter(t => t.role === 'member').length}</Text>
-              <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Trips Joined</Text>
-            </Card>
-          </View>
-        </View>
-
-        <View style={[styles.ctaCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-          <View style={styles.ctaContent}>
-            <View style={styles.ctaTextContainer}>
-              <Text style={[styles.ctaTitle, { color: '#38BDF8' }]}>Want to test the App?</Text>
-              <Text style={[styles.ctaSub, { color: colors.textSecondary }]}>
-                Navigate to the "Trips" tab below to create mock trips with custom features, or join one.
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.ctaCircleBtn} onPress={() => router.push('/trips')}>
-              <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
         </View>
       </Animated.ScrollView>
@@ -1505,7 +921,7 @@ const styles = StyleSheet.create({
   },
   newTripIcon: { marginRight: 4 },
   newTripPillText: { fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
-  scrollContent: { padding: 20, paddingBottom: 40 },
+  scrollContent: { padding: 20, paddingBottom: 110 },
   flatGreetingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingHorizontal: 4, zIndex: 9999, elevation: 9999 },
   mascotImage: { width: 130, height: 130, resizeMode: 'contain', marginRight: 16, zIndex: 10000, elevation: 10000 },
   greetingTextContainer: { flex: 1 },
@@ -1520,31 +936,86 @@ const styles = StyleSheet.create({
   countdownText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
   roleBadge: { backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
   roleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  ratingBadge: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, gap: 4 },
+  ratingText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
   heroDetails: { padding: 12 },
   heroDest: { fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   heroTitle: { fontSize: 20, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', marginTop: 4, marginBottom: 8 },
   dateContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   heroDate: { fontSize: 14, marginLeft: 6 },
+  distanceText: { fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', marginLeft: 2 },
   statsBanner: { flexDirection: 'row', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, marginBottom: 8 },
   statItem: { flex: 1, alignItems: 'center' },
   statVal: { fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', marginTop: 4 },
   statLbl: { fontSize: 10, marginTop: 2 },
   heroButton: { marginTop: 4 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyTitle: { fontFamily: 'DMSerifDisplay-Regular', fontWeight: 'normal', fontSize: 20, marginTop: 16, marginBottom: 8 },
-  emptySub: { fontSize: 14, textAlign: 'center', paddingHorizontal: 30, lineHeight: 20, marginBottom: 24 },
-  emptyActions: { flexDirection: 'row', width: '100%', justifyContent: 'center' },
-  actionBtn: { flex: 1, marginHorizontal: 8, maxWidth: 160 },
-  overviewRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  overviewCard: { flex: 0.48, alignItems: 'center', paddingVertical: 16, borderWidth: 1 },
-  overviewCount: { fontSize: 24, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', marginTop: 8 },
-  overviewLabel: { fontSize: 12, marginTop: 4 },
-  ctaCard: { padding: 16, marginTop: 8, borderRadius: 16 },
-  ctaContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  ctaTextContainer: { flex: 0.85 },
-  ctaTitle: { fontFamily: 'DMSerifDisplay-Regular', fontWeight: 'normal', fontSize: 16, marginBottom: 4 },
-  ctaSub: { fontSize: 13, lineHeight: 18 },
-  ctaCircleBtn: { backgroundColor: '#38BDF8', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  noAttentionContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  noAttentionText: {
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans-Medium',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  attentionItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  attentionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  attentionContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  attentionTripTitle: {
+    fontSize: 10,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  attentionTitle: {
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+  },
+  attentionDesc: {
+    fontSize: 11,
+    fontFamily: 'PlusJakartaSans-Medium',
+    marginTop: 2,
+  },
+  showAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginTop: 2,
+  },
+  showAllBtnText: {
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+  },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1556,5 +1027,17 @@ const styles = StyleSheet.create({
     height: 8,
     width: 8,
     borderRadius: 4,
+  },
+  /* Section Title Accent Bar */
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  sectionAccentBar: {
+    width: 4,
+    height: 20,
+    borderRadius: 2,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Image, View } from 'react-native';
+import { Image, View, StyleSheet } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 const TabIcon = ({ name, color, focused }: { name: string; color: string; focused: boolean }) => {
@@ -30,32 +30,32 @@ export default function TabLayout() {
         tabBarShowLabel: true,
         tabBarStyle: {
           position: 'absolute',
-          bottom: Platform.OS === 'ios' ? 24 : 16,
-          left: 36,
-          right: 36,
+          bottom: 20,
+          left: 0,
+          right: 0,
+          marginHorizontal: 16,
           height: 64,
-          borderRadius: 32,
-          backgroundColor: colors.card,
-          borderTopWidth: 0,
+          borderRadius: 24,
+          backgroundColor: isDark ? 'rgba(30, 30, 30, 0.92)' : 'rgba(255, 255, 255, 0.92)',
           borderWidth: 1,
           borderColor: colors.cardBorder,
-          paddingBottom: 0,
-          paddingTop: 0,
-          paddingHorizontal: 12,
-          elevation: 10,
-          shadowColor: '#000000',
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.15,
-          shadowRadius: 10,
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 8,
+          paddingBottom: 4,
+          paddingTop: 0,
         },
         tabBarLabelStyle: {
-          fontFamily: 'PlusJakartaSans-Medium',
-          fontSize: 9,
+          fontFamily: 'PlusJakartaSans-Bold',
+          fontSize: 10,
+          fontWeight: '700',
           marginBottom: 4,
-          marginTop: -3,
+          textTransform: 'lowercase',
         },
         tabBarIconStyle: {
-          marginTop: 4,
+          marginTop: 2,
         },
         headerStyle: {
           backgroundColor: colors.header,
@@ -102,7 +102,7 @@ export default function TabLayout() {
         options={{
           title: 'Explore',
           tabBarLabel: 'Explore',
-          headerTitle: 'Discover Destinations',
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'compass' : 'compass-outline'} color={color} focused={focused} />
           ),
@@ -113,7 +113,7 @@ export default function TabLayout() {
         options={{
           title: 'Activity',
           tabBarLabel: 'Activity',
-          headerTitle: 'Group Updates',
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'notifications' : 'notifications-outline'} color={color} focused={focused} />
           ),
@@ -124,7 +124,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarLabel: 'Profile',
-          headerTitle: 'My Profile',
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
           ),

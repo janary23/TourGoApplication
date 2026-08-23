@@ -65,16 +65,41 @@ export default function TripSettingsScreen() {
     }
   };
 
-  const featuresMeta = [
-    { key: 'itinerary', label: 'Itinerary Schedule', desc: 'Timeline schedule of daily spots and activities', icon: 'calendar' },
-    { key: 'split_expenses', label: 'Split Expenses', desc: 'Settle bills, divide costs, and track balances', icon: 'wallet' },
-    { key: 'checklist', label: 'Group Checklist', desc: 'Track group tasks, to-dos and assignments', icon: 'list-circle' },
-    { key: 'announcements', label: 'Announcements Board', desc: 'Pin important organizer alerts for everyone', icon: 'megaphone' },
-    { key: 'polls', label: 'Group Polls', desc: 'Vote together on restaurants, schedules, and plans', icon: 'bar-chart' },
-    { key: 'group_chat', label: 'Group Chat Room', desc: 'Realtime chat board for coordination', icon: 'chatbubbles' },
-    { key: 'attendance', label: 'Attendance Check-in', desc: 'Let members check-in at locations or terminals', icon: 'checkbox' },
-    { key: 'documents', label: 'Documents Locker', desc: 'Keep flight vouchers, hotel PDFs and tickets close', icon: 'document-attach' },
-    { key: 'guardian_mode', label: 'Guardian / Location Mode', desc: 'Track live locations of participants (Beta)', icon: 'shield-checkmark' },
+  const featureGroups = [
+    {
+      group: 'PLANNING',
+      features: [
+        { key: 'itinerary', label: 'Itinerary', desc: 'Timeline schedule of daily spots and activities', icon: 'calendar' },
+        { key: 'checklist', label: 'Checklist', desc: 'Track group tasks, to-dos and assignments', icon: 'list-circle' },
+      ],
+    },
+    {
+      group: 'GROUP',
+      features: [
+        { key: 'group_chat', label: 'Chat', desc: 'Realtime chat board for coordination', icon: 'chatbubbles' },
+        { key: 'polls', label: 'Polls', desc: 'Vote together on restaurants, schedules, and plans', icon: 'bar-chart' },
+        { key: 'announcements', label: 'Announcements', desc: 'Pin important organizer alerts for everyone', icon: 'megaphone' },
+      ],
+    },
+    {
+      group: 'MONEY',
+      features: [
+        { key: 'split_expenses', label: 'Expenses', desc: 'Settle bills, divide costs, and track balances', icon: 'wallet' },
+      ],
+    },
+    {
+      group: 'FILES',
+      features: [
+        { key: 'documents', label: 'Documents', desc: 'Keep flight vouchers, hotel PDFs and tickets close', icon: 'document-attach' },
+      ],
+    },
+    {
+      group: 'SAFETY',
+      features: [
+        { key: 'attendance', label: 'Attendance Check-in', desc: 'Let members check-in at locations or terminals', icon: 'checkbox' },
+        { key: 'guardian_mode', label: 'Guardian / Location', desc: 'Track live locations of participants (Beta)', icon: 'shield-checkmark' },
+      ],
+    },
   ];
 
   return (
@@ -93,35 +118,40 @@ export default function TripSettingsScreen() {
           <Text style={styles.tripSubtitle}>Destination: {trip.destination}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Toggle Dashboard Features</Text>
+        <Text style={styles.sectionTitle}>Trip Features</Text>
         <Text style={styles.sectionSub}>
           Turn on or off planning components dynamically. Disabled features will immediately vanish from all participants' screens.
         </Text>
 
-        {featuresMeta.map(feat => {
-          const isEnabled = features[feat.key as keyof TripFeatureSettings];
-          return (
-            <Card key={feat.key} style={styles.featureCard} shadow={false}>
-              <View style={styles.featureItem}>
-                <View style={[styles.iconContainer, isEnabled && styles.iconContainerActive]}>
-                  <Ionicons name={feat.icon as any} size={20} color={isEnabled ? '#38BDF8' : '#757575'} />
-                </View>
-                
-                <View style={styles.textContainer}>
-                  <Text style={styles.label}>{feat.label}</Text>
-                  <Text style={styles.desc}>{feat.desc}</Text>
-                </View>
+        {featureGroups.map(group => (
+          <View key={group.group} style={styles.featureGroup}>
+            <Text style={styles.featureGroupLabel}>{group.group}</Text>
+            {group.features.map(feat => {
+              const isEnabled = features[feat.key as keyof TripFeatureSettings];
+              return (
+                <Card key={feat.key} style={styles.featureCard} shadow={false}>
+                  <View style={styles.featureItem}>
+                    <View style={[styles.iconContainer, isEnabled && styles.iconContainerActive]}>
+                      <Ionicons name={feat.icon as any} size={20} color={isEnabled ? '#38BDF8' : '#757575'} />
+                    </View>
+                    
+                    <View style={styles.textContainer}>
+                      <Text style={styles.label}>{feat.label}</Text>
+                      <Text style={styles.desc}>{feat.desc}</Text>
+                    </View>
 
-                <Switch
-                  value={isEnabled}
-                  onValueChange={() => toggleFeature(feat.key as keyof TripFeatureSettings)}
-                  trackColor={{ false: '#D1D1D6', true: '#80D3D3' }}
-                  thumbColor={isEnabled ? '#38BDF8' : '#F4F3F4'}
-                />
-              </View>
-            </Card>
-          );
-        })}
+                    <Switch
+                      value={isEnabled}
+                      onValueChange={() => toggleFeature(feat.key as keyof TripFeatureSettings)}
+                      trackColor={{ false: '#D1D1D6', true: '#80D3D3' }}
+                      thumbColor={isEnabled ? '#38BDF8' : '#F4F3F4'}
+                    />
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        ))}
 
         <Button
           title="Save Config Changes"
@@ -189,6 +219,17 @@ const styles = StyleSheet.create({
   featureCard: {
     marginBottom: 10,
     padding: 12,
+  },
+  featureGroup: {
+    marginBottom: 6,
+  },
+  featureGroupLabel: {
+    fontSize: 11,
+    fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800',
+    color: '#38BDF8',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   featureItem: {
     flexDirection: 'row',

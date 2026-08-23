@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image, ActivityIndicator, View, Animated, Dimensions, Easing, TouchableOpacity, PanResponder, KeyboardAvoidingView, TextInput, Platform, Modal, SafeAreaView, Text, ScrollView } from 'react-native';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { mockService } from '../services/mockData';
 import { useFonts } from 'expo-font';
 import {
   PlusJakartaSans_400Regular,
@@ -16,9 +18,158 @@ import {
   DMSerifDisplay_400Regular
 } from '@expo-google-fonts/dm-serif-display';
 import { Ionicons } from '@expo/vector-icons';
+import { GEMINI_API_KEY } from '../config/env';
+import { storageGet, storageSet } from '../services/storage';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const AGUILITO_CHAT_STORAGE_KEY = 'tourgo.aguilito.chat.v1';
+
+const TypingIndicator = ({ colors, isDark }: { colors: any; isDark: boolean }) => {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const createAnimation = (dot: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0.3,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+
+    const anim1 = createAnimation(dot1, 0);
+    const anim2 = createAnimation(dot2, 150);
+    const anim3 = createAnimation(dot3, 300);
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 18,
+        borderBottomLeftRadius: 4,
+        marginVertical: 6,
+        gap: 6,
+      }}
+    >
+      <Image
+        source={require('../../assets/images/EagleMascotS5.png')}
+        style={{ width: 18, height: 18, marginRight: 2, resizeMode: 'contain' }}
+      />
+      <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', color: colors.textMuted, marginRight: 2 }}>
+        Thinking
+      </Text>
+      <Animated.View
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: colors.brand,
+          opacity: dot1,
+          transform: [{
+            translateY: dot1.interpolate({
+              inputRange: [0.3, 1],
+              outputRange: [0, -3],
+            })
+          }]
+        }}
+      />
+      <Animated.View
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: colors.brand,
+          opacity: dot2,
+          transform: [{
+            translateY: dot2.interpolate({
+              inputRange: [0.3, 1],
+              outputRange: [0, -3],
+            })
+          }]
+        }}
+      />
+      <Animated.View
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: colors.brand,
+          opacity: dot3,
+          transform: [{
+            translateY: dot3.interpolate({
+              inputRange: [0.3, 1],
+              outputRange: [0, -3],
+            })
+          }]
+        }}
+      />
+    </View>
+  );
+};
+
+const renderMessageText = (text: string, isAi: boolean, colors: any) => {
+  // Clean up markdown bullet points (e.g. '* Item' or '- Item' -> '• Item')
+  let cleaned = text.replace(/^\s*[\*\-]\s+/gm, '• ');
+  
+  // Split by markdown bold syntax (**bold text**)
+  const parts = cleaned.split(/\*\*([^*]+)\*\*/g);
+  
+  return (
+    <Text
+      style={{
+        fontSize: 15,
+        fontFamily: 'PlusJakartaSans-Regular',
+        color: isAi ? colors.text : '#FFFFFF',
+        lineHeight: 22,
+      }}
+    >
+      {parts.map((part, index) => {
+        const isBold = index % 2 === 1;
+        return (
+          <Text
+            key={index}
+            style={
+              isBold
+                ? { fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }
+                : undefined
+            }
+          >
+            {part}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+};
 
 function GlobalMascot() {
   const router = useRouter();
@@ -76,7 +227,43 @@ function GlobalMascot() {
     }
   }, [chatMessages, isTyping, showAiChat]);
 
-  const sendMessage = (text: string) => {
+  useEffect(() => {
+    (globalThis as any).openAiChat = () => {
+      setShowAiChat(true);
+    };
+    return () => {
+      (globalThis as any).openAiChat = null;
+    };
+  }, []);
+
+  // Load saved chat history on mount
+  useEffect(() => {
+    (async () => {
+      const saved = await storageGet(AGUILITO_CHAT_STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+          }
+        } catch {
+          // ignore malformed history
+        }
+      }
+    })();
+  }, []);
+
+  // Persist chat history whenever it changes
+  useEffect(() => {
+    storageSet(AGUILITO_CHAT_STORAGE_KEY, JSON.stringify(chatMessages));
+  }, [chatMessages]);
+
+  const handleNewChat = () => {
+    setChatMessages([]);
+    setChatText('');
+  };
+
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
     const userMsg = {
@@ -87,35 +274,123 @@ function GlobalMascot() {
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
-    const query = text.toLowerCase();
     setIsTyping(true);
 
-    setTimeout(() => {
-      let replyText = "I'm here to help with your trip! You can ask me about weather, packing suggestions, or itinerary planning.";
+    const tripId = mockService.getLastActiveTripId();
+    const isInsideTrip = pathname.startsWith('/trip');
+    const trip = isInsideTrip && tripId ? mockService.getTripById(tripId) : null;
 
-      if (query.includes('hi') || query.includes('hello') || query.includes('hey')) {
-        replyText = "Hello there! Hope you are having a wonderful day. How can I assist you with your travels today?";
-      } else if (query.includes('weather')) {
-        replyText = "The weather for your upcoming trip looks pleasant, around 25°C to 29°C with partial clouds. Perfect for outdoor sightseeing! I'd recommend carrying a light jacket just in case.";
-      } else if (query.includes('pack') || query.includes('bring')) {
-        replyText = "For this tour, I recommend packing comfortable walking shoes, a reusable water bottle, sunscreen, swimwear, sunglasses, and a camera to capture the memories!";
-      } else if (query.includes('flight') || query.includes('airport')) {
-        replyText = "Make sure to arrive at the airport terminal at least 2.5 hours prior to your domestic flight. Keep your digital boarding passes ready on your phone!";
-      } else if (query.includes('itinerary') || query.includes('schedule') || query.includes('todo')) {
-        replyText = "You can view and customize your full itinerary inside your active Trip. We recommend adding details for your flights, hotel bookings, and must-visit spots!";
-      }
+    // Build context about the current trip for the system prompt
+    let tripContext = '';
+    if (trip) {
+      const remainingTasks = trip.checklist ? trip.checklist.filter((t: any) => !t.completed).length : 0;
+      const activePolls = trip.polls ? trip.polls.filter((p: any) => !p.closed).length : 0;
+      const itineraryItems = trip.itinerary ? trip.itinerary.map((i: any) => `${i.time || ''} - ${i.title} (${i.location || 'no location'})`).join('; ') : 'none';
+      const checklistItems = trip.checklist ? trip.checklist.map((t: any) => `[${t.completed ? 'x' : ' '}] ${t.text}`).join('; ') : 'none';
+      tripContext = `
+
+CURRENT ACTIVE TRIP CONTEXT:
+- Trip Name: "${trip.title}"
+- Destination: ${trip.destination}
+- Dates: ${trip.startDate || 'TBD'} to ${trip.endDate || 'TBD'}
+- Checklist (${remainingTasks} incomplete): ${checklistItems}
+- Active Polls: ${activePolls}
+- Itinerary: ${itineraryItems}
+`;
+    }
+
+    const systemPrompt = `You are Aguilito (also spelled Agilito), TourGo's friendly AI travel assistant — a flying eagle mascot that floats across the app. You are extremely intelligent, warm, conversational, and helpful. You provide detailed, inspiring, and thorough travel suggestions, itineraries, and recommendations.
+
+STRICT SCOPE RULE: Your ONLY job is to help users with the TourGo application — planning trips, choosing destinations, using app features (itinerary, checklist, polls, group chat, documents, members), and answering questions about the app itself. ALWAYS stay on topic. If a user asks about anything unrelated to TourGo or travel planning in TourGo (e.g. coding, general trivia, current events, math, science, politics, news, non-travel topics), do NOT answer it. Instead, politely redirect them back with: "I'm just TourGo's travel eagle, so I only help with your trips and the app! Want me to suggest a destination or check your itinerary?" Never break out of this scope.
+
+ABOUT TOURGO APP:
+- TourGo is a collaborative travel planning app for groups of friends and families.
+- TABS: Home (dashboard with recent trips), Trips (list of all trips), Explore (discover PH destinations + map), Activity (notifications/feed), Profile.
+- TRIPS: Users can create trips with title, destination, dates, cover photo, and invite members via unique code or QR.
+- TRIP FEATURES: Itinerary planner, Group Chat, Shared Documents/Files, Member management, Checklist tasks, Group polls, Photo sharing.
+- EXPLORE: Interactive SVG map of the Philippines, browse by region (Luzon/Visayas/Mindanao), trending destinations, recommended places, real destination cards with Wikipedia images.
+- ACTIVITY: Feed of all trip events — new members, itinerary updates, document uploads, chat messages, etc.
+- PROFILE: View/edit user profile, toggle dark mode, see stats.
+- AUTHENTICATION: Email/password sign-up & login via Supabase.
+- TECH STACK: React Native + Expo, Supabase (auth + database), Google Places API (New), Wikipedia API for images.
+
+REAL TOURGO DESTINATIONS IN THE DATABASE (Recommend these to users!):
+1. Big Lagoon (El Nido, Palawan) - A majestic lagoon in El Nido enclosed by towering limestone cliffs, best explored by kayak at sunrise. Rating: 4.9. Best time: Nov – May. Tags: Lagoon, Kayaking, Island.
+2. Kayangan Lake (Coron, Palawan) - Crystal-clear freshwater lake in Coron framed by dramatic karst cliffs, a must-snorkel spot. Rating: 4.8. Best time: Dec – May. Tags: Lake, Snorkeling, Viewpoint.
+3. White Beach (Boracay, Aklan) - Boracay's iconic powder-white sand beach stretching four kilometers along calm turquoise water. Rating: 4.7. Best time: Nov – Apr. Tags: Beach, Sunset, Nightlife.
+4. Banaue Rice Terraces (Banaue, Ifugao) - 2,000-year-old hand-carved rice terraces that climb the mountains like giant green steps. Rating: 4.8. Best time: Dec – Apr. Tags: Heritage, Trekking, Viewpoint.
+5. Basco Lighthouse (Basco, Batanes) - A scenic lighthouse overlooking the rolling green hills and crashing waves of Batanes. Rating: 4.9. Best time: Mar – Jun. Tags: Lighthouse, Coastline, Views.
+6. Cloud 9 Boardwalk (Siargao, Surigao del Norte) - World-famous surf break in Siargao with a wooden boardwalk leading to the iconic viewing tower. Rating: 4.8. Best time: Aug – Nov. Tags: Surfing, Boardwalk, Sunset.
+7. Underground River (Puerto Princesa, Palawan) - An 8.2-km navigable underground river winding through a spectacular limestone cave system. Rating: 4.7. Best time: Dec – May. Tags: Cave, River, UNESCO.
+8. Chocolate Hills (Carmen, Bohol) - Over 1,200 perfectly cone-shaped hills that turn chocolate-brown during the dry season. Rating: 4.7. Best time: Dec – May. Tags: Hills, Viewpoint, Nature.
+9. Tarsier Sanctuary (Tagbilaran, Bohol) - Meet the tiny, wide-eyed Philippine tarsier in its natural forest habitat. Rating: 4.5. Best time: Year-round. Tags: Wildlife, Tarsier, Forest.
+10. Loboc River Cruise (Loboc, Bohol) - A floating restaurant cruise up the emerald Loboc River flanked by jungle. Rating: 4.4. Best time: Nov – May. Tags: River, Cruise, Food.
+11. Sardine Run (Moalboal, Cebu) - Swim through a giant shimmering bait ball of sardines just meters off the shore. Rating: 4.8. Best time: Year-round. Tags: Diving, Snorkeling, Marine.
+
+RECOMMENDATION RULE: When a user asks for tourist spots, sightseeing places, or travel recommendations for any province or city (e.g. Bulacan, Rizal, Cavite, Baguio, Cebu), you must ALWAYS provide at least 3-5 distinct perfect options, highlighting why each option is great, rather than just returning one single destination.
+
+You can also recommend other famous tourist attractions in the Philippines (e.g. Vigan Heritage Village, Apo Reef, Mount Pulag, Kawasan Falls, Mayon Volcano) and tell the user they can search for them using the search bar in the Explore tab.
+
+${tripContext}
+Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Always give in-depth, inspiring travel tips and complete, structured recommendations with bullet points to guide the user perfectly!`;
+
+    try {
+      const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+      // Build conversation history in Gemini format (alternating user/model)
+      const history = chatMessages
+        .filter(m => m.id !== userMsg.id)
+        .map(m => ({
+          role: m.isAi ? 'model' : 'user',
+          parts: [{ text: m.text }],
+        }));
+
+      const response = await fetch(GEMINI_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          contents: [
+            ...history,
+            { role: 'user', parts: [{ text: text.trim() }] },
+          ],
+          generationConfig: {
+            maxOutputTokens: 4000,
+            temperature: 0.75,
+          },
+        }),
+      });
+
+      const json = await response.json();
+      const replyText =
+        json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+        "Sorry, I couldn't reach my wings right now. Try again in a moment!";
 
       setChatMessages((prev) => [
         ...prev,
         {
           id: `msg-${Date.now()}`,
-          sender: 'Agilito',
+          sender: 'Aguilito',
           text: replyText,
           isAi: true,
         },
       ]);
+    } catch (err: any) {
+      console.error('Aguilito Gemini error:', err);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-${Date.now()}`,
+          sender: 'Aguilito',
+          text: "Hmm, my wings got tired. Check your connection and try again!",
+          isAi: true,
+        },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   const handleSendChat = () => {
@@ -232,9 +507,9 @@ function GlobalMascot() {
       setShowBadge(false);
       setShowFlyingBird(false);
       setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
-      
-      if (typeof (global as any).onMascotLand === 'function') {
-        (global as any).onMascotLand();
+
+      if (typeof (globalThis as any).onMascotLand === 'function') {
+        (globalThis as any).onMascotLand();
       }
 
     } else if (!isDashboard) {
@@ -339,8 +614,8 @@ function GlobalMascot() {
           setShowFlyingBird(false);
           setShowBadge(false); // Hide badge when back on dashboard
           setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
-          if (typeof (global as any).onMascotLand === 'function') {
-            (global as any).onMascotLand();
+          if (typeof (globalThis as any).onMascotLand === 'function') {
+            (globalThis as any).onMascotLand();
           }
         }
       });
@@ -553,19 +828,37 @@ function GlobalMascot() {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => setShowAiChat(false)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: isDark ? '#334155' : '#F1F5F9',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Ionicons name="close" size={20} color={colors.text} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity
+                onPress={handleNewChat}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isDark ? '#334155' : '#F1F5F9',
+                  paddingHorizontal: 12,
+                  height: 36,
+                  borderRadius: 18,
+                }}
+              >
+                <Ionicons name="add" size={16} color={colors.brand} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-SemiBold', color: colors.text }}>
+                  New chat
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowAiChat(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: isDark ? '#334155' : '#F1F5F9',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Chat Messages */}
@@ -661,35 +954,12 @@ function GlobalMascot() {
                     borderBottomRightRadius: msg.isAi ? 18 : 4,
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontFamily: 'PlusJakartaSans-Regular',
-                      color: msg.isAi
-                        ? colors.text
-                        : '#FFFFFF',
-                      lineHeight: 22,
-                    }}
-                  >
-                    {msg.text}
-                  </Text>
+                  {renderMessageText(msg.text, msg.isAi, colors)}
                 </View>
               </View>
             ))}
             {isTyping && (
-              <View
-                style={{
-                  alignSelf: 'flex-start',
-                  backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderRadius: 18,
-                  borderBottomLeftRadius: 4,
-                  marginVertical: 6,
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.brand} />
-              </View>
+              <TypingIndicator colors={colors} isDark={isDark} />
             )}
           </ScrollView>
 
@@ -751,6 +1021,19 @@ function GlobalMascot() {
 
 function RootStack() {
   const { isDark, colors } = useTheme();
+  const { session, isLoading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Redirect to login if unauthenticated and not already on an auth screen
+  useEffect(() => {
+    if (isLoading) return;
+    const isAuthRoute = pathname.startsWith('/(auth)') || pathname === '/';
+    if (!session && !isAuthRoute) {
+      router.replace('/(auth)/login');
+    }
+  }, [session, isLoading, pathname]);
+
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} translucent={false} />
@@ -768,17 +1051,19 @@ function RootStack() {
           contentStyle: {
             backgroundColor: colors.background,
           },
-          headerRight: () => (
-            <Image source={require('../../assets/images/TourGoLogo.png')} style={{ width: 28, height: 28, marginRight: 16, resizeMode: 'contain' }} />
-          ),
         }}
       >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="trip/create" options={{ headerShown: false }} />
+        <Stack.Screen name="trip/join" options={{ headerShown: false }} />
       </Stack>
       <GlobalMascot />
     </>
   );
 }
+
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -801,7 +1086,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <RootStack />
+        <AuthProvider>
+          <RootStack />
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

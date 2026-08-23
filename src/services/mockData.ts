@@ -52,6 +52,7 @@ export interface PollItem {
   allowMultiple: boolean;
   creator: string;
   closed: boolean;
+  createdDate: string;
 }
 
 export interface MessageItem {
@@ -228,7 +229,8 @@ let trips: Trip[] = [
         ],
         allowMultiple: false,
         creator: "Harry Sevilla",
-        closed: false
+        closed: false,
+        createdDate: "2026-08-15 08:00 AM"
       }
     ],
     chatMessages: [
@@ -442,7 +444,8 @@ let trips: Trip[] = [
         ],
         allowMultiple: false,
         creator: "Harry Sevilla",
-        closed: false
+        closed: false,
+        createdDate: "2026-08-13 07:30 PM"
       }
     ],
     chatMessages: [],
@@ -759,7 +762,8 @@ export const mockService = {
       })),
       allowMultiple,
       creator: currentUser.name,
-      closed: false
+      closed: false,
+      createdDate: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
     trips = trips.map(t => {
@@ -955,5 +959,35 @@ export const mockService = {
       return t;
     });
     notify();
+  },
+
+  // Edit trip basic info (organizer only)
+  updateTrip(tripId: string, updates: { title?: string; destination?: string; startDate?: string; endDate?: string }) {
+    trips = trips.map(t => {
+      if (t.id === tripId) {
+        return { ...t, ...updates };
+      }
+      return t;
+    });
+    notify();
+  },
+
+  // Delete a trip (organizer only)
+  deleteTrip(tripId: string) {
+    trips = trips.filter(t => t.id !== tripId);
+    notify();
+  },
+
+  // Track last active trip in workspace
+  getLastActiveTripId(): string | null {
+    return lastActiveTripId;
+  },
+
+  setLastActiveTripId(id: string | null) {
+    lastActiveTripId = id;
+    notify();
   }
 };
+
+let lastActiveTripId: string | null = null;
+

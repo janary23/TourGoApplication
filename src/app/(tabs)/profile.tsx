@@ -4,197 +4,183 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockService, UserProfile } from '../../services/mockData';
+import { useRouter } from 'expo-router';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { updateProfile } from '../../services/authService';
+import ProfileInfoCard from '../../components/profile/ProfileInfoCard';
+import ProfileSettingRow from '../../components/profile/ProfileSettingRow';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { isDark, toggleTheme, colors } = useTheme();
-  const [profile, setProfile] = useState<UserProfile>(mockService.getCurrentUser());
+  const { profile: authProfile, signOut, refreshProfile } = useAuth();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(profile.name);
-  const [email, setEmail] = useState(profile.email);
-  const [homeCity, setHomeCity] = useState(profile.homeCity);
+  const [name, setName] = useState(authProfile?.name || '');
+  const [email, setEmail] = useState(authProfile?.email || '');
+  const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
 
+  // Sync form fields when profile loads
   useEffect(() => {
-    const unsubscribe = mockService.subscribe(() => {
-      setProfile(mockService.getCurrentUser());
-    });
-    return unsubscribe;
-  }, []);
+    if (authProfile) {
+      setName(authProfile.name);
+      setEmail(authProfile.email);
+      setHomeCity(authProfile.home_city);
+    }
+  }, [authProfile]);
 
-  const handleSave = () => {
-    if (!name.trim() || !email.trim()) {
-      Alert.alert('Error', 'Name and email cannot be empty.');
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Name cannot be empty.');
       return;
     }
-    mockService.updateCurrentUser({ name, email, homeCity });
-    setIsEditing(false);
-    Alert.alert('Success', 'Profile updated successfully!');
+    const { error } = await updateProfile({ name: name.trim(), home_city: homeCity.trim() });
+    if (error) {
+      Alert.alert('Error', error);
+    } else {
+      await refreshProfile();
+      setIsEditing(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    }
   };
 
   const handleCancel = () => {
-    setName(profile.name);
-    setEmail(profile.email);
-    setHomeCity(profile.homeCity);
+    setName(authProfile?.name || '');
+    setEmail(authProfile?.email || '');
+    setHomeCity(authProfile?.home_city || '');
     setIsEditing(false);
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/(auth)/login');
+          },
+        },
+      ]
+    );
+  };
+
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Profile Card */}
-        <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-          <View style={styles.avatarContainer}>
-            <Image source={{ uri: profile.avatar }} style={[styles.avatar, { borderColor: colors.brand }]} />
-            <View style={[styles.cameraIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="camera" size={16} color="#FFFFFF" />
-            </View>
-          </View>
-
-          {isEditing ? (
-            <View style={styles.form}>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Full Name</Text>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }]}
-                  placeholder="Enter full name"
-                  placeholderTextColor={colors.textMuted}
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Email Address</Text>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }]}
-                  placeholder="Enter email address"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Home City</Text>
-                <TextInput
-                  value={homeCity}
-                  onChangeText={setHomeCity}
-                  style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.text }]}
-                  placeholder="Enter home city"
-                  placeholderTextColor={colors.textMuted}
-                />
-              </View>
-              <View style={styles.btnRow}>
-                <Button title="Cancel" onPress={handleCancel} variant="outline" size="small" style={styles.formBtn} />
-                <Button title="Save Changes" onPress={handleSave} variant="primary" size="small" style={styles.formBtn} />
-              </View>
-            </View>
-          ) : (
-            <View style={styles.infoContainer}>
-              <Text style={[styles.userName, { color: colors.text }]}>{profile.name}</Text>
-              <Text style={[styles.userEmail, { color: colors.textMuted }]}>{profile.email}</Text>
-              <View style={styles.locationContainer}>
-                <Ionicons name="location-sharp" size={16} color={colors.brand} />
-                <Text style={[styles.userLocation, { color: colors.brand }]}>{profile.homeCity}</Text>
-              </View>
-              <Button
-                title="Edit Profile"
-                onPress={() => setIsEditing(true)}
-                variant="outline"
-                size="small"
-                style={styles.editBtn}
-                icon={<Ionicons name="create-outline" size={16} color={colors.brand} />}
-              />
-            </View>
-          )}
-        </View>
+        <ProfileInfoCard
+          colors={colors}
+          profile={authProfile}
+          isEditing={isEditing}
+          setIsEditing={setIsEditing}
+          name={name}
+          setName={setName}
+          email={email}
+          setEmail={setEmail}
+          homeCity={homeCity}
+          setHomeCity={setHomeCity}
+          onSave={handleSave}
+          onCancel={handleCancel}
+        />
 
         {/* Application Settings */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Application Settings</Text>
 
           <View style={[styles.settingCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-
             {/* Dark Mode Toggle */}
-            <View style={styles.optionItem}>
-              <View style={[styles.optionIconBox, { backgroundColor: isDark ? '#2C2C40' : '#EEF2FF' }]}>
-                <Ionicons name={isDark ? 'moon' : 'sunny'} size={20} color={isDark ? '#A78BFA' : '#F59E0B'} />
-              </View>
-              <View style={styles.optionTextBox}>
-                <Text style={[styles.optionText, { color: colors.text }]}>Dark Mode</Text>
-                <Text style={[styles.optionSubText, { color: colors.textMuted }]}>
-                  {isDark ? 'Dark theme active' : 'Light theme active'}
-                </Text>
-              </View>
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: '#E0E0E0', true: colors.brand }}
-                thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
-                ios_backgroundColor="#E0E0E0"
-              />
-            </View>
+            <ProfileSettingRow
+              iconName={isDark ? 'moon' : 'sunny'}
+              iconColor={isDark ? '#A78BFA' : '#F59E0B'}
+              iconBgColor={isDark ? '#2C2C40' : '#EEF2FF'}
+              title="Dark Mode"
+              subtitle={isDark ? 'Dark theme active' : 'Light theme active'}
+              colors={colors}
+              rightElement={
+                <Switch
+                  value={isDark}
+                  onValueChange={toggleTheme}
+                  trackColor={{ false: '#E0E0E0', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#E0E0E0"
+                />
+              }
+            />
 
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* Push Notifications */}
-            <TouchableOpacity style={styles.optionItem} activeOpacity={0.7}>
-              <View style={[styles.optionIconBox, { backgroundColor: isDark ? '#1A2E1A' : '#E8F8EE' }]}>
-                <Ionicons name="notifications-outline" size={20} color={colors.brand} />
-              </View>
-              <View style={styles.optionTextBox}>
-                <Text style={[styles.optionText, { color: colors.text }]}>Push Notifications</Text>
-                <Text style={[styles.optionSubText, { color: colors.textMuted }]}>Manage alerts & reminders</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <ProfileSettingRow
+              iconName="notifications-outline"
+              iconColor="#22C55E"
+              iconBgColor={isDark ? '#1A2E1A' : '#E8F8EE'}
+              title="Push Notifications"
+              subtitle="Manage alerts & reminders"
+              colors={colors}
+              onPress={() => {}}
+            />
 
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* GPS Tracking */}
-            <TouchableOpacity style={styles.optionItem} activeOpacity={0.7}>
-              <View style={[styles.optionIconBox, { backgroundColor: isDark ? '#1A1A2E' : '#EFF6FF' }]}>
-                <Ionicons name="location-outline" size={20} color="#38BDF8" />
-              </View>
-              <View style={styles.optionTextBox}>
-                <Text style={[styles.optionText, { color: colors.text }]}>GPS Tracking</Text>
-                <Text style={[styles.optionSubText, { color: colors.textMuted }]}>Location sharing permissions</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <ProfileSettingRow
+              iconName="location-outline"
+              iconColor="#38BDF8"
+              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
+              title="GPS Tracking"
+              subtitle="Location sharing permissions"
+              colors={colors}
+              onPress={() => {}}
+            />
 
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* Privacy */}
-            <TouchableOpacity style={styles.optionItem} activeOpacity={0.7}>
-              <View style={[styles.optionIconBox, { backgroundColor: isDark ? '#2E1A1A' : '#FFF1F0' }]}>
-                <Ionicons name="shield-outline" size={20} color="#38BDF8" />
-              </View>
-              <View style={styles.optionTextBox}>
-                <Text style={[styles.optionText, { color: colors.text }]}>Privacy & Security</Text>
-                <Text style={[styles.optionSubText, { color: colors.textMuted }]}>Data & account controls</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <ProfileSettingRow
+              iconName="shield-outline"
+              iconColor="#EF4444"
+              iconBgColor={isDark ? '#2E1A1A' : '#FFF1F0'}
+              title="Privacy & Security"
+              subtitle="Data & account controls"
+              colors={colors}
+              onPress={() => {}}
+            />
 
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* Help */}
-            <TouchableOpacity style={styles.optionItem} activeOpacity={0.7}>
-              <View style={[styles.optionIconBox, { backgroundColor: isDark ? '#1A2A2A' : '#F0FAFA' }]}>
-                <Ionicons name="help-circle-outline" size={20} color="#38BDF8" />
-              </View>
-              <View style={styles.optionTextBox}>
-                <Text style={[styles.optionText, { color: colors.text }]}>Help Center & FAQ</Text>
-                <Text style={[styles.optionSubText, { color: colors.textMuted }]}>Support & documentation</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <ProfileSettingRow
+              iconName="help-circle-outline"
+              iconColor="#22C55E"
+              iconBgColor={isDark ? '#1A2E1A' : '#E8F8EE'}
+              title="Help Center & FAQ"
+              subtitle="Support & documentation"
+              colors={colors}
+              onPress={() => {}}
+            />
 
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+            {/* Log Out */}
+            <ProfileSettingRow
+              iconName="log-out-outline"
+              iconColor="#EF4444"
+              iconBgColor={isDark ? '#2E1A1A' : '#FFF1F0'}
+              title="Log Out"
+              subtitle="Sign out of your account"
+              colors={colors}
+              onPress={handleLogout}
+            />
           </View>
         </View>
 
@@ -217,18 +203,18 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   profileCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: 'center',
     paddingVertical: 24,
     paddingHorizontal: 20,
     marginBottom: 24,
-    shadowColor: '#000',
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     elevation: 3,
   },
   avatarContainer: {
@@ -311,18 +297,20 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
-    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 10,
   },
   settingCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     elevation: 3,
   },
   optionItem: {

@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Platform, ActivityIndicator, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockService, Trip, MemberItem } from '../../services/mockData';
+import { Trip } from '../../services/mockData';
+import { getTrips, TripWithRole } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
-
-type FilterTab = 'upcoming' | 'past' | 'all';
+import { Button } from '../../components/ui/Button';
+import FeaturedTripCard from '../../components/trips/FeaturedTripCard';
+import OtherTripCard from '../../components/trips/OtherTripCard';
 
 // Helper to map mock members to Unsplash photos for premium visualization
 const getMemberAvatar = (name: string): string | null => {
@@ -23,33 +25,32 @@ const getMemberAvatar = (name: string): string | null => {
 export default function TripsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [trips, setTrips] = useState<Trip[]>(mockService.getTrips());
-  const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
+  const [trips, setTrips] = useState<TripWithRole[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = mockService.subscribe(() => setTrips(mockService.getTrips()));
-    return unsubscribe;
+  const loadTrips = useCallback(async () => {
+    try {
+      const data = await getTrips();
+      setTrips(data);
+    } catch (e) {
+      console.error('Failed to load trips:', e);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
   }, []);
 
-  // Filter based on dates
-  // A trip is upcoming/current if its end date is today or in the future
-  const getFilteredTrips = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // Reload trips every time the tab comes into focus (e.g., after create/join)
+  useFocusEffect(useCallback(() => { loadTrips(); }, [loadTrips]));
 
-    return trips.filter(trip => {
-      const tripEndDate = new Date(trip.endDate);
-      if (activeTab === 'upcoming') {
-        return tripEndDate >= today;
-      }
-      if (activeTab === 'past') {
-        return tripEndDate < today;
-      }
-      return true;
-    });
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    loadTrips();
   };
 
-  const filteredTrips = getFilteredTrips();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // Helper to format trip dates into a clean "Aug 20 – 25, 2026" structure
   const formatTripDate = (startDateStr: string, endDateStr: string) => {
@@ -68,171 +69,217 @@ export default function TripsScreen() {
     }
   };
 
-  // Helper to retrieve simulated meaningful updates
-  const getTripUpdateText = (trip: Trip): string | null => {
-    if (trip.id === 'trip-a') return 'Updated 2h ago';
-    if (trip.id === 'trip-b') return 'Updated 1d ago';
-    if (trip.chatMessages && trip.chatMessages.length > 3) {
-      return 'Updated just now';
+  // No more hardcoded update text — trips are real now
+  const getTripUpdateText = (_trip: TripWithRole): string | null => null;
+
+  // Helper to calculate countdown string
+  const getCountdownText = (startDateStr: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDateStr);
+    start.setHours(0, 0, 0, 0);
+    
+    const diffTime = start.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return null;
     }
+    if (diffDays === 0) {
+      return 'STARTS TODAY';
+    }
+    if (diffDays === 1) {
+      return '1 DAY TO GO';
+    }
+    return `${diffDays} DAYS TO GO`;
+  };
+
+  // Identify featured trip:
+  // Nearest upcoming trip (startDate >= today)
+  // If none, most recently active trip (startDate < today)
+  const getFeaturedTrip = () => {
+    const upcoming = trips.filter(trip => {
+      const start = new Date(trip.startDate);
+      start.setHours(0, 0, 0, 0);
+      return start >= today;
+    });
+
+    if (upcoming.length > 0) {
+      const sorted = [...upcoming].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+      return { trip: sorted[0], type: 'upcoming' as const };
+    }
+
+    const past = trips.filter(trip => {
+      const start = new Date(trip.startDate);
+      start.setHours(0, 0, 0, 0);
+      return start < today;
+    });
+
+    if (past.length > 0) {
+      const sorted = [...past].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+      return { trip: sorted[0], type: 'past' as const };
+    }
+
     return null;
   };
 
+  const featuredInfo = getFeaturedTrip();
+  const featuredTrip = featuredInfo?.trip || null;
+  const isFeaturedUpcoming = featuredInfo?.type === 'upcoming';
+
+  // Categorize other trips (excluding the featured one)
+  // An upcoming trip is one where endDate >= today (active or future)
+  const otherUpcomingTrips = trips
+    .filter(trip => {
+      if (featuredTrip && trip.id === featuredTrip.id) return false;
+      const end = new Date(trip.endDate);
+      end.setHours(0, 0, 0, 0);
+      return end >= today;
+    })
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  // A past trip is one where endDate < today
+  const pastTrips = trips
+    .filter(trip => {
+      if (featuredTrip && trip.id === featuredTrip.id) return false;
+      const end = new Date(trip.endDate);
+      end.setHours(0, 0, 0, 0);
+      return end < today;
+    })
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      {/* Top Header Row */}
-      <View style={styles.headerRow}>
-        <Image source={require('../../../assets/images/TourGoLogo.png')} style={styles.logo} />
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity onPress={() => router.push('/trip/join')} style={styles.headerActionBtn}>
-            <Text style={[styles.headerActionText, { color: colors.brand }]}>Join</Text>
+      {/* Top Header Row with brand logo/name on the left and actions on the right */}
+      <View style={[styles.headerRow, { borderBottomColor: colors.divider }]}>
+        <View style={styles.headerBrandContainer}>
+          <Image source={require('../../../assets/images/TourGoLogo.png')} style={styles.headerLogoImage} />
+          <Text style={[styles.appName, { color: colors.brand }]}>
+            Tour<Text style={{ color: '#22C55E' }}>Go</Text>
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/trip/join')}
+            style={[styles.smallActionButton, { backgroundColor: colors.brandLight, borderColor: colors.brand }]}
+          >
+            <Ionicons name="enter-outline" size={14} color={colors.brand} style={{ marginRight: 4 }} />
+            <Text style={[styles.smallActionButtonText, { color: colors.brand }]}>Join</Text>
           </TouchableOpacity>
-          <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
-          <TouchableOpacity onPress={() => router.push('/trip/create')} style={styles.headerActionBtn}>
-            <Text style={[styles.headerActionText, { color: colors.brand }]}>Create</Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/trip/create')}
+            style={[styles.smallActionButton, { backgroundColor: '#22C55E', borderColor: '#22C55E' }]}
+          >
+            <Ionicons name="add" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
+            <Text style={[styles.smallActionButtonText, { color: '#FFFFFF' }]}>Create</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Main Title Area */}
-      <View style={styles.titleContainer}>
-        <Text style={[styles.pageTitle, { color: colors.text }]}>My Trips</Text>
-        <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>Trips you're part of</Text>
-      </View>
-
-      {/* Simple Text-Based Filters */}
-      <View style={[styles.filterContainer, { borderBottomColor: colors.divider }]}>
-        {(['Upcoming', 'Past', 'All'] as const).map(tabLabel => {
-          const tabKey = tabLabel.toLowerCase() as FilterTab;
-          const isActive = activeTab === tabKey;
-          return (
-            <TouchableOpacity
-              key={tabKey}
-              onPress={() => setActiveTab(tabKey)}
-              style={styles.filterTab}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                styles.filterTabText,
-                { color: isActive ? colors.brand : colors.textMuted },
-                isActive && styles.filterTabTextActive
-              ]}>
-                {tabLabel}
-              </Text>
-              {isActive && <View style={[styles.activeUnderline, { backgroundColor: colors.brand }]} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
       {/* Trips Scroll List */}
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: 'PlusJakartaSans-Regular' }}>Loading your trips...</Text>
+        </View>
+      ) : (
       <ScrollView
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand}
+          />
+        }
       >
-        {filteredTrips.length > 0 ? (
-          filteredTrips.map(trip => {
-            const isOrganizer = trip.role === 'organizer';
-            const updateText = getTripUpdateText(trip);
+        {trips.length > 0 ? (
+          <>
+            {/* Featured Trip Section */}
+            {featuredTrip && (
+              <FeaturedTripCard
+                trip={featuredTrip}
+                colors={colors}
+                isOrganizer={featuredTrip.role === 'organizer'}
+                countdown={getCountdownText(featuredTrip.startDate)}
+                formatTripDate={formatTripDate}
+                router={router}
+              />
+            )}
 
-            return (
-              <TouchableOpacity
-                key={trip.id}
-                onPress={() => router.push(`/trip/${trip.id}`)}
-                activeOpacity={0.7}
-                style={[styles.tripItemRow, { borderBottomColor: colors.divider }]}
-              >
-                {/* Destination Photo (approximately 1:1.15 slightly portrait) */}
-                <Image source={{ uri: trip.image }} style={styles.tripPhoto} />
+            {/* Other Upcoming Trips */}
+            {otherUpcomingTrips.length > 0 && (
+              <View style={{ width: '100%', marginBottom: 16 }}>
+                <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+                  UPCOMING
+                </Text>
+                {otherUpcomingTrips.map(trip => (
+                  <OtherTripCard
+                    key={trip.id}
+                    trip={trip}
+                    colors={colors}
+                    isOrganizer={trip.role === 'organizer'}
+                    formatTripDate={formatTripDate}
+                    router={router}
+                  />
+                ))}
+              </View>
+            )}
 
-                {/* Information Layout */}
-                <View style={styles.tripDetails}>
-                  <View>
-                    <Text style={[styles.tripTitleText, { color: colors.text }]} numberOfLines={2}>
-                      {trip.title}
-                    </Text>
-                    <Text style={[styles.tripSecondaryText, { color: colors.textSecondary }]}>
-                      {trip.destination}
-                    </Text>
-                    <Text style={[styles.tripDateText, { color: colors.textMuted }]}>
-                      {formatTripDate(trip.startDate, trip.endDate)}
-                    </Text>
-                  </View>
-
-                  {/* Avatars & Social Pile */}
-                  <View style={styles.socialAndStatusBlock}>
-                    <View style={styles.avatarsRow}>
-                      <View style={styles.avatarPile}>
-                        {trip.members.slice(0, 3).map((member, index) => {
-                          const avatarUrl = getMemberAvatar(member.name);
-                          return (
-                            <View
-                              key={member.id}
-                              style={[
-                                styles.avatarCircle,
-                                {
-                                  marginLeft: index > 0 ? -8 : 0,
-                                  zIndex: 10 - index,
-                                  borderColor: colors.background
-                                }
-                              ]}
-                            >
-                              {avatarUrl ? (
-                                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                              ) : (
-                                <View style={[styles.avatarFallback, { backgroundColor: colors.brandLight }]}>
-                                  <Text style={[styles.avatarFallbackText, { color: colors.brand }]}>
-                                    {member.name.charAt(0).toUpperCase()}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          );
-                        })}
-                      </View>
-                      <Text style={[styles.membersCountText, { color: colors.textMuted }]}>
-                        {trip.members.length > 3 ? `+${trip.members.length - 3}` : `${trip.members.length} members`}
-                      </Text>
-                    </View>
-
-                    {/* Understated relationship / update info */}
-                    <View style={styles.relationshipRow}>
-                      <Text style={[styles.relationshipText, { color: colors.textSecondary }]}>
-                        {isOrganizer ? 'Organizer' : 'Member'}
-                      </Text>
-                      {updateText && (
-                        <>
-                          <Text style={[styles.dotSeparator, { color: colors.textMuted }]}>•</Text>
-                          <Text style={[styles.updateText, { color: colors.textMuted }]}>
-                            {updateText}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
+            {/* Past Trips */}
+            {pastTrips.length > 0 && (
+              <View style={{ width: '100%', marginBottom: 16 }}>
+                <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+                  PAST
+                </Text>
+                {pastTrips.map(trip => (
+                  <OtherTripCard
+                    key={trip.id}
+                    trip={trip}
+                    colors={colors}
+                    isOrganizer={trip.role === 'organizer'}
+                    formatTripDate={formatTripDate}
+                    router={router}
+                  />
+                ))}
+              </View>
+            )}
+          </>
         ) : (
-          /* Clean Minimal Empty State */
+          /* Clean Minimal Empty State matching index.tsx mascot empty treatment */
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips yet</Text>
+            <Image
+              source={require('../../../assets/images/EagleMascotS5.png')}
+              style={{ width: 140, height: 140, resizeMode: 'contain', marginBottom: 12 }}
+            />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips planned yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              Your trips will appear here when you create one or join a trip.
+              Start organizing a new adventure or join your group's trip right away!
             </Text>
-            <View style={styles.emptyActionsRow}>
-              <TouchableOpacity onPress={() => router.push('/trip/create')} style={styles.emptyActionLink}>
-                <Text style={[styles.emptyActionText, { color: colors.brand }]}>Create a trip</Text>
-              </TouchableOpacity>
-              <Text style={[styles.emptyOrText, { color: colors.textMuted }]}>and</Text>
-              <TouchableOpacity onPress={() => router.push('/trip/join')} style={styles.emptyActionLink}>
-                <Text style={[styles.emptyActionText, { color: colors.brand }]}>Join a trip</Text>
-              </TouchableOpacity>
+            <View style={styles.emptyActions}>
+              <Button
+                title="Create a Trip"
+                onPress={() => router.push('/trip/create')}
+                style={styles.actionBtn}
+                size="small"
+              />
+              <Button
+                title="Join a Trip"
+                onPress={() => router.push('/trip/join')}
+                variant="outline"
+                style={styles.actionBtn}
+                size="small"
+              />
             </View>
           </View>
         )}
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -243,38 +290,34 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  logo: {
-    width: 30,
-    height: 30,
-    resizeMode: 'contain',
-  },
-  headerRightActions: {
+  headerBrandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerActionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+  headerLogoImage: {
+    width: 36,
+    height: 36,
+    marginRight: 10,
+    resizeMode: 'contain',
   },
-  headerActionText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  actionDivider: {
-    width: 1,
-    height: 14,
-    marginHorizontal: 4,
+  appName: {
+    fontSize: 24,
+    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: 12,
+    marginTop: 20,
     marginBottom: 16,
   },
   pageTitle: {
@@ -283,11 +326,28 @@ const styles = StyleSheet.create({
     fontSize: 26,
     letterSpacing: -0.5,
   },
-  pageSubtitle: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    fontSize: 13,
-    marginTop: 2,
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  smallActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  smallActionButtonText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 12,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -300,12 +360,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   filterTabText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
     fontSize: 14,
-  },
-  filterTabTextActive: {
-    fontWeight: '700',
   },
   activeUnderline: {
     position: 'absolute',
@@ -316,23 +371,31 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 16,
     paddingBottom: 110, // Accounts for absolute positioned bottom tab bar
   },
-  tripItemRow: {
+  tripItemCard: {
     flexDirection: 'row',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 16,
+    // Subtle elevation/shadows matching TourGo widgets
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tripPhoto: {
     width: 90,
     height: 110,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#F3F4F6',
   },
   tripDetails: {
     flex: 1,
-    paddingLeft: 16,
+    paddingLeft: 12,
     justifyContent: 'space-between',
   },
   tripTitleText: {
@@ -342,18 +405,24 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   tripSecondaryText: {
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    fontSize: 13,
-    marginTop: 3,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 4,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   tripDateText: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 12,
-    marginTop: 2,
   },
   socialAndStatusBlock: {
-    marginTop: 10,
+    marginTop: 8,
   },
   avatarsRow: {
     flexDirection: 'row',
@@ -398,7 +467,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   relationshipText: {
-    fontFamily: 'PlusJakartaSans-Medium',
     fontSize: 11,
   },
   dotSeparator: {
@@ -412,7 +480,7 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    paddingVertical: 40,
     paddingHorizontal: 20,
   },
   emptyTitle: {
@@ -420,32 +488,142 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 6,
+    marginTop: 8,
   },
   emptySubtitle: {
     fontFamily: 'PlusJakartaSans-Regular',
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 16,
+    marginBottom: 8,
     paddingHorizontal: 10,
   },
-  emptyActionsRow: {
+  emptyActions: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  actionBtn: {
+    flex: 1,
+    marginHorizontal: 8,
+    maxWidth: 160,
+  },
+  featuredSectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  featuredTripCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  featuredTripPhoto: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  featuredTripDetails: {
+    marginTop: 4,
+  },
+  countdownText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.5,
+    marginTop: 12,
+  },
+  featuredTripTitleText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 24,
+    marginTop: 8,
+  },
+  featuredTripSecondaryText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 4,
+  },
+  featuredDateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
+  },
+  featuredTripDateText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 13,
+  },
+  featuredSocialAndStatusBlock: {
+    marginTop: 12,
+  },
+  featuredAvatarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  featuredAvatarPile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featuredAvatarCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
     justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  emptyActionLink: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+  featuredAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
-  emptyActionText: {
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    fontSize: 13,
+  featuredAvatarFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  emptyOrText: {
+  featuredAvatarFallbackText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  featuredRelationshipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  featuredMembersCountText: {
+    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 12,
+  },
+  featuredRelationshipText: {
+    fontSize: 12,
+  },
+  featuredDotSeparator: {
+    marginHorizontal: 6,
+    fontSize: 10,
+  },
+  featuredUpdateText: {
     fontFamily: 'PlusJakartaSans-Regular',
-    fontSize: 13,
-    marginHorizontal: 5,
+    fontSize: 12,
   },
 });

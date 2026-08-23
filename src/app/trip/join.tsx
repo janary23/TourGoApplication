@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Alert, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockService } from '../../services/mockData';
+import { joinTrip } from '../../services/tripService';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useTheme } from '../../context/ThemeContext';
@@ -14,35 +14,44 @@ export default function JoinTripScreen() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!code.trim()) {
       Alert.alert("Code Required", "Please enter a valid trip code.");
       return;
     }
 
     setLoading(true);
-
-    // Simulate minor networking delay
-    setTimeout(() => {
-      const result = mockService.joinTrip(code.trim());
-      setLoading(false);
-
+    try {
+      const result = await joinTrip(code.trim());
       if ('error' in result) {
         Alert.alert("Failed to Join", result.error);
       } else {
-        Alert.alert("Joined Successfully! 🎉", `You are now a member of "${result.title}"`, [
+        Alert.alert("Joined Successfully!", "You are now a member of this trip.", [
           {
             text: "Open Trip Dashboard",
-            onPress: () => router.replace(`/trip/${result.id}`)
+            onPress: () => router.replace(`/trip/${result.tripId}`)
           }
         ]);
       }
-    }, 800);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom', 'left', 'right']}>
-      <Stack.Screen options={{ title: 'Join a Trip', headerBackTitle: 'Back', presentation: 'modal' }} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
+      {/* Custom Sleek Header Bar */}
+      <View style={[styles.customHeader, { borderBottomColor: colors.cardBorder }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.customBackBtn}>
+          <Ionicons name="chevron-back" size={24} color={colors.brand} />
+          <Text style={[styles.customBackText, { color: colors.brand }]}>Back</Text>
+        </TouchableOpacity>
+        <Text style={[styles.customHeaderTitle, { color: colors.text }]}>Join a Trip</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.explainerContainer}>
           <View style={[styles.iconCircle, { backgroundColor: colors.brandLight }]}>
@@ -79,12 +88,12 @@ export default function JoinTripScreen() {
           <View style={styles.infoLayout}>
             <Ionicons name="information-circle-outline" size={22} color={colors.brand} />
             <View style={styles.infoTextContainer}>
-              <Text style={[styles.infoTitle, { color: colors.text }]}>Mock Codes Available:</Text>
+              <Text style={[styles.infoTitle, { color: colors.text }]}>How to get a trip code:</Text>
               <Text style={[styles.infoSub, { color: colors.textSecondary }]}>
-                - Try code <Text style={styles.bold}>COOLBAGUIO</Text> to join the Baguio trip.
+                Ask your trip organizer to share the trip code from the trip's dashboard header.
               </Text>
               <Text style={[styles.infoSub, { color: colors.textSecondary }]}>
-                - Create a trip on another profile, check its code, and enter it here to simulate.
+                Codes are auto-generated when a trip is created and are case-insensitive.
               </Text>
             </View>
           </View>
@@ -194,5 +203,29 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+  },
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  customBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 60,
+  },
+  customBackText: {
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans-Bold',
+    marginLeft: 2,
+  },
+  customHeaderTitle: {
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

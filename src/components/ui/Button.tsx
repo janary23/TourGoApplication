@@ -75,7 +75,7 @@ export const Button: React.FC<ButtonProps> = ({
       style={[getButtonStyles(), style]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'outline' || variant === 'ghost' ? '#38BDF8' : '#FFFFFF'} />
+        <ActivityIndicator color={variant === 'outline' || variant === 'ghost' ? '#22C55E' : '#FFFFFF'} />
       ) : (
         <View style={styles.contentContainer}>
           {icon && <View style={styles.iconContainer}>{icon}</View>}
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F8EE', // Light green tint
   },
   accent: {
-    backgroundColor: '#38BDF8',
-    shadowColor: '#38BDF8',
+    backgroundColor: '#22C55E',
+    shadowColor: '#22C55E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 6,

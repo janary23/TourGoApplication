@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ViewStyle, StyleProp } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   variant?: 'white' | 'teal' | 'sky' | 'accent' | 'gray';
   shadow?: boolean;
@@ -16,15 +17,39 @@ export const Card: React.FC<CardProps> = ({
   variant = 'white',
   shadow = true
 }) => {
+  const { colors } = useTheme();
+
   const getCardStyles = () => {
     const cardStyles: ViewStyle[] = [styles.card];
 
     // Variant background colors
-    if (variant === 'white') cardStyles.push(styles.white);
-    else if (variant === 'teal') cardStyles.push(styles.teal);
-    else if (variant === 'sky') cardStyles.push(styles.sky);
+    if (variant === 'white') {
+      cardStyles.push({
+        backgroundColor: colors.card,
+        borderColor: colors.cardBorder,
+        borderWidth: 1,
+      });
+    }
+    else if (variant === 'teal') {
+      cardStyles.push({
+        backgroundColor: colors.brand,
+      });
+    }
+    else if (variant === 'sky') {
+      cardStyles.push({
+        backgroundColor: colors.brandLight,
+        borderWidth: 1,
+        borderColor: colors.cardBorder,
+      });
+    }
     else if (variant === 'accent') cardStyles.push(styles.accent);
-    else if (variant === 'gray') cardStyles.push(styles.gray);
+    else if (variant === 'gray') {
+      cardStyles.push({
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.cardBorder,
+      });
+    }
 
     // Apply shadow if enabled
     if (shadow && variant !== 'teal') {
