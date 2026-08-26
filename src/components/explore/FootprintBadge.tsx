@@ -13,15 +13,12 @@ export const FootprintBadge: React.FC<FootprintBadgeProps> = ({ destinations, pr
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-      <View style={[styles.iconWrap, { backgroundColor: colors.surface }]}>
-        <Ionicons name="airplane-outline" size={14} color={colors.text} />
-      </View>
-      <View>
-        <Text style={[styles.value, { color: colors.text }]}>
-          {destinations} destination{destinations === 1 ? '' : 's'}
-        </Text>
-        <Text style={[styles.sub, { color: colors.textMuted }]}>{provinces} province{provinces === 1 ? '' : 's'}</Text>
-      </View>
+      <Ionicons name="airplane" size={12} color={colors.brand} style={{ marginRight: 6 }} />
+      <Text style={[styles.text, { color: colors.text }]}>
+        {destinations} {destinations === 1 ? 'destination' : 'destinations'}
+        <Text style={{ color: colors.textMuted }}> • </Text>
+        {provinces} {provinces === 1 ? 'province' : 'provinces'}
+      </Text>
     </View>
   );
 };
@@ -31,30 +28,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    marginLeft: 16,
+    marginLeft: 12,
     marginTop: 10,
     borderRadius: 20,
     borderWidth: 1,
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  iconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  value: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+  text: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-  },
-  sub: {
-    fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    marginTop: 1,
   },
 });

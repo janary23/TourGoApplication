@@ -17,43 +17,49 @@ export const Card: React.FC<CardProps> = ({
   variant = 'white',
   shadow = true
 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const getCardStyles = () => {
     const cardStyles: ViewStyle[] = [styles.card];
 
-    // Variant background colors
+    // Variant background & border colors
     if (variant === 'white') {
       cardStyles.push({
         backgroundColor: colors.card,
         borderColor: colors.cardBorder,
         borderWidth: 1,
       });
-    }
-    else if (variant === 'teal') {
+    } else if (variant === 'teal') {
       cardStyles.push({
         backgroundColor: colors.brand,
       });
-    }
-    else if (variant === 'sky') {
+    } else if (variant === 'sky') {
       cardStyles.push({
         backgroundColor: colors.brandLight,
         borderWidth: 1,
-        borderColor: colors.cardBorder,
+        borderColor: isDark ? colors.brand : '#BAE6FD',
       });
-    }
-    else if (variant === 'accent') cardStyles.push(styles.accent);
-    else if (variant === 'gray') {
+    } else if (variant === 'accent') {
       cardStyles.push({
-        backgroundColor: colors.card,
+        backgroundColor: isDark ? '#2C1A0A' : '#FFF7ED',
+        borderWidth: 1,
+        borderColor: isDark ? '#4A2A0C' : '#FFEDD5',
+      });
+    } else if (variant === 'gray') {
+      cardStyles.push({
+        backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.cardBorder,
       });
     }
 
-    // Apply shadow if enabled
+    // Apply shadow if enabled (only in light mode, dark mode relies on borders)
     if (shadow && variant !== 'teal') {
-      cardStyles.push(styles.shadow);
+      if (!isDark) {
+        cardStyles.push(styles.shadowLight);
+      } else {
+        cardStyles.push(styles.shadowDark);
+      }
     }
 
     return cardStyles;
@@ -63,7 +69,7 @@ export const Card: React.FC<CardProps> = ({
     return (
       <TouchableOpacity
         onPress={onPress}
-        activeOpacity={0.9}
+        activeOpacity={0.8}
         style={[getCardStyles(), style]}
       >
         {children}
@@ -82,36 +88,20 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     padding: 16,
-    marginVertical: 8,
+    marginVertical: 6,
   },
-  white: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
+  shadowLight: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  teal: {
-    backgroundColor: '#38BDF8', // Brand Teal
-  },
-  sky: {
-    backgroundColor: '#F0F9FF', // Light Sky background
-    borderWidth: 1,
-    borderColor: '#BAE6FD', // Sky Blue border
-  },
-  accent: {
-    backgroundColor: '#FFF7ED', // Light Orange background
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-  },
-  gray: {
-    backgroundColor: '#F9F9F9',
-    borderWidth: 1,
-    borderColor: '#ECECEC',
-  },
-  shadow: {
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+  shadowDark: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 1,
   },
 });

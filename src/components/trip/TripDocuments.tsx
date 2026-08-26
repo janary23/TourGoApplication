@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, TextInput, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { addDocument as dbAddDocument } from '../../services/tripService';
+import { addDocument as dbAddDocument, deleteDocument as dbDeleteDocument } from '../../services/tripService';
+import { AI_FEATURES_ENABLED } from '../../services/aiService';
 
 interface TripDocumentsProps {
   trip: any;
@@ -19,6 +20,10 @@ export default function TripDocuments({
   const [modalVisible, setModalVisible] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState('');
   const [newDocType, setNewDocType] = useState('pdf');
+
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 
   const handleAddDocument = async () => {
     if (!newDocTitle.trim()) {
@@ -41,6 +46,39 @@ export default function TripDocuments({
     Alert.alert("Success", "Document added!");
   };
 
+  const handleDeleteDoc = async () => {
+    if (!deleteConfirmId) return;
+    const { error } = await dbDeleteDocument(deleteConfirmId);
+    setDeleteConfirmId(null);
+    if (error) {
+      Alert.alert('Error', error);
+    } else {
+      loadTrip();
+    }
+  };
+
+  const handleAiExtract = async () => {
+    setAiSuggesting(true);
+    try {
+      const { extractDocumentDetails } = await import('../../services/aiService');
+      const filenames = trip.documents.map((d: any) => d.title);
+      const suggestions = await extractDocumentDetails(filenames);
+      setAiSuggestions(suggestions);
+    } catch (e) {
+      setAiSuggestions(['Flight schedule event on Day 1', 'Hotel check-in event on Day 2']);
+    } finally {
+      setAiSuggesting(false);
+    }
+  };
+
+  const getDocStyle = (title: string) => {
+    const ext = title.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') return { icon: 'document-text', color: '#EF4444', bg: '#FEF2F2', label: 'PDF' };
+    if (ext === 'docx' || ext === 'doc') return { icon: 'document', color: '#2563EB', bg: '#EFF6FF', label: 'DOC' };
+    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') return { icon: 'image', color: '#10B981', bg: '#ECFDF5', label: 'IMG' };
+    return { icon: 'document-attach', color: '#6B7280', bg: '#F3F4F6', label: 'FILE' };
+  };
+
   const renderEmptyState = (
     title: string,
     desc: string,
@@ -51,12 +89,15 @@ export default function TripDocuments({
   ) => {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name={icon as any} size={48} color={color} style={{ opacity: 0.8 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title.toLowerCase()}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc.toLowerCase()}</Text>
+        <View style={[styles.emptyIconBox, { backgroundColor: color + '12', borderColor: color + '25', borderWidth: 1 }]}>
+          <Ionicons name={icon as any} size={28} color={color} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc}</Text>
         {actionLabel && onAction && (
-          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color }]} onPress={onAction}>
-            <Text style={styles.emptyActionBtnText}>{actionLabel.toLowerCase()}</Text>
+          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color, flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={onAction} activeOpacity={0.85}>
+            <Ionicons name="add" size={14} color="#FFFFFF" />
+            <Text style={styles.emptyActionBtnText}>{actionLabel}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -66,10 +107,10 @@ export default function TripDocuments({
   return (
     <View style={{ marginBottom: 20 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Text style={[styles.subHeaderTitle, { color: colors.text, marginBottom: 0, marginTop: 0 }]}>documents</Text>
+        <Text style={[styles.subHeaderTitle, { color: colors.text, marginBottom: 0, marginTop: 0 }]}>Documents</Text>
         <TouchableOpacity style={[styles.tabAddBtn, { borderColor: '#0284C7', borderWidth: 1.5 }]} onPress={() => setModalVisible(true)}>
           <Ionicons name="add" size={16} color="#0284C7" />
-          <Text style={[styles.tabAddBtnText, { color: '#0284C7' }]}>upload file</Text>
+          <Text style={[styles.tabAddBtnText, { color: '#0284C7' }]}>Upload File</Text>
         </TouchableOpacity>
       </View>
       {trip.documents.length === 0 ? (
@@ -84,35 +125,73 @@ export default function TripDocuments({
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {trip.documents.map((doc: any) => {
-            const isPdf = doc.title.toLowerCase().endsWith('.pdf');
-            const isImg = doc.title.toLowerCase().endsWith('.png') || doc.title.toLowerCase().endsWith('.jpg');
-            const fileIcon = isPdf ? 'document-text' : isImg ? 'image' : 'document';
-            const fileIconColor = isPdf ? '#EF4444' : isImg ? '#10B981' : '#F59E0B';
+            const docStyle = getDocStyle(doc.title);
             return (
-              <TouchableOpacity
+              <View
                 key={doc.id}
                 style={{
                   width: '48%',
                   backgroundColor: colors.card,
                   borderColor: colors.cardBorder,
                   borderWidth: 1,
-                  borderRadius: 12,
+                  borderRadius: 16,
                   padding: 12,
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  minHeight: 110
+                  minHeight: 120,
+                  position: 'relative',
                 }}
-                activeOpacity={0.8}
-                onPress={() => Alert.alert("Download Complete", `File saved: ${doc.title}`)}
               >
-                <Ionicons name={fileIcon} size={28} color={fileIconColor} />
-                <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', color: colors.text, textAlign: 'center', marginVertical: 4 }} numberOfLines={1}>
-                  {doc.title.toLowerCase()}
+                {/* Delete button (top-right corner) */}
+                {isOrganizer && (
+                  <TouchableOpacity
+                    style={{ position: 'absolute', top: 8, right: 8 }}
+                    onPress={() => setDeleteConfirmId(doc.id)}
+                  >
+                    <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+                {/* File type icon with color background */}
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: docStyle.bg, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                  <Ionicons name={docStyle.icon as any} size={22} color={docStyle.color} />
+                </View>
+                <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, textAlign: 'center' }} numberOfLines={2}>
+                  {doc.title}
                 </Text>
-                <Text style={{ fontSize: 9, color: colors.textSecondary }}>{doc.fileSize}</Text>
-              </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                  <View style={{ backgroundColor: docStyle.bg, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', color: docStyle.color }}>{docStyle.label}</Text>
+                  </View>
+                  <Text style={{ fontSize: 9, color: colors.textSecondary }}>{doc.fileSize}</Text>
+                </View>
+              </View>
             );
           })}
+        </View>
+      )}
+
+      {/* AI EXTRACTION SUGGESTION */}
+      {AI_FEATURES_ENABLED && trip.documents.length > 0 && (
+        <View style={{ marginTop: 12, backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BAE6FD' }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#0284C7' }}>AI Auto-Extract</Text>
+            </View>
+            <TouchableOpacity onPress={handleAiExtract} disabled={aiSuggesting}>
+              <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: '#0284C7' }}>{aiSuggesting ? 'Reading...' : 'Scan docs'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontSize: 10, color: '#0369A1', marginTop: 4, fontFamily: 'Poppins-Medium' }}>Automatically extract flight times, hotel bookings, and events from your uploaded documents to add itinerary stops.</Text>
+          {aiSuggestions.length > 0 && (
+            <View style={{ marginTop: 8, gap: 4 }}>
+              {aiSuggestions.map((s, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="add-circle-outline" size={14} color="#0284C7" />
+                  <Text style={{ fontSize: 11, color: '#0369A1', flex: 1 }}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -162,7 +241,7 @@ export default function TripDocuments({
                       }}
                       onPress={() => setNewDocType(t)}
                     >
-                      <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: newDocType === t ? '#FFFFFF' : colors.text }}>{t.toUpperCase()}</Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: newDocType === t ? '#FFFFFF' : colors.text }}>{t.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -174,6 +253,33 @@ export default function TripDocuments({
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* DELETE CONFIRM MODAL */}
+      <Modal
+        visible={!!deleteConfirmId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmId(null)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDeleteConfirmId(null)}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: 20 }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
+            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+              <Ionicons name="trash" size={40} color="#EF4444" />
+              <Text style={{ fontSize: 15, fontFamily: 'Poppins-Bold', color: colors.text, marginTop: 12 }}>Delete Document?</Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginTop: 6, paddingHorizontal: 20 }}>This file will be permanently removed from the trip vault.</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20 }}>
+              <TouchableOpacity style={{ flex: 1, height: 44, borderRadius: 10, borderColor: colors.cardBorder, borderWidth: 1, justifyContent: 'center', alignItems: 'center' }} onPress={() => setDeleteConfirmId(null)}>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' }} onPress={handleDeleteDoc}>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -188,7 +294,7 @@ const styles = StyleSheet.create({
   },
   subHeaderTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   tabAddBtn: {
@@ -201,7 +307,7 @@ const styles = StyleSheet.create({
   },
   tabAddBtnText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   emptyContainer: {
@@ -211,16 +317,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     width: '100%',
   },
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   emptyTitle: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 12,
     textAlign: 'center',
   },
   emptyDesc: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     marginTop: 4,
     textAlign: 'center',
@@ -234,7 +348,7 @@ const styles = StyleSheet.create({
   emptyActionBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   modalOverlay: {
@@ -264,7 +378,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   modalCloseBtn: {
@@ -275,7 +389,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 6,
   },
@@ -284,7 +398,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
   },
   submitBtn: {
@@ -298,7 +412,7 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
 });

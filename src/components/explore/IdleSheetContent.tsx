@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../context/ThemeContext';
@@ -17,10 +18,33 @@ const TOTAL_PROVINCES = 82;
 type RegionGroup = 'Luzon' | 'Visayas' | 'Mindanao';
 export type RegionFilter = RegionGroup | 'All';
 const REGION_LABELS: RegionGroup[] = ['Luzon', 'Visayas', 'Mindanao'];
-const REGION_COLORS: Record<RegionGroup, string> = {
-  Luzon: '#22C55E',
-  Visayas: '#22C55E',
-  Mindanao: '#22C55E',
+
+// Curated high-quality, atmospheric Unsplash images for provinces
+const PROVINCE_IMAGES: Record<string, string> = {
+  'PH-PLW': 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=400&q=80', // Palawan
+  'PH-AKL': 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=400&q=80', // Aklan
+  'PH-BEN': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=400&q=80', // Benguet (Baguio)
+  'PH-BOH': 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=400&q=80', // Bohol
+  'PH-CEB': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80', // Cebu
+  'PH-SUN': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80', // Surigao del Norte (Siargao)
+  'PH-ILS': 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?auto=format&fit=crop&w=400&q=80', // Ilocos Sur (Vigan)
+  'PH-BTN': 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=400&q=80', // Batanes
+  'PH-CAV': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=400&q=80', // Cavite
+  'PH-ALB': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=400&q=80', // Mayon
+  'PH-IFU': 'https://images.unsplash.com/photo-1523908511403-7fc7b25592f4?auto=format&fit=crop&w=400&q=80', // Ifugao
+  'PH-RIZ': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=400&q=80', // Rizal
+  'PH-LUN': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80', // La Union
+  'PH-MDR': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80', // Oriental Mindoro
+};
+
+const REGION_IMAGES: Record<string, string> = {
+  Luzon: 'https://images.unsplash.com/photo-1523908511403-7fc7b25592f4?auto=format&fit=crop&w=400&q=80',
+  Visayas: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=400&q=80',
+  Mindanao: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80',
+};
+
+const getProvinceImage = (provinceId: string, region: string) => {
+  return PROVINCE_IMAGES[provinceId] || REGION_IMAGES[region] || REGION_IMAGES.Luzon;
 };
 
 interface IdleSheetContentProps {
@@ -32,6 +56,7 @@ interface IdleSheetContentProps {
   onRegionChange: (region: RegionFilter) => void;
   colors: ThemeColors;
   isDark: boolean;
+  trips?: any[];
 }
 
 // Build deduplicated canonical list once
@@ -53,6 +78,7 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
   onRegionChange,
   colors,
   isDark,
+  trips = [],
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -81,27 +107,162 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
     });
   }, [visitedProvinces]);
 
-  return (
-    <View style={styles.root}>
-      {/* ─── Hero Card ─── */}
-      <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <View style={styles.heroRow}>
-          <View>
-            <Text style={[styles.heroLabel, { color: colors.text }]}>
-              Your Philippines Travel
-            </Text>
-            <View style={styles.heroNumbers}>
-              <Text style={[styles.heroCount, { color: colors.brand }]}>
-                {visitedCount}
-              </Text>
-              <Text style={[styles.heroTotal, { color: colors.brand }]}>
-                {' '}/ {TOTAL_PROVINCES} provinces
-              </Text>
-            </View>
+  // Match trips to province IDs
+  const provinceTripsMap = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    trips.forEach(trip => {
+      if (!trip.destination) return;
+      const normalized = trip.destination.toLowerCase().trim();
+      let provinceId: string | null = null;
+      if (normalized.includes('baguio') || normalized.includes('benguet')) provinceId = 'PH-BEN';
+      else if (normalized.includes('el nido') || normalized.includes('coron') || normalized.includes('puerto princesa') || normalized.includes('palawan')) provinceId = 'PH-PLW';
+      else if (normalized.includes('boracay') || normalized.includes('aklan')) provinceId = 'PH-AKL';
+      else if (normalized.includes('siargao') || normalized.includes('surigao del norte')) provinceId = 'PH-SUN';
+      else if (normalized.includes('surigao del sur')) provinceId = 'PH-SUR';
+      else if (normalized.includes('tagaytay') || normalized.includes('cavite')) provinceId = 'PH-CAV';
+      else if (normalized.includes('subic') || normalized.includes('zambales')) provinceId = 'PH-ZMB';
+      else if (normalized.includes('sagada') || normalized.includes('mountain province')) provinceId = 'PH-MOU';
+      else if (normalized.includes('banaue') || normalized.includes('ifugao')) provinceId = 'PH-IFU';
+      else if (normalized.includes('baler') || normalized.includes('aurora')) provinceId = 'PH-AUR';
+      else if (normalized.includes('vigan') || normalized.includes('ilocos sur')) provinceId = 'PH-ILS';
+      else if (normalized.includes('pagudpud') || normalized.includes('laoag') || normalized.includes('ilocos norte')) provinceId = 'PH-ILN';
+      else if (normalized.includes('san juan') || normalized.includes('la union')) provinceId = 'PH-LUN';
+      else if (normalized.includes('puerto galera') || normalized.includes('oriental mindoro')) provinceId = 'PH-MDR';
+      else if (normalized.includes('hundred islands') || normalized.includes('pangasinan')) provinceId = 'PH-PAN';
+      else if (normalized.includes('antipolo') || normalized.includes('rizal')) provinceId = 'PH-RIZ';
+      else if (normalized.includes('dumaguete') || normalized.includes('negros oriental')) provinceId = 'PH-NER';
+      else if (normalized.includes('bacolod') || normalized.includes('negros occidental')) provinceId = 'PH-NEC';
+      else if (normalized.includes('iloilo')) provinceId = 'PH-ILI';
+      else if (normalized.includes('cebu')) provinceId = 'PH-CEB';
+      else if (normalized.includes('bohol') || normalized.includes('chocolate hills')) provinceId = 'PH-BOH';
+      else if (normalized.includes('davao city') || normalized.includes('davao del sur')) provinceId = 'PH-DAS';
+      else if (normalized.includes('cagayan de oro') || normalized.includes('misamis oriental')) provinceId = 'PH-MSR';
+      else if (normalized.includes('angeles') || normalized.includes('pampanga')) provinceId = 'PH-PAM';
+      else {
+        const matched = PHILIPPINES_PROVINCES.find(p =>
+          normalized.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(normalized)
+        );
+        provinceId = matched ? matched.id : null;
+      }
+      
+      if (provinceId) {
+        if (!map[provinceId]) map[provinceId] = [];
+        map[provinceId].push(trip);
+      }
+    });
+    return map;
+  }, [trips]);
+
+  const renderCard = ({ item }: { item: typeof CANONICAL_PROVINCES[0] }) => {
+    const isVisited = visitedProvinces.includes(item.id);
+    const bgImage = getProvinceImage(item.id, item.region);
+    
+    // Find matching trips for this province
+    const matchingTrips = provinceTripsMap[item.id] || [];
+    const latestTrip = matchingTrips.length > 0 ? matchingTrips[matchingTrips.length - 1] : null;
+    
+    let dateStr = '';
+    let memoryStr = '';
+    
+    if (latestTrip) {
+      dateStr = new Date(latestTrip.endDate).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+      });
+      memoryStr = latestTrip.title || '';
+    }
+
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: isVisited ? colors.brand : colors.cardBorder,
+            shadowColor: isVisited ? colors.brand : '#000',
+          },
+          !isVisited && styles.cardLocked,
+          pressed && { transform: [{ scale: 0.97 }] },
+        ]}
+        onPress={() => onSelectProvince(item.id)}
+      >
+        {/* Card Top: Framed Image */}
+        <View style={styles.cardImageContainer}>
+          <Image
+            source={{ uri: bgImage }}
+            style={[styles.cardImg, !isVisited && { opacity: 0.55 }]}
+          />
+          {/* Overlay if unvisited */}
+          {!isVisited && <View style={styles.lockedOverlay} />}
+
+          {/* Floating Stamp / Wax Seal in the top-right corner */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => onToggleVisited(item.id)}
+            style={[
+              styles.waxSeal,
+              isVisited ? styles.waxSealCollected : styles.waxSealLocked,
+            ]}
+          >
+            {isVisited ? (
+              <Text style={styles.waxSealText}>GO</Text>
+            ) : (
+              <Ionicons name="lock-closed" size={10} color="rgba(255, 255, 255, 0.85)" />
+            )}
+          </TouchableOpacity>
+
+          {/* Floating Region tag in the top-left corner */}
+          <View style={[styles.floatingRegionBadge, { backgroundColor: isVisited ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0, 0, 0, 0.55)' }]}>
+            <Text style={styles.floatingRegionText}>{item.region}</Text>
           </View>
         </View>
 
-        {/* Progress bar */}
+        {/* Card Bottom: Text info */}
+        <View style={styles.cardInfoContainer}>
+          <Text style={[styles.cardTitleText, { color: colors.text }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+
+          {isVisited ? (
+            <View style={styles.cardMeta}>
+              <Text style={[styles.cardMemoryText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {memoryStr ? `"${memoryStr}"` : 'Journey unlocked'}
+              </Text>
+              <View style={styles.cardDateRow}>
+                <Ionicons name="calendar-outline" size={10} color={colors.textMuted} />
+                <Text style={[styles.cardDateText, { color: colors.textMuted }]}>
+                  {dateStr || 'Collected'}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.cardMeta}>
+              <Text style={[styles.cardLockText, { color: colors.textMuted }]}>
+                Unmapped territory
+              </Text>
+              <Text style={[styles.cardExploreText, { color: colors.brand }]}>
+                Tap to collect
+              </Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      {/* ─── Scrapbook Odyssey Dashboard ─── */}
+      <View style={[styles.dashboardCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <Text style={[styles.dashboardLabel, { color: colors.text }]}>
+          My Philippine Odyssey
+        </Text>
+        
+        <Text style={[styles.dashboardStats, { color: colors.textMuted }]}>
+          You have journeyed through <Text style={[styles.highlightText, { color: colors.brand }]}>{visitedCount}</Text> of the <Text style={styles.boldText}>{TOTAL_PROVINCES}</Text> provinces.
+        </Text>
+
+        {/* Subtle Progress bar */}
         <View style={[styles.progressTrack, { backgroundColor: colors.surface }]}>
           <View
             style={[
@@ -110,208 +271,82 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
             ]}
           />
         </View>
-
-        {/* Region pills */}
-        <View style={styles.regionRow}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => onRegionChange('All')}
-            style={[
-              styles.regionPill,
-              region === 'All' && styles.regionPillActive,
-              {
-                backgroundColor:
-                  region === 'All'
-                    ? '#22C55E'
-                    : colors.surface,
-                borderColor:
-                  region === 'All' ? '#22C55E' : colors.cardBorder,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.regionPillText,
-                {
-                  color: region === 'All' ? '#FFFFFF' : colors.textMuted,
-                },
-              ]}
-            >
-              All
-            </Text>
-          </TouchableOpacity>
-
-          {regionStats.map(({ region: r, total, visited }) => {
-            const isActive = region === r;
-            const regionColor = REGION_COLORS[r];
-            return (
-              <TouchableOpacity
-                key={r}
-                activeOpacity={0.8}
-                onPress={() => onRegionChange(r)}
-                style={[
-                  styles.regionPill,
-                  {
-                    backgroundColor: isActive
-                      ? regionColor
-                      : colors.surface,
-                    borderColor: isActive ? regionColor : colors.cardBorder,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.regionPillText,
-                    { color: isActive ? '#FFFFFF' : colors.textMuted },
-                  ]}
-                >
-                  {r}
-                </Text>
-                <View
-                  style={[
-                    styles.regionBubble,
-                    {
-                      backgroundColor: isActive
-                        ? 'rgba(255,255,255,0.25)'
-                        : colors.divider,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.regionBubbleText,
-                      { color: isActive ? '#FFFFFF' : colors.textMuted },
-                    ]}
-                  >
-                    {visited}/{total}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
       </View>
 
-      {/* ─── Search ─── */}
+      {/* ─── iOS segmented capsule filter row ─── */}
+      <View style={[styles.filterContainer, { backgroundColor: colors.inputBg }]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => onRegionChange('All')}
+          style={[
+            styles.filterPill,
+            region === 'All' && [styles.filterPillActive, { backgroundColor: colors.card }],
+          ]}
+        >
+          <Text style={[styles.filterPillText, { color: region === 'All' ? colors.text : colors.textMuted }]}>
+            All
+          </Text>
+        </TouchableOpacity>
+
+        {regionStats.map(({ region: r }) => {
+          const isActive = region === r;
+          return (
+            <TouchableOpacity
+              key={r}
+              activeOpacity={0.8}
+              onPress={() => onRegionChange(r)}
+              style={[
+                styles.filterPill,
+                isActive && [styles.filterPillActive, { backgroundColor: colors.card }],
+              ]}
+            >
+              <Text style={[styles.filterPillText, { color: isActive ? colors.text : colors.textMuted }]}>
+                {r}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ─── Search Bar ─── */}
       <View
         style={[
           styles.searchBar,
           { backgroundColor: colors.inputBg, borderColor: colors.cardBorder },
         ]}
       >
-        <Ionicons name="search" size={14} color={colors.textMuted} />
+        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search provinces…"
+          placeholder="Search collections..."
           placeholderTextColor={colors.textMuted}
           style={[styles.searchInput, { color: colors.text }]}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-            <Ionicons name="close-circle" size={15} color={colors.textMuted} />
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* ─── Province List ─── */}
-      <View style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      <View style={styles.listCard}>
         <FlatList
           data={filteredProvinces}
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const isVisited = visitedProvinces.includes(item.id);
-          const regionColor = REGION_COLORS[item.region as RegionGroup];
-
-          return (
-            <Pressable
-              style={({ pressed }) => [
-                styles.provinceRow,
-                {
-                  backgroundColor: pressed
-                    ? colors.surface
-                    : 'transparent',
-                  borderBottomColor: colors.divider,
-                },
-              ]}
-              onPress={() => onSelectProvince(item.id)}
-            >
-              {/* Visited Checkbox */}
-              <TouchableOpacity
-                hitSlop={8}
-                activeOpacity={0.8}
-                onPress={() => onToggleVisited(item.id)}
-                style={[
-                  styles.checkbox,
-                  {
-                    backgroundColor: isVisited
-                      ? colors.brand
-                      : 'transparent',
-                    borderColor: isVisited ? colors.brand : colors.cardBorder,
-                  },
-                ]}
-              >
-                {isVisited && (
-                  <Ionicons name="checkmark" size={11} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
-
-              {/* Province Name + Region */}
-              <View style={styles.provInfo}>
-                <Text
-                  style={[
-                    styles.provName,
-                    {
-                      color: colors.text,
-                      fontFamily: isVisited
-                        ? 'PlusJakartaSans-Bold'
-                        : 'PlusJakartaSans-SemiBold',
-                    },
-                  ]}
-                >
-                  {item.name}
-                </Text>
-                <View style={styles.regionTag}>
-                  <View
-                    style={[
-                      styles.regionDot,
-                      { backgroundColor: regionColor },
-                    ]}
-                  />
-                  <Text style={[styles.regionTagText, { color: colors.textMuted }]}>
-                    {item.region}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Status badge */}
-              {isVisited ? (
-                <View
-                  style={[
-                    styles.visitedBadge,
-                    { backgroundColor: colors.brandLight },
-                  ]}
-                >
-                  <Text style={[styles.visitedBadgeText, { color: colors.brand }]}>
-                    ✓ Visited
-                  </Text>
-                </View>
-              ) : (
-                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-              )}
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              No provinces match "{searchQuery}"
-            </Text>
-          </View>
-        )}
-      />
+          numColumns={2}
+          renderItem={renderCard}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No provinces match "{searchQuery}"
+              </Text>
+            </View>
+          )}
+        />
       </View>
     </View>
   );
@@ -321,187 +356,229 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingTop: 10,
   },
-  // Hero stats card
-  heroCard: {
-    borderRadius: 16,
+  // Scrapbook stats card
+  dashboardCard: {
+    borderRadius: 20,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
-    marginBottom: 10,
+    paddingVertical: 18,
+    marginBottom: 12,
     shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 2,
   },
-  listCard: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  heroLabel: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+  dashboardLabel: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-    letterSpacing: 0.3,
-    marginBottom: 4,
+    letterSpacing: -0.3,
+    marginBottom: 6,
   },
-  heroNumbers: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  heroCount: {
-    fontSize: 46,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
-    letterSpacing: -1,
-    lineHeight: 52,
-  },
-  heroTotal: {
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
-  },
-  // Progress bar
-  progressTrack: {
-    height: 6,
-    borderRadius: 6,
-    overflow: 'hidden',
+  dashboardStats: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Regular',
+    lineHeight: 18,
     marginBottom: 14,
+  },
+  highlightText: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  boldText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+  },
+  progressTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 6,
+    borderRadius: 2,
   },
-  // Region filter pills
-  regionRow: {
+  // Segmented filters
+  filterContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
+    padding: 4,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 4,
   },
-  regionPill: {
-    flexDirection: 'row',
+  filterPill: {
+    flex: 1,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    gap: 5,
-  },
-  regionPillActive: {},
-  regionPillText: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-  },
-  regionBubble: {
+    justifyContent: 'center',
     borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
   },
-  regionBubbleText: {
-    fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
+  filterPillActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
   },
   // Search bar
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 0,
-    marginBottom: 10,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     gap: 8,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
+    fontFamily: 'Poppins-Medium',
     padding: 0,
   },
-  // Province list
+  // Card Grid Layout
+  listCard: {
+    flex: 1,
+    overflow: 'hidden',
+  },
   listContent: {
-    paddingHorizontal: 8,
-    paddingBottom: 12,
+    paddingBottom: 24,
   },
-  provinceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+  // Premium iOS Collectible Card Style
+  card: {
+    flex: 1,
+    height: 210,
+    margin: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
     borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardLocked: {
+    opacity: 0.85,
+  },
+  cardImageContainer: {
+    height: 115,
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  lockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  floatingRegionBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  floatingRegionText: {
+    fontSize: 8,
+    fontFamily: 'Poppins-Bold',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  waxSeal: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  provInfo: {
+  waxSealCollected: {
+    backgroundColor: '#991B1B', // Rich crimson wax
+    borderWidth: 1.5,
+    borderColor: '#D97706', // Amber gold border seal ring
+  },
+  waxSealLocked: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  waxSealText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-ExtraBold',
+    fontWeight: '900',
+    color: '#D97706', // Amber gold stamp letter
+  },
+  cardInfoContainer: {
+    padding: 10,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cardTitleText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  cardMeta: {
+    gap: 2,
+    justifyContent: 'flex-end',
     flex: 1,
   },
-  provName: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 19,
+  cardMemoryText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+    fontStyle: 'italic',
   },
-  regionTag: {
+  cardDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 1,
+    marginTop: 2,
   },
-  regionDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
+  cardDateText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Regular',
   },
-  regionTagText: {
+  cardLockText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
+    fontFamily: 'Poppins-Regular',
+    fontStyle: 'italic',
   },
-  visitedBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  visitedBadgeText: {
+  cardExploreText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
   },
-  // Empty state
   emptyWrap: {
     paddingVertical: 32,
     alignItems: 'center',
   },
   emptyText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
+    fontFamily: 'Poppins-Regular',
     textAlign: 'center',
   },
 });

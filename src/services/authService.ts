@@ -2,6 +2,7 @@
 // Real Supabase Auth operations — replaces all mock currentUser logic
 
 import { supabase } from './supabase';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export interface UserProfile {
   id: string;
@@ -83,4 +84,52 @@ export async function updateProfile(
 export async function getCurrentUserId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+/** Upload an avatar image to Supabase Storage and update the profile. */
+export async function uploadAvatar(
+  localUri: string
+): Promise<{ url: string | null; error: string | null }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { url: null, error: 'Not authenticated' };
+
+  const base64 = await FileSystem.readAsStringAsync(localUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  const binaryStr = atob(base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  const ext = localUri.split('.').pop()?.toLowerCase() || 'jpg';
+  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+  const filePath = `avatars/${user.id}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(filePath, bytes, { contentType: mimeType, upsert: true });
+
+  if (uploadError) {
+    const msg = uploadError.message.includes('Bucket not found')
+      ? 'Storage bucket not found. Run scripts/create_avatars_bucket.sql in Supabase SQL Editor first.'
+      : uploadError.message;
+    return { url: null, error: msg };
+  }
+
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+  const cacheBuster = `?t=${Date.now()}`;
+  const avatarUrl = urlData?.publicUrl ? urlData.publicUrl + cacheBuster : null;
+
+  if (avatarUrl) {
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: avatarUrl })
+      .eq('id', user.id);
+
+    if (updateError) return { url: null, error: updateError.message };
+  }
+
+  return { url: avatarUrl, error: null };
 }

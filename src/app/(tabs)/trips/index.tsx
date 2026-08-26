@@ -3,12 +3,12 @@ import { StyleSheet, View, Text, ScrollView, Image, TouchableOpacity, Platform, 
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trip } from '../../services/mockData';
-import { getTrips, TripWithRole } from '../../services/tripService';
-import { useTheme } from '../../context/ThemeContext';
-import { Button } from '../../components/ui/Button';
-import FeaturedTripCard from '../../components/trips/FeaturedTripCard';
-import OtherTripCard from '../../components/trips/OtherTripCard';
+import { Trip } from '../../../services/mockData';
+import { getTrips, TripWithRole } from '../../../services/tripService';
+import { useTheme } from '../../../context/ThemeContext';
+import { Button } from '../../../components/ui/Button';
+import FeaturedTripCard from '../../../components/trips/FeaturedTripCard';
+import OtherTripCard from '../../../components/trips/OtherTripCard';
 
 // Helper to map mock members to Unsplash photos for premium visualization
 const getMemberAvatar = (name: string): string | null => {
@@ -78,10 +78,10 @@ export default function TripsScreen() {
     today.setHours(0, 0, 0, 0);
     const start = new Date(startDateStr);
     start.setHours(0, 0, 0, 0);
-    
+
     const diffTime = start.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) {
       return null;
     }
@@ -155,7 +155,7 @@ export default function TripsScreen() {
       {/* Top Header Row with brand logo/name on the left and actions on the right */}
       <View style={[styles.headerRow, { borderBottomColor: colors.divider }]}>
         <View style={styles.headerBrandContainer}>
-          <Image source={require('../../../assets/images/TourGoLogo.png')} style={styles.headerLogoImage} />
+          <Image source={require('../../../../assets/images/TourGoLogo.png')} style={styles.headerLogoImage} />
           <Text style={[styles.appName, { color: colors.brand }]}>
             Tour<Text style={{ color: '#22C55E' }}>Go</Text>
           </Text>
@@ -172,7 +172,7 @@ export default function TripsScreen() {
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push('/trip/create')}
-            style={[styles.smallActionButton, { backgroundColor: '#22C55E', borderColor: '#22C55E' }]}
+            style={[styles.smallActionButton, { backgroundColor: colors.brand, borderColor: colors.brand }]}
           >
             <Ionicons name="add" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
             <Text style={[styles.smallActionButtonText, { color: '#FFFFFF' }]}>Create</Text>
@@ -184,101 +184,101 @@ export default function TripsScreen() {
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: 'PlusJakartaSans-Regular' }}>Loading your trips...</Text>
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: 'Poppins-Regular' }}>Loading your trips...</Text>
         </View>
       ) : (
-      <ScrollView
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.brand}
-          />
-        }
-      >
-        {trips.length > 0 ? (
-          <>
-            {/* Featured Trip Section */}
-            {featuredTrip && (
-              <FeaturedTripCard
-                trip={featuredTrip}
-                colors={colors}
-                isOrganizer={featuredTrip.role === 'organizer'}
-                countdown={getCountdownText(featuredTrip.startDate)}
-                formatTripDate={formatTripDate}
-                router={router}
-              />
-            )}
-
-            {/* Other Upcoming Trips */}
-            {otherUpcomingTrips.length > 0 && (
-              <View style={{ width: '100%', marginBottom: 16 }}>
-                <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
-                  UPCOMING
-                </Text>
-                {otherUpcomingTrips.map(trip => (
-                  <OtherTripCard
-                    key={trip.id}
-                    trip={trip}
-                    colors={colors}
-                    isOrganizer={trip.role === 'organizer'}
-                    formatTripDate={formatTripDate}
-                    router={router}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* Past Trips */}
-            {pastTrips.length > 0 && (
-              <View style={{ width: '100%', marginBottom: 16 }}>
-                <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
-                  PAST
-                </Text>
-                {pastTrips.map(trip => (
-                  <OtherTripCard
-                    key={trip.id}
-                    trip={trip}
-                    colors={colors}
-                    isOrganizer={trip.role === 'organizer'}
-                    formatTripDate={formatTripDate}
-                    router={router}
-                  />
-                ))}
-              </View>
-            )}
-          </>
-        ) : (
-          /* Clean Minimal Empty State matching index.tsx mascot empty treatment */
-          <View style={styles.emptyContainer}>
-            <Image
-              source={require('../../../assets/images/EagleMascotS5.png')}
-              style={{ width: 140, height: 140, resizeMode: 'contain', marginBottom: 12 }}
+        <ScrollView
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.brand}
             />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips planned yet</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              Start organizing a new adventure or join your group's trip right away!
-            </Text>
-            <View style={styles.emptyActions}>
-              <Button
-                title="Create a Trip"
-                onPress={() => router.push('/trip/create')}
-                style={styles.actionBtn}
-                size="small"
+          }
+        >
+          {trips.length > 0 ? (
+            <>
+              {/* Featured Trip Section */}
+              {featuredTrip && (
+                <FeaturedTripCard
+                  trip={featuredTrip}
+                  colors={colors}
+                  isOrganizer={featuredTrip.role === 'organizer'}
+                  countdown={getCountdownText(featuredTrip.startDate)}
+                  formatTripDate={formatTripDate}
+                  router={router}
+                />
+              )}
+
+              {/* Other Upcoming Trips */}
+              {otherUpcomingTrips.length > 0 && (
+                <View style={{ width: '100%', marginBottom: 16 }}>
+                  <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+                    UPCOMING
+                  </Text>
+                  {otherUpcomingTrips.map(trip => (
+                    <OtherTripCard
+                      key={trip.id}
+                      trip={trip}
+                      colors={colors}
+                      isOrganizer={trip.role === 'organizer'}
+                      formatTripDate={formatTripDate}
+                      router={router}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Past Trips */}
+              {pastTrips.length > 0 && (
+                <View style={{ width: '100%', marginBottom: 16 }}>
+                  <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>
+                    PAST
+                  </Text>
+                  {pastTrips.map(trip => (
+                    <OtherTripCard
+                      key={trip.id}
+                      trip={trip}
+                      colors={colors}
+                      isOrganizer={trip.role === 'organizer'}
+                      formatTripDate={formatTripDate}
+                      router={router}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          ) : (
+            /* Clean Minimal Empty State matching index.tsx mascot empty treatment */
+            <View style={styles.emptyContainer}>
+              <Image
+                source={require('../../../../assets/images/EagleMascotS5.png')}
+                style={{ width: 140, height: 140, resizeMode: 'contain', marginBottom: 12 }}
               />
-              <Button
-                title="Join a Trip"
-                onPress={() => router.push('/trip/join')}
-                variant="outline"
-                style={styles.actionBtn}
-                size="small"
-              />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips planned yet</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+                Start organizing a new adventure or join your group's trip right away!
+              </Text>
+              <View style={styles.emptyActions}>
+                <Button
+                  title="Create a Trip"
+                  onPress={() => router.push('/trip/create')}
+                  style={styles.actionBtn}
+                  size="small"
+                />
+                <Button
+                  title="Join a Trip"
+                  onPress={() => router.push('/trip/join')}
+                  variant="outline"
+                  style={styles.actionBtn}
+                  size="small"
+                />
+              </View>
             </View>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   headerBrandContainer: {
@@ -301,14 +301,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerLogoImage: {
-    width: 36,
-    height: 36,
-    marginRight: 10,
+    width: 30,
+    height: 30,
+    marginRight: 8,
     resizeMode: 'contain',
   },
   appName: {
-    fontSize: 24,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 20,
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pageTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 26,
     letterSpacing: -0.5,
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   smallActionButtonText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 12,
   },
@@ -399,13 +399,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   tripTitleText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 16,
     lineHeight: 20,
   },
   tripSecondaryText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 12,
     textTransform: 'uppercase',
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tripDateText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
   },
   socialAndStatusBlock: {
@@ -453,12 +453,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarFallbackText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 9,
     fontWeight: '700',
   },
   membersCountText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 11,
     marginLeft: 8,
   },
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
   updateText: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 11,
   },
   emptyContainer: {
@@ -484,14 +484,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 6,
     marginTop: 8,
   },
   emptySubtitle: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionHeader: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 12,
     textTransform: 'uppercase',
@@ -540,21 +540,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   countdownText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 12,
     letterSpacing: 0.5,
     marginTop: 12,
   },
   featuredTripTitleText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 20,
     lineHeight: 24,
     marginTop: 8,
   },
   featuredTripSecondaryText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 13,
     textTransform: 'uppercase',
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   featuredTripDateText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 13,
   },
   featuredSocialAndStatusBlock: {
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   featuredAvatarFallbackText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   featuredMembersCountText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
   },
   featuredRelationshipText: {
@@ -623,7 +623,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   featuredUpdateText: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
   },
 });
+

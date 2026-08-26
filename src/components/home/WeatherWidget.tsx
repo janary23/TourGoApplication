@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   weatherLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     marginBottom: 2,
     textTransform: 'uppercase',
@@ -314,13 +314,13 @@ const styles = StyleSheet.create({
   },
   weatherTemp: {
     fontSize: 22,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     lineHeight: 24,
   },
   weatherLocation: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     marginTop: 1,
   },
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   expandedTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weatherTabContainer: {
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   weatherTabBtnText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weatherMainCard: {
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   },
   weatherCityName: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weatherMainCondText: {
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   },
   weatherMainTempText: {
     fontSize: 28,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
   },
   weatherMainIcon: {
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   weatherMetricVal: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 3,
   },
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   },
   forecastHeaderTitle: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   forecastDayName: {
     width: 32,
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   forecastMidSection: {

@@ -52,8 +52,8 @@ export default function ActivityItemCard({
         <Text style={[styles.descText, { color: colors.textSecondary }]} numberOfLines={3}>{item.description}</Text>
       </View>
       <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
-        <Text style={[styles.viewTripText, { color: '#22C55E' }]}>Open Trip Dashboard</Text>
-        <Ionicons name="chevron-forward" size={14} color="#22C55E" />
+        <Text style={[styles.viewTripText, { color: colors.brand }]}>Open Trip Dashboard</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
       </View>
     </Card>
   );
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   },
   tripLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   urgentText: {
     color: '#FFFFFF',
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   cardBody: {
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   viewTripText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
 });

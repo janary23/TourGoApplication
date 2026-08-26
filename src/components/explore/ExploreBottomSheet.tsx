@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, PanResponder, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -10,21 +10,31 @@ interface ExploreBottomSheetProps {
   onStateChange: (state: SheetState) => void;
   bottomInset: number;
   children: React.ReactNode;
+  /** Shown beside the handle, even while collapsed — e.g. "My Passport" */
+  peekTitle?: string;
+  /** Small line under the title — e.g. "24 of 82 provinces stamped" */
+  peekSubtitle?: string;
+  /** 0..1 — renders a thin gold progress sliver next to the peek text */
+  progress?: number;
 }
 
 const HANDLE_WIDTH = 40;
+const GOLD = '#D9A441';
 
 export const ExploreBottomSheet: React.FC<ExploreBottomSheetProps> = ({
   state,
   onStateChange,
   bottomInset,
   children,
+  peekTitle,
+  peekSubtitle,
+  progress,
 }) => {
   const { colors, isDark } = useTheme();
   const { height } = useWindowDimensions();
 
   // Define clear height boundaries
-  const collapsedH = 110;
+  const collapsedH = peekTitle ? 132 : 110;
   const partialH = height * 0.42;
   const fullH = height - bottomInset;
 
@@ -98,6 +108,8 @@ export const ExploreBottomSheet: React.FC<ExploreBottomSheetProps> = ({
     })
   ).current;
 
+  const clampedProgress = typeof progress === 'number' ? Math.max(0, Math.min(1, progress)) : null;
+
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <Animated.View
@@ -113,8 +125,49 @@ export const ExploreBottomSheet: React.FC<ExploreBottomSheetProps> = ({
           },
         ]}
       >
+        {/* Bookmark ribbon tab — the "this is a page in your passport" cue */}
+        <View style={[styles.ribbonTab, { backgroundColor: GOLD }]} pointerEvents="none">
+          <Ionicons name="book-outline" size={13} color="#3A2A05" />
+        </View>
+
         <View {...panResponder.panHandlers} style={styles.grabArea}>
-          <View style={[styles.handle, { backgroundColor: isDark ? '#3A3A3C' : '#E3E3E3' }]} />
+          <View style={[styles.handle, { backgroundColor: GOLD, opacity: 0.55 }]} />
+
+          {(peekTitle || peekSubtitle) && (
+            <View style={styles.peekRow}>
+              <View
+                style={[
+                  styles.peekIconWrap,
+                  { backgroundColor: isDark ? 'rgba(217,164,65,0.15)' : 'rgba(217,164,65,0.14)' },
+                ]}
+              >
+                <Ionicons name="ribbon" size={16} color={GOLD} />
+              </View>
+              <View style={{ flex: 1 }}>
+                {peekTitle && (
+                  <Text style={[styles.peekTitle, { color: colors.text }]} numberOfLines={1}>
+                    {peekTitle}
+                  </Text>
+                )}
+                {peekSubtitle && (
+                  <Text style={[styles.peekSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
+                    {peekSubtitle}
+                  </Text>
+                )}
+                {clampedProgress !== null && (
+                  <View style={[styles.progressTrack, { backgroundColor: isDark ? '#2A2A2C' : '#EFEAE0' }]}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${Math.round(clampedProgress * 100)}%`, backgroundColor: GOLD },
+                      ]}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {state !== 'collapsed' && (
             <TouchableOpacity
               onPress={() => onStateChange('collapsed')}
@@ -156,15 +209,68 @@ const styles = StyleSheet.create({
     elevation: 20,
     zIndex: 999,
   },
+  ribbonTab: {
+    position: 'absolute',
+    top: -16,
+    alignSelf: 'center',
+    width: 34,
+    height: 24,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    zIndex: 1000,
+  },
   grabArea: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 12,
-    paddingBottom: 12,
+    paddingBottom: 10,
     width: '100%',
   },
   handle: {
     width: HANDLE_WIDTH,
+    height: 4,
+    borderRadius: 2,
+  },
+  peekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  peekIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  peekTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  peekSubtitle: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    marginTop: 6,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressFill: {
     height: 4,
     borderRadius: 2,
   },

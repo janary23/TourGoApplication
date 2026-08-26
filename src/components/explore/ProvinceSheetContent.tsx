@@ -1,6 +1,7 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import type { ThemeColors } from '../../context/ThemeContext';
 import type { PhilippinesProvince } from '../../services/philippinesMapData';
 import type { Destination, Municipality } from '../../services/destinations';
@@ -21,7 +22,11 @@ interface ProvinceSheetContentProps {
   colors: ThemeColors;
   isDark: boolean;
   trips?: any[];
+  isLoadingDests?: boolean;
 }
+
+const GOLD = '#D9A441';
+const CRIMSON_WAX = '#991B1B';
 
 export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
   province,
@@ -37,21 +42,44 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
   onSelectDest,
   onClose,
   colors,
-  trips,
+  trips = [],
+  isLoadingDests = false,
 }) => {
+  const router = useRouter();
   const exploredHere = destinations.filter(d => visitedDests.includes(d.id)).length;
   const savedHere = destinations.filter(d => savedDests.includes(d.id)).length;
 
+  const handlePlanTrip = () => {
+    router.push(
+      `/trip/create?dest=${encodeURIComponent(province.name)}&title=${encodeURIComponent(
+        province.name + ' Adventure'
+      )}`
+    );
+  };
+
+  const tripMemories = trips.filter(t => {
+    const end = new Date(t.endDate);
+    return end < new Date();
+  });
+
+  const firstVisitedDate = tripMemories.length > 0
+    ? new Date(Math.min(...tripMemories.map(t => new Date(t.startDate).getTime()))).toLocaleDateString(undefined, {
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
+      {/* ─── Back Header ─── */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} style={{ marginRight: 12 }}>
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
+        <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} style={styles.backBtn}>
+          <Ionicons name="chevron-down" size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={[styles.title, { color: colors.text }]}>{province.name}</Text>
           <Text style={[styles.context, { color: colors.textMuted }]}>
-            {province.region}, Philippines
+            {province.region} Region • Philippines
           </Text>
         </View>
         <View style={styles.actions}>
@@ -59,28 +87,28 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
             style={[
               styles.toggle,
               {
-                backgroundColor: provinceVisited ? colors.brandLight : colors.surface,
-                borderColor: provinceVisited ? colors.brand : colors.cardBorder,
+                backgroundColor: provinceVisited ? 'rgba(153, 27, 27, 0.1)' : colors.surface,
+                borderColor: provinceVisited ? CRIMSON_WAX : colors.cardBorder,
               },
             ]}
             onPress={onToggleVisited}
             activeOpacity={0.8}
           >
             <Ionicons
-              name={provinceVisited ? 'checkmark-circle' : 'ellipse-outline'}
-              size={15}
-              color={provinceVisited ? colors.brand : colors.textMuted}
+              name={provinceVisited ? 'ribbon' : 'ribbon-outline'}
+              size={14}
+              color={provinceVisited ? CRIMSON_WAX : colors.textMuted}
             />
-            <Text style={[styles.toggleText, { color: provinceVisited ? colors.brand : colors.textMuted }]}>
-              {provinceVisited ? 'Visited' : 'Visited?'}
+            <Text style={[styles.toggleText, { color: provinceVisited ? CRIMSON_WAX : colors.textMuted }]}>
+              {provinceVisited ? 'Stamped' : 'Stamp'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.toggle,
               {
-                backgroundColor: provinceSaved ? '#E8F8EE' : colors.surface,
-                borderColor: provinceSaved ? '#22C55E' : colors.cardBorder,
+                backgroundColor: provinceSaved ? 'rgba(217, 164, 65, 0.1)' : colors.surface,
+                borderColor: provinceSaved ? GOLD : colors.cardBorder,
               },
             ]}
             onPress={onToggleSaved}
@@ -88,79 +116,103 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
           >
             <Ionicons
               name={provinceSaved ? 'bookmark' : 'bookmark-outline'}
-              size={15}
-              color={provinceSaved ? '#22C55E' : colors.textMuted}
+              size={14}
+              color={provinceSaved ? GOLD : colors.textMuted}
             />
-            <Text style={[styles.toggleText, { color: provinceSaved ? '#22C55E' : colors.textMuted }]}>
+            <Text style={[styles.toggleText, { color: provinceSaved ? GOLD : colors.textMuted }]}>
               {provinceSaved ? 'Saved' : 'Save'}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ─── Trips Section (Collection Mark Info Card) ─── */}
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <Text style={[styles.label, { color: colors.brand, fontFamily: 'PlusJakartaSans-Bold', letterSpacing: 0.5, marginBottom: 8 }]}>YOUR TRIPS HERE</Text>
-        {trips && trips.length > 0 ? (
-          trips.map(trip => (
+      {/* ─── State Container ─── */}
+      {provinceVisited ? (
+        /* Explored State Card */
+        <View style={[styles.stampCard, { backgroundColor: colors.card, borderColor: GOLD }]}>
+          <View style={styles.stampHeader}>
+            <View style={[styles.stampSeal, { backgroundColor: CRIMSON_WAX }]}>
+              <Text style={styles.stampSealText}>PASSED</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.stampStatusTitle, { color: colors.text }]}>PROVINCE COLLECTED</Text>
+              <Text style={[styles.stampStatusSub, { color: colors.textMuted }]}>
+                {firstVisitedDate ? `First unlocked: ${firstVisitedDate}` : 'Stamped in passport'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.dividerLine, { borderBottomColor: colors.cardBorder }]} />
+
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={[styles.statNum, { color: GOLD }]}>{exploredHere}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Spots Visited</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={[styles.statNum, { color: colors.text }]}>{tripMemories.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Journeys Done</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={[styles.statNum, { color: colors.text }]}>{savedHere}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Wishlisted</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        /* Unexplored State Card */
+        <View style={[styles.unexploredCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Ionicons name="compass-outline" size={32} color={colors.textMuted} style={styles.compassIcon} />
+          <Text style={[styles.unexploredTitle, { color: colors.text }]}>Not explored yet</Text>
+          <Text style={[styles.unexploredText, { color: colors.textMuted }]}>
+            “Your next adventure?” Add this beautiful province to your travel wishlist or map out a plan.
+          </Text>
+          <TouchableOpacity
+            style={[styles.planButton, { backgroundColor: colors.brand }]}
+            onPress={handlePlanTrip}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="calendar-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.planButtonText}>Plan Your First Trip</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ─── Trips / Memories Section ─── */}
+      {provinceVisited && tripMemories.length > 0 && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={[styles.sectionLabel, { color: colors.brand }]}>TRAVEL MEMORIES</Text>
+          {tripMemories.map(trip => (
             <View key={trip.id} style={[styles.tripCard, { borderBottomColor: colors.cardBorder }]}>
               <View style={styles.tripHeader}>
-                <Ionicons name="airplane" size={16} color={colors.brand} style={{ marginRight: 6 }} />
+                <Ionicons name="airplane" size={15} color={colors.brand} style={{ marginRight: 6 }} />
                 <Text style={[styles.tripTitle, { color: colors.text }]}>{trip.title}</Text>
               </View>
               
               <View style={styles.tripInfoRow}>
-                <Ionicons name="location-outline" size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
+                <Ionicons name="calendar-outline" size={12} color={colors.textMuted} style={{ marginRight: 6 }} />
                 <Text style={[styles.tripInfoText, { color: colors.textSecondary }]}>
-                  <Text style={{ fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }}>Where: </Text>
-                  {trip.destination}
-                </Text>
-              </View>
-
-              <View style={styles.tripInfoRow}>
-                <Ionicons name="calendar-outline" size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
-                <Text style={[styles.tripInfoText, { color: colors.textSecondary }]}>
-                  <Text style={{ fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }}>When: </Text>
                   {new Date(trip.startDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})} - {new Date(trip.endDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}
                 </Text>
               </View>
 
               {trip.membersList && trip.membersList.length > 0 && (
                 <View style={styles.tripInfoRow}>
-                  <Ionicons name="people-outline" size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
+                  <Ionicons name="people-outline" size={12} color={colors.textMuted} style={{ marginRight: 6 }} />
                   <Text style={[styles.tripInfoText, { color: colors.textSecondary }]} numberOfLines={1}>
-                    <Text style={{ fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }}>Who: </Text>
-                    {trip.membersList.join(', ')}
+                    Traveled with: {trip.membersList.join(', ')}
                   </Text>
                 </View>
               )}
             </View>
-          ))
-        ) : (
-          <Text style={[styles.emptyHint, { color: colors.textMuted }]}>
-            No trips planned or visited in this province yet. Create a trip to mark your footprint!
-          </Text>
-        )}
-      </View>
-
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <View style={styles.statsRow}>
-          <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Ionicons name="footsteps-outline" size={15} color={colors.brand} />
-            <Text style={[styles.statText, { color: colors.textSecondary }]}>
-              {exploredHere} place{exploredHere === 1 ? '' : 's'} explored
-            </Text>
-          </View>
-          <View style={[styles.stat, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Ionicons name="bookmark-outline" size={15} color="#22C55E" />
-            <Text style={[styles.statText, { color: colors.textSecondary }]}>{savedHere} saved</Text>
-          </View>
+          ))}
         </View>
-      </View>
+      )}
 
+      {/* ─── Municipalities ─── */}
       {municipalities.length > 0 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>MUNICIPALITIES</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MUNICIPALITIES</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muniScroll}>
             {municipalities.map(m => (
               <TouchableOpacity
@@ -169,7 +221,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
                 onPress={() => onSelectMuni(m.id)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="business-outline" size={14} color={colors.brand} />
+                <Ionicons name="business-outline" size={12} color={colors.brand} style={{ marginRight: 4 }} />
                 <Text style={[styles.muniChipText, { color: colors.textSecondary }]}>{m.name}</Text>
               </TouchableOpacity>
             ))}
@@ -177,37 +229,48 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
         </View>
       )}
 
+      {/* ─── Popular Destinations List ─── */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <Text style={[styles.label, { color: colors.textMuted }]}>POPULAR DESTINATIONS</Text>
-        {destinations.length > 0 ? (
-          destinations.map(dest => (
-            <TouchableOpacity
-              key={dest.id}
-              style={[styles.row, { borderColor: colors.cardBorder }]}
-              onPress={() => onSelectDest(dest.id)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.rowDot,
-                  { backgroundColor: visitedDests.includes(dest.id) ? '#22C55E' : colors.surface },
-                ]}
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>DESTINATIONS IN THE REGION</Text>
+        {isLoadingDests ? (
+          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={colors.brand} />
+            <Text style={{ marginTop: 8, fontSize: 12, color: colors.textMuted, fontFamily: 'Poppins-Regular' }}>
+              Fetching top spots from Google Places...
+            </Text>
+          </View>
+        ) : destinations.length > 0 ? (
+          destinations.map(dest => {
+            const isVisited = visitedDests.includes(dest.id);
+            return (
+              <TouchableOpacity
+                key={dest.id}
+                style={[styles.row, { borderColor: colors.cardBorder }]}
+                onPress={() => onSelectDest(dest.id)}
+                activeOpacity={0.7}
               >
-                {visitedDests.includes(dest.id) && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.rowName, { color: colors.text }]}>{dest.name}</Text>
-                <Text style={[styles.rowTags, { color: colors.textMuted }]}>{dest.tags.join(' · ')}</Text>
-              </View>
-              <View style={styles.ratingWrap}>
-                <Ionicons name="star" size={12} color={colors.brand} />
-                <Text style={[styles.ratingText, { color: colors.textSecondary }]}>{dest.rating}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))
+                <View
+                  style={[
+                    styles.rowDot,
+                    { backgroundColor: isVisited ? GOLD : colors.surface, borderColor: isVisited ? GOLD : colors.cardBorder },
+                  ]}
+                >
+                  {isVisited && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowName, { color: colors.text }]}>{dest.name}</Text>
+                  <Text style={[styles.rowTags, { color: colors.textMuted }]}>{dest.tags.join(' · ')}</Text>
+                </View>
+                <View style={styles.ratingWrap}>
+                  <Ionicons name="star" size={11} color={GOLD} style={{ marginRight: 3 }} />
+                  <Text style={[styles.ratingText, { color: colors.textSecondary }]}>{dest.rating}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              </TouchableOpacity>
+            );
+          })
         ) : (
-          <Text style={[styles.emptyHint, { color: colors.textMuted }]}>No featured destinations here yet.</Text>
+          <Text style={[styles.emptyHint, { color: colors.textMuted }]}>No destinations logged here yet.</Text>
         )}
       </View>
     </ScrollView>
@@ -216,144 +279,165 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
 
 const styles = StyleSheet.create({
   body: {
-    paddingHorizontal: 12,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 2,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  backBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontSize: 22,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   context: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
-    marginTop: 2,
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    marginTop: 1,
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 7,
+    paddingVertical: 6,
     paddingHorizontal: 10,
+    gap: 4,
   },
   toggleText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  stampCard: {
+    borderRadius: 20,
+    borderWidth: 2,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  stampHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stampSeal: {
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
+    borderWidth: 2,
+    borderColor: '#D97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-12deg' }],
+  },
+  stampSealText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-ExtraBold',
+    fontWeight: '900',
+    color: '#D97706',
+    letterSpacing: 0.5,
+  },
+  stampStatusTitle: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  stampStatusSub: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    marginLeft: 5,
+    fontFamily: 'Poppins-Medium',
+  },
+  dividerLine: {
+    borderBottomWidth: 1,
+    marginVertical: 14,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stat: {
-    flexDirection: 'row',
+  statBox: {
+    flex: 1,
     alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
   },
-  statText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    marginLeft: 7,
+  statNum: {
+    fontSize: 20,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '800',
   },
-  muniScroll: {
-    marginTop: 4,
-  },
-  muniChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginRight: 8,
-  },
-  muniChipText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  label: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    paddingVertical: 12,
-  },
-  rowDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowName: {
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-  },
-  rowTags: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
+  statLabel: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
     marginTop: 2,
   },
-  ratingWrap: {
+  unexploredCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  compassIcon: {
+    marginBottom: 12,
+  },
+  unexploredTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  unexploredText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  planButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
   },
-  ratingText: {
+  planButtonText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-    marginLeft: 4,
-  },
-  emptyHint: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Regular',
-    fontWeight: '400',
-    paddingVertical: 8,
   },
   tripCard: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tripHeader: {
     flexDirection: 'row',
@@ -361,19 +445,82 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tripTitle: {
-    fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   tripInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 3,
-    paddingLeft: 22,
+    paddingLeft: 20,
   },
   tripInfoText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  muniScroll: {
+    marginTop: 4,
+  },
+  muniChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 6,
+  },
+  muniChipText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+  },
+  rowDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginRight: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowName: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+  },
+  rowTags: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Regular',
+    marginTop: 1,
+  },
+  ratingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  ratingText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  emptyHint: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
+    fontFamily: 'Poppins-Regular',
+    paddingVertical: 8,
   },
 });

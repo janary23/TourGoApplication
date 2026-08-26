@@ -110,7 +110,18 @@ export default function HomeScreen() {
 
   const loadData = async () => {
     try {
-      const userTrips = await getTrips();
+      let userTrips;
+      try {
+        userTrips = await getTrips();
+      } catch (jwtErr: any) {
+        // Clock-skew: refresh the session once and retry
+        if (jwtErr?.message?.includes('JWT issued at future')) {
+          await supabase.auth.refreshSession();
+          userTrips = await getTrips();
+        } else {
+          throw jwtErr;
+        }
+      }
       setTrips(userTrips);
 
       if (session?.user?.id) {
@@ -287,7 +298,7 @@ export default function HomeScreen() {
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => router.push('/trip/create')}
-          style={[styles.newTripPill, { backgroundColor: '#22C55E', borderColor: '#22C55E' }]}
+          style={[styles.newTripPill, { backgroundColor: colors.brand, borderColor: colors.brand }]}
         >
           <Ionicons name="add" size={16} color="#FFFFFF" style={styles.newTripIcon} />
           <Text style={[styles.newTripPillText, { color: '#FFFFFF' }]}>New Trip</Text>
@@ -331,7 +342,7 @@ export default function HomeScreen() {
         {/* Section 1: For You Today */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionTitleRow}>
-            <View style={[styles.sectionAccentBar, { backgroundColor: '#22C55E' }]} />
+            <View style={[styles.sectionAccentBar, { backgroundColor: colors.brand }]} />
             <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>For You Today</Text>
           </View>
           {(() => {
@@ -339,7 +350,7 @@ export default function HomeScreen() {
             if (todayItems.length === 0) {
               return (
                 <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.divider }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', color: colors.textMuted }}>All caught up! No pending tasks today.</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>All caught up! No pending tasks today.</Text>
                 </View>
               );
             }
@@ -479,7 +490,13 @@ export default function HomeScreen() {
                       opacity,
                     }}
                   >
-                    <Card onPress={() => router.push('/explore' as any)} style={StyleSheet.flatten([styles.heroCard, { marginVertical: 0, backgroundColor: colors.card, borderColor: colors.cardBorder }])}>
+                    <Card onPress={() => {
+                      let provId = 'PH-PLW';
+                      if (item.id === 'disc-la-union') provId = 'PH-LUN';
+                      else if (item.id === 'disc-el-nido') provId = 'PH-PLW';
+                      else if (item.id === 'disc-siargao') provId = 'PH-SUN';
+                      router.push({ pathname: '/explore', params: { selectProvinceId: provId } });
+                    }} style={StyleSheet.flatten([styles.heroCard, { marginVertical: 0, backgroundColor: colors.card, borderColor: colors.cardBorder }])}>
                       <Image source={{ uri: item.image }} style={styles.heroImage} />
                       <View style={styles.heroOverlay}>
                         <View style={[styles.countdownBadge, { backgroundColor: item.color }]}>
@@ -562,7 +579,7 @@ const wStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  monthPillText: { fontSize: 11, fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600' },
+  monthPillText: { fontSize: 11, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
   /* Mini Calendar Grid */
   calendarGrid: {
     marginTop: 4,
@@ -589,10 +606,10 @@ const wStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  weatherLabel: { fontSize: 10, fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600', marginBottom: 2 },
+  weatherLabel: { fontSize: 10, fontFamily: 'Poppins-SemiBold', fontWeight: '600', marginBottom: 2 },
   weatherIcon: { fontSize: 20, marginBottom: 1 },
-  weatherTemp: { fontSize: 22, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', lineHeight: 24 },
-  weatherLocation: { fontSize: 9, fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600', marginTop: 1 },
+  weatherTemp: { fontSize: 22, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', lineHeight: 24 },
+  weatherLocation: { fontSize: 9, fontFamily: 'Poppins-SemiBold', fontWeight: '600', marginTop: 1 },
   /* Expanded Sizing Styles */
   widgetsRowExpanded: {
     marginBottom: 24,
@@ -616,7 +633,7 @@ const wStyles = StyleSheet.create({
   },
   expandedTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   calendarNavHeader: {
@@ -635,7 +652,7 @@ const wStyles = StyleSheet.create({
   },
   calendarMonthTitle: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weekdayRow: {
@@ -647,7 +664,7 @@ const wStyles = StyleSheet.create({
     width: 40,
     textAlign: 'center',
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   daysGridContainer: {
@@ -666,7 +683,7 @@ const wStyles = StyleSheet.create({
   },
   dayCellText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   selectedDayCell: {
     backgroundColor: '#22C55E',
@@ -693,7 +710,7 @@ const wStyles = StyleSheet.create({
   },
   detailsDateHeader: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -717,13 +734,13 @@ const wStyles = StyleSheet.create({
   },
   tripDetailDest: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   tripDetailTitle: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 1,
     marginBottom: 1,
@@ -748,7 +765,7 @@ const wStyles = StyleSheet.create({
   },
   noTripsText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   modalOverlay: {
     flex: 1,
@@ -792,7 +809,7 @@ const wStyles = StyleSheet.create({
   },
   weatherTabBtnText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weatherMainCard: {
@@ -809,7 +826,7 @@ const wStyles = StyleSheet.create({
   },
   weatherCityName: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weatherMainCondText: {
@@ -819,7 +836,7 @@ const wStyles = StyleSheet.create({
   },
   weatherMainTempText: {
     fontSize: 28,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
   },
   weatherMainIcon: {
@@ -840,7 +857,7 @@ const wStyles = StyleSheet.create({
   },
   weatherMetricVal: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 3,
   },
@@ -850,7 +867,7 @@ const wStyles = StyleSheet.create({
   },
   forecastHeaderTitle: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -866,7 +883,7 @@ const wStyles = StyleSheet.create({
   forecastDayName: {
     width: 32,
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   forecastMidSection: {
@@ -901,10 +918,10 @@ const wStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
   headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
-  headerLogoImage: { width: 36, height: 36, marginRight: 10, resizeMode: 'contain' },
-  appName: { fontSize: 24, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', letterSpacing: -0.5 },
+  headerLogoImage: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
+  appName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', letterSpacing: -0.5 },
   newTripPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -920,33 +937,33 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   newTripIcon: { marginRight: 4 },
-  newTripPillText: { fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  newTripPillText: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   scrollContent: { padding: 20, paddingBottom: 110 },
   flatGreetingContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingHorizontal: 4, zIndex: 9999, elevation: 9999 },
   mascotImage: { width: 130, height: 130, resizeMode: 'contain', marginRight: 16, zIndex: 10000, elevation: 10000 },
   greetingTextContainer: { flex: 1 },
-  greetingUserText: { fontSize: 28, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', marginBottom: 2 },
-  greetingSubText: { fontSize: 14, fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600', marginTop: 4 },
+  greetingUserText: { fontSize: 28, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', marginBottom: 2 },
+  greetingSubText: { fontSize: 14, fontFamily: 'Poppins-SemiBold', fontWeight: '600', marginTop: 4 },
   sectionContainer: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 12 },
   heroCard: { overflow: 'hidden', padding: 0, borderRadius: 20 },
   heroImage: { width: '100%', height: 125 },
   heroOverlay: { position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
   countdownBadge: { backgroundColor: '#22C55E', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
-  countdownText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  countdownText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   roleBadge: { backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
-  roleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  roleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   ratingBadge: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, gap: 4 },
-  ratingText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  ratingText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   heroDetails: { padding: 12 },
-  heroDest: { fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroTitle: { fontSize: 20, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', marginTop: 4, marginBottom: 8 },
+  heroDest: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroTitle: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', marginTop: 4, marginBottom: 8 },
   dateContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   heroDate: { fontSize: 14, marginLeft: 6 },
-  distanceText: { fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', marginLeft: 2 },
+  distanceText: { fontSize: 13, fontFamily: 'Poppins-Medium', marginLeft: 2 },
   statsBanner: { flexDirection: 'row', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, marginBottom: 8 },
   statItem: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', marginTop: 4 },
+  statVal: { fontSize: 14, fontFamily: 'Poppins-Bold', fontWeight: '700', marginTop: 4 },
   statLbl: { fontSize: 10, marginTop: 2 },
   heroButton: { marginTop: 4 },
   noAttentionContainer: {
@@ -959,7 +976,7 @@ const styles = StyleSheet.create({
   },
   noAttentionText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 6,
     textAlign: 'center',
   },
@@ -984,7 +1001,7 @@ const styles = StyleSheet.create({
   },
   attentionTripTitle: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -992,12 +1009,12 @@ const styles = StyleSheet.create({
   },
   attentionTitle: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   attentionDesc: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 2,
   },
   showAllBtn: {
@@ -1013,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   showAllBtnText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   paginationContainer: {

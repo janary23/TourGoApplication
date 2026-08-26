@@ -1,5 +1,7 @@
 import { GEMINI_API_KEY } from '../config/env';
 
+export const AI_FEATURES_ENABLED = true;
+
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 
@@ -86,9 +88,90 @@ export interface GeneratedItineraryItem {
   isAiSuggested?: boolean;
 }
 
+// Per-day location override input for AI itinerary generation
+export interface DayLocationConfig {
+  dayIndex: number;           // 0-based
+  location: string;           // e.g. "El Nido Beach" or "Puerto Princesa City"
+  activitiesPerDay?: number;  // default 4
+}
+
+// AI-POWERED FULL ITINERARY GENERATOR (per-day location support)
+export async function generateTripItinerary(
+  tripTitle: string,
+  destination: string,
+  startDate: string,
+  endDate: string,
+  numDays: number,
+  dayConfigs: DayLocationConfig[],   // per-day location + activity count
+  tripNotes?: string
+): Promise<GeneratedItineraryItem[]> {
+
+  // Build per-day config description for the prompt
+  const dayDescriptions = dayConfigs.map((d) =>
+    `Day ${d.dayIndex + 1}: ${d.location} (${d.activitiesPerDay ?? 4} activities)`
+  ).join('\n');
+
+  const systemPrompt = `You are an expert Philippine travel itinerary planner. Generate a complete day-by-day travel schedule.
+Return ONLY a JSON array of objects. Each object must have these fields:
+- dayIndex: number (0-based, e.g. Day 1 = 0)
+- time: string (12-hour format, e.g. "08:00 AM")
+- title: string (short activity name, e.g. "Island Hopping Tour A")
+- description: string (2-3 sentence helpful description with what to expect)
+- location: string (specific venue or area within the day's base location)
+- costEstimated: string (rough per-person cost in PHP, e.g. "₱500 - ₱800")
+- duration: string (how long the activity takes, e.g. "3 hours")
+- travelTip: string (one practical tip for this stop)
+Do NOT wrap in markdown. Return only the raw JSON array.`;
+
+  const userPrompt = `Trip Title: ${tripTitle}
+Main Destination: ${destination}
+Start Date: ${startDate}
+End Date: ${endDate}
+Total Days: ${numDays}
+${tripNotes ? `Trip Notes: ${tripNotes}` : ''}
+
+Per-Day Location Plan (IMPORTANT: use DIFFERENT specific locations per day as specified below):
+${dayDescriptions}
+
+Generate all activities for all ${numDays} days. Make sure each day's activities are located at the correct specified base location. Sort activities chronologically within each day (morning first, evening last). Include breakfast, main attractions, lunch, afternoon activities, and dinner stops.`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    const parsed: GeneratedItineraryItem[] = JSON.parse(text);
+    return parsed.map(item => ({ ...item, isAiSuggested: true }));
+  } catch (error: any) {
+    console.warn('generateItinerary Gemini error:', error);
+    // Fallback: generate a basic sample schedule
+    const fallback: GeneratedItineraryItem[] = [];
+    dayConfigs.forEach((d) => {
+      const count = d.activitiesPerDay ?? 4;
+      const baseActivities = [
+        { time: '07:00 AM', title: 'Breakfast', description: 'Start the day with a local breakfast.', location: d.location },
+        { time: '09:00 AM', title: 'Morning Exploration', description: 'Explore the sights around your base area.', location: d.location },
+        { time: '12:00 PM', title: 'Lunch Break', description: 'Enjoy lunch at a local restaurant.', location: d.location },
+        { time: '02:00 PM', title: 'Afternoon Activity', description: 'Visit a nearby attraction or landmark.', location: d.location },
+        { time: '05:00 PM', title: 'Sunset View', description: 'Find a great spot to catch the sunset.', location: d.location },
+        { time: '07:00 PM', title: 'Dinner & Rest', description: 'Dinner at a local restaurant, then rest.', location: d.location },
+      ];
+      baseActivities.slice(0, count).forEach(act => {
+        fallback.push({
+          dayIndex: d.dayIndex,
+          time: act.time,
+          title: act.title,
+          description: act.description,
+          location: act.location,
+          isAiSuggested: true,
+        });
+      });
+    });
+    return fallback;
+  }
+}
+
 // 1. RECOMMEND DESTINATIONS IN THE PHILIPPINES
 export async function recommendDestinations(
   tripType: string,
+  tripSubtype: string,
   travelers: string,
   preferences: string[],
   budget: string,
@@ -111,6 +194,7 @@ Return your output ONLY as a JSON array of objects, with these fields:
 Ensure the JSON is valid and conforms to this structure. Do not wrap in markdown code blocks like \`\`\`json.`;
 
   const userPrompt = `Trip Type: ${tripType}
+Trip Subtype: ${tripSubtype}
 Number of Travelers: ${travelers}
 Interests/Preferences: ${preferences.join(', ') || 'General sightseeing'}
 Budget Category: ${budget}
@@ -502,6 +586,213 @@ Ensure all fields are kept. Do not wrap in markdown code blocks.`;
         travelTip: (stop.travelTip || '') + ' (Programmatic travel buffer added)'
       };
     });
+  }
+}
+
+// 8. GENERATE PACKING LIST
+export async function generatePackingList(
+  destination: string,
+  tripType: string,
+  durationDays: number
+): Promise<string[]> {
+  const systemPrompt = `You are a travel packing specialist. Generate exactly 5 essential checklist item descriptions to pack for a trip to the given destination and trip type.
+Return your output ONLY as a JSON array of strings (e.g. ["Pack swim trunks", "Bring sunblock", "Bring water bottle", "Pack umbrella", "Bring valid ID"]).
+Do not wrap in markdown code blocks.`;
+
+  const userPrompt = `Destination: ${destination}
+Trip Category: ${tripType}
+Duration: ${durationDays} days`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('generatePackingList Gemini error:', error);
+    return [
+      'Pack comfortable walking shoes',
+      'Bring mobile charger & power bank',
+      'Prepare copies of travel tickets & ID',
+      'Pack basic toiletries & sunscreen',
+      'Bring emergency cash (PHP)'
+    ];
+  }
+}
+
+// 9. SUMMARIZE CHAT MESSAGES
+export async function summarizeChatMessages(messages: { sender: string; text: string; timestamp: string }[]): Promise<string> {
+  if (messages.length === 0) return 'No messages to summarize.';
+  const systemPrompt = `You are Agilito, the AI Travel Mascot for TourGo. Summarize the chat messages of the group planning their trip in 1-2 friendly, bulleted points. Outline key planning updates or active questions. Keep it under 60 words.
+Return your output as a plain JSON object with a single field: "summary" (string).
+Do not wrap in markdown code blocks.`;
+
+  const messagesText = messages.map(m => `[${m.timestamp}] ${m.sender}: ${m.text}`).join('\n');
+
+  try {
+    const text = await callGemini(systemPrompt, `Chat logs:\n${messagesText}`);
+    const obj = JSON.parse(text);
+    return obj.summary || 'Chat summarized successfully.';
+  } catch (error) {
+    console.warn('summarizeChatMessages Gemini error:', error);
+    return 'Group members are actively chatting. Check in to see recent coordination updates!';
+  }
+}
+
+// 10. SUGGEST POLL OPTIONS
+export async function suggestPollOptions(question: string): Promise<string[]> {
+  const systemPrompt = `You are a helpful travel planner. Suggest exactly 3 sensible choices/options for the given poll question.
+Return your output ONLY as a JSON array of strings (e.g. ["Option A", "Option B", "Option C"]).
+Do not wrap in markdown code blocks.`;
+
+  try {
+    const text = await callGemini(systemPrompt, `Question: "${question}"`);
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('suggestPollOptions Gemini error:', error);
+    throw error;
+  }
+}
+
+// 11. SUGGEST EXPENSE CATEGORY AND SPLIT
+export async function suggestExpenseCategoryAndSplit(
+  title: string,
+  amount: number,
+  members: { userId: string; name: string }[]
+): Promise<{ category: string; splitSuggestions: { userId: string; sharePercentage: number }[] }> {
+  const systemPrompt = `You are an expense classifier. Categorize the given expense title into one of: 'food', 'transport', 'lodging', 'activities', 'misc'. Suggest an even split configuration among all members.
+Return your output ONLY as a JSON object matching this structure:
+{
+  "category": "food/transport/...",
+  "splitSuggestions": [
+    { "userId": "user-uuid", "sharePercentage": 50 }
+  ]
+}
+Do not wrap in markdown code blocks.`;
+
+  const userPrompt = `Expense Title: ${title}
+Amount: ${amount} PHP
+Travelers: ${JSON.stringify(members.map(m => ({ id: m.userId, name: m.name })))}`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('suggestExpenseCategoryAndSplit Gemini error:', error);
+    const evenPct = parseFloat((100 / Math.max(members.length, 1)).toFixed(1));
+    return {
+      category: title.toLowerCase().includes('food') || title.toLowerCase().includes('eat') || title.toLowerCase().includes('dinner') ? 'food' :
+                title.toLowerCase().includes('hotel') || title.toLowerCase().includes('stay') ? 'lodging' :
+                title.toLowerCase().includes('taxi') || title.toLowerCase().includes('flight') || title.toLowerCase().includes('gas') ? 'transport' : 'activities',
+      splitSuggestions: members.map(m => ({ userId: m.userId, sharePercentage: evenPct }))
+    };
+  }
+}
+
+// 12. AUTO-EXTRACTION OF FILE DETAILS
+export async function extractDocumentDetails(filenames: string[]): Promise<string[]> {
+  try {
+    const systemPrompt = `You are a travel document parser. Given a list of document filenames, infer what travel events they likely contain (flights, hotel check-ins, tours, etc.) and return them as a JSON array of short, human-readable event descriptions that could be added as itinerary stops.`;
+    const userPrompt = `Documents: ${filenames.join(', ')}`;
+    const raw = await callGemini(systemPrompt, userPrompt);
+    const cleaned = cleanJsonResponse(raw);
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed as string[];
+    return [];
+  } catch (error) {
+    console.warn('extractDocumentDetails Gemini error:', error);
+    return filenames.map(f => {
+      const lower = f.toLowerCase();
+      if (lower.includes('flight') || lower.includes('ticket')) return `✈ Flight — check-in from document "${f}"`;
+      if (lower.includes('hotel') || lower.includes('booking')) return `🏨 Hotel check-in — from document "${f}"`;
+      if (lower.includes('tour') || lower.includes('activity')) return `🎟 Activity booking — from document "${f}"`;
+      return `📄 Event extracted from "${f}"`;
+    });
+  }
+}
+
+// 13. CONFLICT DETECTION
+export async function detectItineraryConflicts(
+  newItem: { dayIndex: number; time: string; title: string },
+  currentItinerary: { dayIndex: number; time: string; title: string }[]
+): Promise<{ hasConflict: boolean; warning?: string }> {
+  const systemPrompt = `You are a scheduling validator. Compare the new activity time and day with the existing itinerary list and detect if there are any conflicts (i.e. identical scheduled times on the same day).
+Return your output ONLY as a JSON object matching this structure:
+{
+  "hasConflict": true/false,
+  "warning": "Overlaps with 'Activity Name' at Time"
+}
+Do not wrap in markdown code blocks.`;
+
+  const userPrompt = `New Item: ${JSON.stringify(newItem)}
+Itinerary List: ${JSON.stringify(currentItinerary)}`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('detectItineraryConflicts Gemini error:', error);
+    const match = currentItinerary.find(i => i.dayIndex === newItem.dayIndex && i.time === newItem.time);
+    if (match) {
+      return {
+        hasConflict: true,
+        warning: `Overlaps with "${match.title}" scheduled at the exact same time (${newItem.time}).`
+      };
+    }
+    return { hasConflict: false };
+  }
+}
+
+export interface SuggestedStop {
+  dayIndex: number;
+  time: string;
+  title: string;
+  description: string;
+  location: string;
+  costEstimated: string;
+}
+
+export async function suggestItineraryStopsFromInterview(
+  destination: string,
+  dayIndex: number,
+  timeRange: string,
+  details: string
+): Promise<SuggestedStop[]> {
+  const systemPrompt = `You are Agilito, the AI Travel Co-pilot for TourGo. Based on the user's preferences from a stop interview, suggest exactly 3 great activity stops/spots.
+Return your output ONLY as a JSON array of objects, with these exact fields:
+- dayIndex: number (must be ${dayIndex})
+- time: string (specific start time, e.g. "09:30 AM" or "02:00 PM" within the ${timeRange} window)
+- title: string (short activity/venue name, e.g. "Dino's beachside grill")
+- description: string (short 1-2 sentence description explaining why it matches and what to do)
+- location: string (specific location/address in ${destination})
+- costEstimated: string (rough cost in PHP, e.g. "₱300-500/person" or "Free")
+
+Ensure the JSON is valid and conforms to this structure. Do not wrap in markdown code blocks.`;
+
+  const userPrompt = `Destination: ${destination}
+Day: Day ${dayIndex + 1}
+Time window: ${timeRange}
+Additional Details/Vibes: ${details || 'None'}
+Generate 3 suggested stops.`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    const parsed: SuggestedStop[] = JSON.parse(text);
+    return parsed;
+  } catch (error: any) {
+    console.warn('suggestItineraryStopsFromInterview Gemini error:', error);
+    // Fallback standard mixed recommendations
+    let t1 = 'Morning Exploration Tour', d1 = 'Start the day exploring beautiful landmarks and attractions.', l1 = destination, c1 = 'Free';
+    let t2 = 'Local Culinary Stop', d2 = 'Savor popular dishes and delicacies from the region.', l2 = destination, c2 = '₱200 - ₱400';
+    let t3 = 'Scenic Sunset View', d3 = 'Catch a spectacular panoramic view of the sunset.', l3 = destination, c3 = 'Free';
+
+    const baseTime = timeRange === 'Morning' ? '09:00 AM' : timeRange === 'Afternoon' ? '02:00 PM' : timeRange === 'Evening' ? '06:30 PM' : '09:30 PM';
+    const midTime = timeRange === 'Morning' ? '10:30 AM' : timeRange === 'Afternoon' ? '03:30 PM' : timeRange === 'Evening' ? '07:30 PM' : '10:30 PM';
+    const lateTime = timeRange === 'Morning' ? '11:30 AM' : timeRange === 'Afternoon' ? '05:00 PM' : timeRange === 'Evening' ? '08:30 PM' : '11:30 PM';
+
+    return [
+      { dayIndex, time: baseTime, title: t1, description: d1, location: l1, costEstimated: c1 },
+      { dayIndex, time: midTime, title: t2, description: d2, location: l2, costEstimated: c2 },
+      { dayIndex, time: lateTime, title: t3, description: d3, location: l3, costEstimated: c3 },
+    ];
   }
 }
 

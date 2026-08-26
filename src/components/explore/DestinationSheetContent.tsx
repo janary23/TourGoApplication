@@ -106,8 +106,8 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
           style={[
             styles.actionPill,
             {
-              backgroundColor: saved ? '#E8F8EE' : colors.surface,
-              borderColor: saved ? '#22C55E' : colors.cardBorder,
+              backgroundColor: saved ? colors.brandLight : colors.surface,
+              borderColor: saved ? colors.brand : colors.cardBorder,
             },
           ]}
           onPress={onToggleSaved}
@@ -116,9 +116,9 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
           <Ionicons
             name={saved ? 'bookmark' : 'bookmark-outline'}
             size={16}
-            color={saved ? '#22C55E' : colors.textMuted}
+            color={saved ? colors.brand : colors.textMuted}
           />
-          <Text style={[styles.actionText, { color: saved ? '#22C55E' : colors.textMuted }]}>
+          <Text style={[styles.actionText, { color: saved ? colors.brand : colors.textMuted }]}>
             {saved ? 'Saved' : 'Save'}
           </Text>
         </TouchableOpacity>
@@ -158,13 +158,13 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   context: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     marginTop: 1,
   },
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -193,12 +193,12 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
   description: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     lineHeight: 19,
     marginTop: 12,
@@ -213,18 +213,18 @@ const styles = StyleSheet.create({
   infoLabel: {
     flex: 1,
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     marginLeft: 10,
   },
   infoValue: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
   label: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   nearbyName: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
   ratingWrap: {
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   nearbyRating: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     marginLeft: 6,
   },

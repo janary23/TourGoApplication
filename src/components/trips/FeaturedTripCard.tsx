@@ -33,12 +33,12 @@ export default function FeaturedTripCard({
         ]}
       >
         {/* Large Destination Photo */}
-        <Image source={{ uri: trip.image }} style={styles.featuredTripPhoto} />
+        <Image source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000' }} style={styles.featuredTripPhoto} />
 
         {/* Information Layout */}
         <View style={styles.featuredTripDetails}>
           {countdown && (
-            <Text style={[styles.countdownText, { color: '#22C55E' }]}>
+            <Text style={[styles.countdownText, { color: colors.brand }]}>
               {countdown}
             </Text>
           )}
@@ -98,8 +98,8 @@ export default function FeaturedTripCard({
                 style={[
                   styles.featuredRelationshipText,
                   {
-                    color: isOrganizer ? '#22C55E' : colors.textSecondary,
-                    fontFamily: 'PlusJakartaSans-Bold',
+                    color: isOrganizer ? colors.brand : colors.textSecondary,
+                    fontFamily: 'Poppins-Bold',
                   }
                 ]}
               >
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   countdownText: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: 1.2,
     marginBottom: 6,
@@ -145,14 +145,14 @@ const styles = StyleSheet.create({
   },
   featuredTripTitleText: {
     fontSize: 18,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     lineHeight: 22,
     marginBottom: 2,
   },
   featuredTripSecondaryText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   },
   featuredTripDateText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   featuredSocialAndStatusBlock: {
     flexDirection: 'row',
@@ -201,12 +201,12 @@ const styles = StyleSheet.create({
   },
   featuredAvatarFallbackText: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   featuredMembersCountText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginLeft: 6,
   },
   featuredRelationshipRow: {

@@ -8,18 +8,19 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { mockService } from '../services/mockData';
 import { useFonts } from 'expo-font';
 import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold
-} from '@expo-google-fonts/plus-jakarta-sans';
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold
+} from '@expo-google-fonts/poppins';
 import {
   DMSerifDisplay_400Regular
 } from '@expo-google-fonts/dm-serif-display';
 import { Ionicons } from '@expo/vector-icons';
 import { GEMINI_API_KEY } from '../config/env';
 import { storageGet, storageSet } from '../services/storage';
+import { WalkthroughModal, shouldShowWalkthrough, markWalkthroughDone } from '../components/WalkthroughModal';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -84,7 +85,7 @@ const TypingIndicator = ({ colors, isDark }: { colors: any; isDark: boolean }) =
         source={require('../../assets/images/EagleMascotS5.png')}
         style={{ width: 18, height: 18, marginRight: 2, resizeMode: 'contain' }}
       />
-      <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Medium', color: colors.textMuted, marginRight: 2 }}>
+      <Text style={{ fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.textMuted, marginRight: 2 }}>
         Thinking
       </Text>
       <Animated.View
@@ -147,7 +148,7 @@ const renderMessageText = (text: string, isAi: boolean, colors: any) => {
     <Text
       style={{
         fontSize: 15,
-        fontFamily: 'PlusJakartaSans-Regular',
+        fontFamily: 'Poppins-Regular',
         color: isAi ? colors.text : '#FFFFFF',
         lineHeight: 22,
       }}
@@ -159,7 +160,7 @@ const renderMessageText = (text: string, isAi: boolean, colors: any) => {
             key={index}
             style={
               isBold
-                ? { fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }
+                ? { fontFamily: 'Poppins-Bold', fontWeight: '700' }
                 : undefined
             }
           >
@@ -175,13 +176,13 @@ function GlobalMascot() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, mascotFlightEnabled } = useTheme();
 
   const [mascotImageSource, setMascotImageSource] = useState(require('../../assets/images/EagleMascotS5.png'));
   const [travelAngle, setTravelAngle] = useState(0);
   const [showBirdInBadge, setShowBirdInBadge] = useState(false);
   const [showBadge, setShowBadge] = useState(false);
-  const [showFlyingBird, setShowFlyingBird] = useState(true);
+  const [showFlyingBird, setShowFlyingBird] = useState(false);
   const [showAiChat, setShowAiChat] = useState(false);
   const [chatText, setChatText] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: string; text: string; isAi: boolean }>>([]);
@@ -201,15 +202,19 @@ function GlobalMascot() {
   // Ref to track if we need first launch slow timing
   const isFirstLaunchRef = useRef(true);
 
+  // Ref to track previous pathname — only animate flight on actual navigation
+  const prevPathnameRef = useRef(pathname);
+
   // Track coordinates of the floating icon (remembers last dragged position!)
   const floatingPosRef = useRef({ x: SCREEN_WIDTH - 80, y: SCREEN_HEIGHT / 2 - 32 });
 
   // Use refs to prevent stale closures in the PanResponder handlers
   const showBirdInBadgeRef = useRef(showBirdInBadge);
   const isDashboardRef = useRef(false);
+  const isFirstRender = useRef(true);
 
-  // Keep refs in sync
   const isDashboard = pathname === '/' || pathname === '/index' || pathname === '(tabs)' || pathname === '/(tabs)';
+  const isTripsPage = pathname.includes('/trip/');
 
   useEffect(() => {
     showBirdInBadgeRef.current = showBirdInBadge;
@@ -335,7 +340,7 @@ ${tripContext}
 Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Always give in-depth, inspiring travel tips and complete, structured recommendations with bullet points to guide the user perfectly!`;
 
     try {
-      const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
       // Build conversation history in Gemini format (alternating user/model)
       const history = chatMessages
@@ -428,14 +433,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       onPanResponderGrant: () => {
         badgeX.stopAnimation();
         badgeY.stopAnimation();
+        badgeX.extractOffset();
+        badgeY.extractOffset();
       },
       onPanResponderMove: (evt, gestureState) => {
-        badgeX.setValue(gestureState.moveX - 32);
-        badgeY.setValue(gestureState.moveY - 32);
+        badgeX.setValue(gestureState.dx);
+        badgeY.setValue(gestureState.dy);
       },
       onPanResponderRelease: (evt, gestureState) => {
-        const curX = (badgeX as any)._value;
-        const curY = (badgeY as any)._value;
+        badgeX.flattenOffset();
+        badgeY.flattenOffset();
+
+        const curX = (badgeX as any)._value ?? (SCREEN_WIDTH - 80);
+        const curY = (badgeY as any)._value ?? (SCREEN_HEIGHT / 2 - 32);
 
         const leftLimit = 16;
         const rightLimit = SCREEN_WIDTH - 80;
@@ -467,6 +477,14 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
   ).current;
 
   useEffect(() => {
+    // Only run flight animation when pathname actually changes (not on toggle changes)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+    } else if (pathname === prevPathnameRef.current) {
+      return;
+    }
+    prevPathnameRef.current = pathname;
+
     const dashPerchX = 24;
     const dashPerchY = insets.top + 88;
     const floatX = floatingPosRef.current.x;
@@ -513,62 +531,85 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       }
 
     } else if (!isDashboard) {
-      // ===== GOING TO SUB-PAGE: badge appears empty, bird flies towards it =====
-      flightProgress.setValue(0);
-      setShowBirdInBadge(false);
-      setShowBadge(true);       // Show the empty circle immediately!
-      setShowFlyingBird(true);
+      // ===== GOING TO SUB-PAGE =====
+      if (typeof (globalThis as any).onMascotLeave === 'function') {
+        (globalThis as any).onMascotLeave();
+      }
+      if (!mascotFlightEnabled) {
+        // Flight disabled — skip animation, show badge with bird instantly
+        setShowFlyingBird(false);
+        setShowBadge(true);
+        setShowBirdInBadge(true);
+        badgeX.setValue(floatX);
+        badgeY.setValue(floatY);
+      } else {
+        // Flight enabled — badge appears empty, bird flies towards it
+        flightProgress.setValue(0);
+        setShowBirdInBadge(false);
+        setShowBadge(true);       // Show the empty circle immediately!
+        setShowFlyingBird(true);
 
-      // Start flapping wings
-      startFlapping();
+        // Start flapping wings
+        startFlapping();
 
-      // Position badge at its saved floating position
-      badgeX.setValue(floatX);
-      badgeY.setValue(floatY);
+        // Position badge at its saved floating position
+        badgeX.setValue(floatX);
+        badgeY.setValue(floatY);
 
-      // Bird starts from dashboard perch, flies to badge center
-      const targetBirdX = floatX + 32 - 65; // Center 130px bird on 64px badge
-      const targetBirdY = floatY + 32 - 65;
+        // Bird starts from dashboard perch, flies to badge center
+        const targetBirdX = floatX + 32 - 65; // Center 130px bird on 64px badge
+        const targetBirdY = floatY + 32 - 65;
 
-      const dx = targetBirdX - dashPerchX;
-      const dy = targetBirdY - dashPerchY;
-      setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
+        const dx = targetBirdX - dashPerchX;
+        const dy = targetBirdY - dashPerchY;
+        setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
 
-      birdX.setValue(dashPerchX);
-      birdY.setValue(dashPerchY);
+        birdX.setValue(dashPerchX);
+        birdY.setValue(dashPerchY);
 
-      Animated.parallel([
-        Animated.timing(birdX, {
-          toValue: targetBirdX,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(birdY, {
-          toValue: targetBirdY,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(flightProgress, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        clearInterval(flapInterval);
-        clearTimeout(landingTimeout1);
-        clearTimeout(landingTimeout2);
-        if (finished) {
-          // Bird arrived! Hide flying bird, show bird inside badge
-          setShowFlyingBird(false);
-          setShowBirdInBadge(true);
-        }
-      });
+        Animated.parallel([
+          Animated.timing(birdX, {
+            toValue: targetBirdX,
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(birdY, {
+            toValue: targetBirdY,
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(flightProgress, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(({ finished }) => {
+          clearInterval(flapInterval);
+          clearTimeout(landingTimeout1);
+          clearTimeout(landingTimeout2);
+          if (finished) {
+            // Bird arrived! Hide flying bird, show bird inside badge
+            setShowFlyingBird(false);
+            setShowBirdInBadge(true);
+          }
+        });
+      }
 
     } else {
-      // ===== GOING BACK TO DASHBOARD: bird flies out of badge to dashboard perch =====
+      // ===== GOING BACK TO DASHBOARD =====
+      if (!mascotFlightEnabled) {
+        // Flight disabled — skip animation, just hide badge and show static mascot
+        setShowFlyingBird(false);
+        setShowBadge(false);
+        setShowBirdInBadge(false);
+        setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
+        if (typeof (globalThis as any).onMascotLand === 'function') {
+          (globalThis as any).onMascotLand();
+        }
+      } else {
       flightProgress.setValue(0);
       setShowBirdInBadge(false);  // Remove bird from badge
       setShowFlyingBird(true);
@@ -619,6 +660,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
           }
         }
       });
+      }
     }
 
     return () => {
@@ -626,7 +668,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       clearTimeout(landingTimeout1);
       clearTimeout(landingTimeout2);
     };
-  }, [pathname, insets]);
+  }, [pathname, insets, mascotFlightEnabled]);
 
   // Flying bird opacity (fades out as it enters badge on sub-page)
   const flyingBirdOpacity = flightProgress.interpolate({
@@ -644,7 +686,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
   return (
     <>
       {/* ===== STATIC FLOATING BADGE (fixed position, not moving with bird) ===== */}
-      {showBadge && !isDashboard && (
+      {showBadge && !isDashboard && !isTripsPage && (
         <Animated.View
           {...badgePanResponder.panHandlers}
           style={{
@@ -721,7 +763,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       )}
 
       {/* ===== FLYING BIRD (moves independently) ===== */}
-      {showFlyingBird && (
+      {showFlyingBird && !isTripsPage && (
         <Animated.View
           pointerEvents="none"
           style={{
@@ -810,7 +852,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 <Text
                   style={{
                     fontSize: 18,
-                    fontFamily: 'PlusJakartaSans-Bold',
+                    fontFamily: 'Poppins-Bold',
                     color: colors.text,
                   }}
                 >
@@ -819,7 +861,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 <Text
                   style={{
                     fontSize: 12,
-                    fontFamily: 'PlusJakartaSans-Medium',
+                    fontFamily: 'Poppins-Medium',
                     color: '#22C55E',
                     marginTop: 1,
                   }}
@@ -841,7 +883,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 }}
               >
                 <Ionicons name="add" size={16} color={colors.brand} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-SemiBold', color: colors.text }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text }}>
                   New chat
                 </Text>
               </TouchableOpacity>
@@ -869,11 +911,15 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
             showsVerticalScrollIndicator={false}
           >
             {chatMessages.length === 0 && (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 80, paddingHorizontal: 10 }}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 120, paddingHorizontal: 10 }}>
+                <Image
+                  source={require('../../assets/images/EagleMascotS5.png')}
+                  style={{ width: 100, height: 100, marginBottom: 16, resizeMode: 'contain' }}
+                />
                 <Text
                   style={{
-                    fontSize: 18,
-                    fontFamily: 'PlusJakartaSans-Bold',
+                    fontSize: 20,
+                    fontFamily: 'Poppins-Bold',
                     color: colors.text,
                     marginBottom: 8,
                     textAlign: 'center',
@@ -884,19 +930,24 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 <Text
                   style={{
                     fontSize: 14,
-                    fontFamily: 'PlusJakartaSans-Regular',
+                    fontFamily: 'Poppins-Regular',
                     color: colors.textMuted,
                     marginBottom: 24,
                     textAlign: 'center',
                     paddingHorizontal: 20,
                   }}
                 >
-                  Tap one of the suggestions below to ask instantly:
+                  Your AI Travel Assistant is ready to help. Tap a suggestion below or type your message.
                 </Text>
 
-                <View style={{ width: '100%', gap: 10 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+                  style={{ flexGrow: 0, width: '100%' }}
+                >
                   {[
-                    { text: 'What is the weather like?', icon: 'sunny' },
+                    { text: 'Weather details?', icon: 'sunny' },
                     { text: 'What should I pack?', icon: 'briefcase' },
                     { text: 'Flight guidelines?', icon: 'airplane' },
                     { text: 'Show my itinerary', icon: 'calendar' },
@@ -910,17 +961,17 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                         alignItems: 'center',
                         backgroundColor: colors.card,
                         paddingHorizontal: 16,
-                        paddingVertical: 12,
-                        borderRadius: 12,
+                        paddingVertical: 10,
+                        borderRadius: 20,
                         borderWidth: 1,
                         borderColor: colors.cardBorder,
                       }}
                     >
-                      <Ionicons name={chip.icon as any} size={16} color={colors.brand} style={{ marginRight: 10 }} />
+                      <Ionicons name={chip.icon as any} size={14} color={colors.brand} style={{ marginRight: 6 }} />
                       <Text
                         style={{
-                          fontSize: 14,
-                          fontFamily: 'PlusJakartaSans-Medium',
+                          fontSize: 13,
+                          fontFamily: 'Poppins-Medium',
                           color: colors.text,
                         }}
                       >
@@ -928,7 +979,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
             {chatMessages.map((msg) => (
@@ -992,7 +1043,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                   backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
                   paddingHorizontal: 16,
                   color: colors.text,
-                  fontFamily: 'PlusJakartaSans-Medium',
+                  fontFamily: 'Poppins-Medium',
                   fontSize: 14,
                   marginRight: 12,
                 }}
@@ -1024,6 +1075,7 @@ function RootStack() {
   const { session, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   // Redirect to login if unauthenticated and not already on an auth screen
   useEffect(() => {
@@ -1033,6 +1085,15 @@ function RootStack() {
       router.replace('/(auth)/login');
     }
   }, [session, isLoading, pathname]);
+
+  // Show walkthrough for new users on first authenticated load
+  useEffect(() => {
+    if (isLoading || !session) return;
+    (async () => {
+      const shouldShow = await shouldShowWalkthrough();
+      if (shouldShow) setShowWalkthrough(true);
+    })();
+  }, [session, isLoading]);
 
   return (
     <>
@@ -1044,7 +1105,7 @@ function RootStack() {
           },
           headerTintColor: colors.brand,
           headerTitleStyle: {
-            fontFamily: 'PlusJakartaSans-Bold',
+            fontFamily: 'Poppins-Bold',
             color: colors.text,
           },
           headerShadowVisible: false,
@@ -1058,8 +1119,18 @@ function RootStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="trip/create" options={{ headerShown: false }} />
         <Stack.Screen name="trip/join" options={{ headerShown: false }} />
+        <Stack.Screen name="trip/settings" options={{ headerShown: false }} />
+        <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       </Stack>
       <GlobalMascot />
+      <WalkthroughModal
+        visible={showWalkthrough}
+        colors={colors}
+        onComplete={() => {
+          markWalkthroughDone();
+          setShowWalkthrough(false);
+        }}
+      />
     </>
   );
 }
@@ -1067,11 +1138,11 @@ function RootStack() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
-    'PlusJakartaSans-Medium': PlusJakartaSans_500Medium,
-    'PlusJakartaSans-SemiBold': PlusJakartaSans_600SemiBold,
-    'PlusJakartaSans-Bold': PlusJakartaSans_700Bold,
-    'PlusJakartaSans-ExtraBold': PlusJakartaSans_800ExtraBold,
+    'Poppins-Regular': Poppins_400Regular,
+    'Poppins-Medium': Poppins_500Medium,
+    'Poppins-SemiBold': Poppins_600SemiBold,
+    'Poppins-Bold': Poppins_700Bold,
+    'Poppins-ExtraBold': Poppins_800ExtraBold,
     'DMSerifDisplay-Regular': DMSerifDisplay_400Regular,
   });
 

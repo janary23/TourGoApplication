@@ -2,22 +2,20 @@ import React, { useRef, useState, useMemo } from 'react';
 import {
   Animated,
   Image,
-  ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../context/ThemeContext';
 import type { RegionFilter } from './IdleSheetContent';
 import { DESTINATIONS } from '../../services/destinations';
 import { PHILIPPINES_PROVINCES } from '../../services/philippinesMapData';
-import { RegionPlacesModal } from './RegionPlacesModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,106 +42,20 @@ const CATEGORIES = [
   { id: 'weekend', label: 'Weekend Trips', icon: '🏡' },
 ];
 
-interface TrendingDest {
-  id: string;
-  name: string;
-  subtitle: string;
-  tags: string[];
-  rating: number;
-  image: ImageSourcePropType;
-}
-
-const TRENDING: TrendingDest[] = [
-  {
-    id: 'siargao',
-    name: 'Siargao',
-    subtitle: 'Surigao del Norte',
-    tags: ['Island', 'Beach'],
-    rating: 4.8,
-    image: require('../../../assets/images/explore_siargao.jpg'),
-  },
-  {
-    id: 'palawan',
-    name: 'Palawan',
-    subtitle: 'Palawan',
-    tags: ['Island', 'Adventure'],
-    rating: 4.9,
-    image: require('../../../assets/images/explore_palawan.jpg'),
-  },
-  {
-    id: 'baguio',
-    name: 'Baguio',
-    subtitle: 'Benguet',
-    tags: ['Mountain', 'Nature'],
-    rating: 4.7,
-    image: require('../../../assets/images/explore_baguio.jpg'),
-  },
-  {
-    id: 'batanes',
-    name: 'Batanes',
-    subtitle: 'Cagayan Valley',
-    tags: ['Island', 'Culture'],
-    rating: 4.8,
-    image: require('../../../assets/images/explore_batanes.jpg'),
-  },
+const TRAVELER_PROFILES = [
+  { name: 'Sarah Chen', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80', badge: 'Island Wanderer' },
+  { name: 'Dave Miller', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80', badge: 'Active Explorer' },
+  { name: 'Grace Ho', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80', badge: 'Active Explorer' },
+  { name: 'Mark Santos', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80', badge: 'Island Legend' },
 ];
 
-interface RecommendedDest {
-  id: string;
-  name: string;
-  location: string;
-  category: string;
-  rating: number;
-  image: ImageSourcePropType;
-}
-
-const RECOMMENDED: RecommendedDest[] = [
-  {
-    id: 'siargao_rec',
-    name: 'Siargao Island',
-    location: 'Surigao del Norte',
-    category: '🏄 Surfing · Beach',
-    rating: 4.8,
-    image: require('../../../assets/images/explore_siargao.jpg'),
-  },
-  {
-    id: 'palawan_rec',
-    name: 'El Nido, Palawan',
-    location: 'Palawan',
-    category: '🏝️ Island · Adventure',
-    rating: 4.9,
-    image: require('../../../assets/images/explore_palawan.jpg'),
-  },
-  {
-    id: 'baguio_rec',
-    name: 'Baguio City',
-    location: 'Benguet, Luzon',
-    category: '⛰️ Mountain · Cool Weather',
-    rating: 4.7,
-    image: require('../../../assets/images/explore_baguio.jpg'),
-  },
-];
-
-const REGIONS: { id: RegionFilter; label: string; sub: string; image: ImageSourcePropType }[] = [
-  {
-    id: 'Luzon',
-    label: 'Luzon',
-    sub: 'Rice terraces, highlands & capital',
-    image: require('../../../assets/images/explore_luzon.jpg'),
-  },
-  {
-    id: 'Visayas',
-    label: 'Visayas',
-    sub: 'Islands, beaches & heritage cities',
-    image: require('../../../assets/images/explore_visayas.jpg'),
-  },
-  {
-    id: 'Mindanao',
-    label: 'Mindanao',
-    sub: 'Mountains, tribes & wild nature',
-    image: require('../../../assets/images/explore_mindanao.jpg'),
-  },
-];
+const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+};
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -170,7 +82,7 @@ const CategoryChip: React.FC<{
         style={[
           chipStyles.chip,
           isSelected
-            ? { backgroundColor: '#22C55E', borderColor: '#22C55E' }
+            ? { backgroundColor: colors.brand, borderColor: colors.brand }
             : { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: isDark ? '#2C2C2E' : '#EFEFEF' },
         ]}
       >
@@ -202,349 +114,276 @@ const chipStyles = StyleSheet.create({
   icon: { fontSize: 14 },
   label: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
 });
 
-const TrendingCard: React.FC<{ item: TrendingDest; onPress: () => void }> = ({ item, onPress }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30, bounciness: 2 }).start();
-  const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
-
-  return (
-    <Animated.View style={[trendStyles.card, { transform: [{ scale }] }]}>
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress} style={{ flex: 1 }}>
-        <Image source={item.image} style={trendStyles.image} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.75)']}
-          style={trendStyles.gradient}
-        >
-          {/* Rating badge */}
-          <View style={trendStyles.ratingBadge}>
-            <Ionicons name="star" size={10} color="#FACC15" />
-            <Text style={trendStyles.ratingText}>{item.rating}</Text>
-          </View>
-          <View style={trendStyles.info}>
-            {/* Tags */}
-            <View style={trendStyles.tags}>
-              {item.tags.map(tag => (
-                <View key={tag} style={trendStyles.tag}>
-                  <Text style={trendStyles.tagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={trendStyles.name}>{item.name}</Text>
-            <Text style={trendStyles.subtitle}>{item.subtitle}</Text>
-          </View>
-        </LinearGradient>
-      </Pressable>
-    </Animated.View>
-  );
-};
-
-const trendStyles = StyleSheet.create({
-  card: {
-    width: 155,
-    height: 220,
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginRight: 12,
-    backgroundColor: '#1A1A1A',
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    padding: 12,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 20,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    gap: 3,
-  },
-  ratingText: {
-    fontSize: 11,
-    color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-  },
-  info: {},
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: 5,
-  },
-  tag: {
-    backgroundColor: 'rgba(34,197,94,0.85)',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  tagText: {
-    fontSize: 9,
-    color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  name: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-});
-
-const RecommendedCard: React.FC<{
-  item: RecommendedDest;
+const TravelFeedPost: React.FC<{
+  item: any;
   isSaved: boolean;
-  onSave: () => void;
-  onPress: () => void;
+  onToggleSaved: () => void;
+  onSelect: () => void;
   colors: ThemeColors;
   isDark: boolean;
-}> = ({ item, isSaved, onSave, onPress, colors, isDark }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 30, bounciness: 2 }).start();
-  const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+}> = ({ item, isSaved, onToggleSaved, onSelect, colors, isDark }) => {
+  const router = useRouter();
+  const profile = TRAVELER_PROFILES[hashString(item.name) % TRAVELER_PROFILES.length];
+
+  const handlePlan = () => {
+    router.push(
+      `/trip/create?dest=${encodeURIComponent(item.name)}&title=${encodeURIComponent(item.name)}`
+    );
+  };
 
   return (
-    <Animated.View style={[recStyles.card, { transform: [{ scale }] }]}>
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress} style={{ flex: 1 }}>
-        <Image source={item.image} style={recStyles.image} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.75)']}
-          style={recStyles.gradient}
-        >
-          {/* Top right save button */}
-          <TouchableOpacity
-            onPress={onSave}
-            hitSlop={10}
-            style={[
-              recStyles.saveBtn,
-              { backgroundColor: isSaved ? '#22C55E' : 'rgba(0,0,0,0.45)' },
-            ]}
-          >
-            <Ionicons
-              name={isSaved ? 'bookmark' : 'bookmark-outline'}
-              size={15}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-
-          {/* Bottom info */}
-          <View style={recStyles.infoBlock}>
-            <Text style={recStyles.name} numberOfLines={1}>{item.name}</Text>
-            <View style={recStyles.locationRow}>
-              <Ionicons name="location-outline" size={11} color="#86EFAC" />
-              <Text style={recStyles.location} numberOfLines={1}>{item.location}</Text>
-            </View>
-            <View style={recStyles.bottomRow}>
-              <Text style={recStyles.category}>{item.category}</Text>
-              <View style={recStyles.ratingPill}>
-                <Ionicons name="star" size={11} color="#FACC15" />
-                <Text style={recStyles.rating}>{item.rating}</Text>
-              </View>
+    <View style={[postStyles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      {/* 1. Header (Author Details) */}
+      <View style={postStyles.header}>
+        <Image source={{ uri: profile.avatar }} style={postStyles.avatar} />
+        <View style={postStyles.authorTextCol}>
+          <View style={postStyles.authorTopRow}>
+            <Text style={[postStyles.authorName, { color: colors.text }]}>{profile.name}</Text>
+            <View style={[postStyles.badge, { backgroundColor: colors.brandLight }]}>
+              <Text style={[postStyles.badgeText, { color: colors.brand }]}>{profile.badge.toLowerCase()}</Text>
             </View>
           </View>
-        </LinearGradient>
+          <Text style={[postStyles.timeText, { color: colors.textSecondary }]}>Shared a travel tip</Text>
+        </View>
+      </View>
+
+      {/* 2. Visual Content */}
+      <Pressable onPress={onSelect} style={postStyles.imageWrapper}>
+        <Image source={{ uri: item.image }} style={postStyles.image} resizeMode="cover" />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.15)', 'transparent', 'rgba(0,0,0,0.6)']}
+          style={postStyles.imageGradient}
+        />
+        
+        {/* Spot Tag */}
+        <View style={postStyles.spotTag}>
+          <Ionicons name="location" size={12} color="#FFFFFF" />
+          <Text style={postStyles.spotTagText}>{item.location}</Text>
+        </View>
+
+        {/* Rating overlay */}
+        <View style={postStyles.ratingBadge}>
+          <Ionicons name="star" size={10} color="#FACC15" />
+          <Text style={postStyles.ratingText}>{item.rating}</Text>
+        </View>
       </Pressable>
-    </Animated.View>
+
+      {/* 3. Description & Tags */}
+      <View style={postStyles.body}>
+        <Text style={[postStyles.spotTitle, { color: colors.text }]}>{item.name}</Text>
+        <Text style={[postStyles.caption, { color: colors.textSecondary }]}>
+          {item.description}
+        </Text>
+        
+        {/* Hashtags */}
+        <View style={postStyles.tagsWrapper}>
+          {item.tags.map((tag: string) => (
+            <Text key={tag} style={[postStyles.tag, { color: colors.brand }]}>
+              #{tag.toLowerCase()}
+            </Text>
+          ))}
+        </View>
+      </View>
+
+      {/* 4. Action Row */}
+      <View style={[postStyles.actionRow, { borderTopColor: colors.cardBorder }]}>
+        <TouchableOpacity
+          onPress={onToggleSaved}
+          style={[postStyles.actionBtn, isSaved && postStyles.savedActionBtn]}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={18}
+            color={isSaved ? '#FFFFFF' : colors.textSecondary}
+          />
+          <Text style={[
+            postStyles.actionBtnText,
+            { color: isSaved ? '#FFFFFF' : colors.textSecondary }
+          ]}>
+            {isSaved ? 'Saved' : 'Save Spot'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handlePlan}
+          style={[postStyles.planBtn, { backgroundColor: colors.brand }]}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={16} color="#FFFFFF" />
+          <Text style={postStyles.planBtnText}>Plan Trip</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
-const recStyles = StyleSheet.create({
+const postStyles = StyleSheet.create({
   card: {
-    borderRadius: 18,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 20,
     overflow: 'hidden',
-    marginBottom: 12,
-    height: 180,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
     shadowRadius: 12,
-    elevation: 4,
-    backgroundColor: '#1A1A1A',
+    elevation: 3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E2E8F0',
+  },
+  authorTextCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  authorTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  authorName: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  badge: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '800',
+  },
+  timeText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+    marginTop: 1,
+  },
+  imageWrapper: {
+    height: 240,
+    width: '100%',
+    backgroundColor: '#1E293B',
   },
   image: {
     ...StyleSheet.absoluteFillObject,
   },
-  gradient: {
+  imageGradient: {
     ...StyleSheet.absoluteFillObject,
-    padding: 14,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    flexDirection: 'row',
   },
-  saveBtn: {
+  spotTag: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  spotTagText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  ratingBadge: {
     position: 'absolute',
     top: 12,
     right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoBlock: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  name: {
-    fontSize: 17,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    marginBottom: 3,
-  },
-  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginBottom: 5,
-  },
-  location: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
-    flex: 1,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  category: {
-    fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Regular',
-    color: 'rgba(255,255,255,0.65)',
-    flex: 1,
-    marginRight: 6,
-  },
-  ratingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    gap: 3,
-  },
-  rating: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});
-
-const RegionCard: React.FC<{
-  item: (typeof REGIONS)[0];
-  onPress: () => void;
-}> = ({ item, onPress }) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30, bounciness: 2 }).start();
-  const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
-
-  return (
-    <Animated.View style={[regionStyles.card, { transform: [{ scale }] }]}>
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={onPress}
-        style={{ flex: 1 }}
-      >
-        <Image source={item.image} style={regionStyles.image} resizeMode="cover" />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.72)']}
-          style={regionStyles.gradient}
-        >
-          <View>
-            <Text style={regionStyles.label}>{item.label}</Text>
-            <Text style={regionStyles.sub}>{item.sub}</Text>
-          </View>
-          <View style={regionStyles.arrowPill}>
-            <Text style={regionStyles.arrowText}>Explore destinations</Text>
-            <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
-
-const regionStyles = StyleSheet.create({
-  card: {
-    height: 120,
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginBottom: 10,
-    backgroundColor: '#1A1A1A',
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    padding: 14,
-  },
-  label: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  sub: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    marginTop: 2,
-    maxWidth: 180,
-  },
-  arrowPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(34,197,94,0.85)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     gap: 4,
   },
-  arrowText: {
-    fontSize: 11,
+  ratingText: {
     color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  body: {
+    padding: 16,
+  },
+  spotTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-ExtraBold',
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  caption: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    lineHeight: 18,
+  },
+  tagsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  tag: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderTopWidth: 1,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  savedActionBtn: {
+    backgroundColor: '#38BDF8',
+  },
+  actionBtnText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  planBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  planBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
   },
 });
 
@@ -560,8 +399,6 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
   onSelectSearchQuery,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [regionModalRegion, setRegionModalRegion] = useState<string | null>(null);
-  const [regionModalVisible, setRegionModalVisible] = useState(false);
 
   const dynamicRecommended = useMemo(() => {
     let list = DESTINATIONS.map(d => {
@@ -572,8 +409,9 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
         location: province ? province.name : 'Philippines',
         category: d.tags.slice(0, 2).join(' · '),
         rating: parseFloat(d.rating) || 4.5,
-        image: d.image ? { uri: d.image } : require('../../../assets/images/explore_siargao.jpg'),
+        image: d.image || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=600&q=80',
         tags: d.tags,
+        description: d.description,
       };
     });
 
@@ -597,7 +435,6 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
     Animated.spring(mapBtnScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
 
   return (
-    <>
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
@@ -626,7 +463,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
           },
         ]}
       >
-        <Ionicons name="search-outline" size={16} color="#22C55E" />
+        <Ionicons name="search-outline" size={16} color={colors.brand} />
         <Text style={[styles.searchPlaceholder, { color: colors.textMuted }]}>
           Search destinations, places, experiences...
         </Text>
@@ -657,72 +494,32 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
         ))}
       </ScrollView>
 
-      {/* ─── Trending Carousel ─── */}
+      {/* ─── Scrollable Travel Log Feed ─── */}
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Trending Now</Text>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => onOpenMap()}>
-          <Text style={styles.seeAll}>See all</Text>
-        </TouchableOpacity>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Traveler Diaries Feed</Text>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.trendingRow}
-        style={styles.trendingScroll}
-      >
-        {TRENDING.map(item => (
-          <TrendingCard
-            key={item.id}
-            item={item}
-            onPress={() => onSelectSearchQuery(item.name + " " + item.subtitle)}
-          />
-        ))}
-      </ScrollView>
-
-      {/* ─── Recommended For You ─── */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recommended for You</Text>
-      </View>
-      <View style={styles.recommendedList}>
+      <View style={styles.feedContainer}>
         {dynamicRecommended.length > 0 ? (
           dynamicRecommended.map(item => (
-            <RecommendedCard
+            <TravelFeedPost
               key={item.id}
               item={item}
               isSaved={savedDestinations.includes(item.id)}
-              onSave={() => onToggleSaved(item.id)}
-              onPress={() => onSelectSearchQuery(item.name + " " + item.location)}
+              onToggleSaved={() => onToggleSaved(item.id)}
+              onSelect={() => onSelectSearchQuery(item.name + " " + item.location)}
               colors={colors}
               isDark={isDark}
             />
           ))
         ) : (
-          <Text style={{ textAlign: 'center', width: '100%', marginVertical: 32, fontFamily: 'PlusJakartaSans-Regular', fontSize: 14, color: colors.textMuted }}>
-            No popular destinations matching this category yet.
+          <Text style={{ textAlign: 'center', width: '100%', marginVertical: 32, fontFamily: 'Poppins-Regular', fontSize: 14, color: colors.textMuted }}>
+            No popular diaries matching this category yet.
           </Text>
         )}
       </View>
 
-      {/* ─── Explore by Region ─── */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Explore by Region</Text>
-      </View>
-      <View style={styles.regionsContainer}>
-        {REGIONS.map(region => (
-          <RegionCard
-            key={region.id}
-            item={region}
-            onPress={() => {
-              console.log('RegionCard pressed:', region.label);
-              setRegionModalRegion(region.label);
-              setRegionModalVisible(true);
-            }}
-          />
-        ))}
-      </View>
-
       {/* ─── View Trip Map CTA ─── */}
-      <Animated.View style={{ transform: [{ scale: mapBtnScale }], borderRadius: 20, overflow: 'hidden', marginBottom: 6 }}>
+      <Animated.View style={{ transform: [{ scale: mapBtnScale }], borderRadius: 20, overflow: 'hidden', marginBottom: 20 }}>
         <TouchableOpacity
           activeOpacity={1}
           onPressIn={handleMapPressIn}
@@ -731,7 +528,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
           style={{ borderRadius: 20, overflow: 'hidden' }}
         >
           <LinearGradient
-            colors={['#16A34A', '#22C55E', '#4ADE80']}
+            colors={['#0EA5E9', '#38BDF8', '#7DD3FC']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.mapBannerGradient}
@@ -741,8 +538,8 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
                 <Ionicons name="map" size={26} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.mapBannerTitle}>View Trip Map</Text>
-                <Text style={styles.mapBannerSub}>Your personal travel footprint</Text>
+                <Text style={styles.mapBannerTitle}>View Travel Footprint</Text>
+                <Text style={styles.mapBannerSub}>Your interactive travel diaries footprint</Text>
               </View>
             </View>
             <View style={styles.mapBannerArrow}>
@@ -754,16 +551,6 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
-
-    {/* Region Places Modal */}
-    <RegionPlacesModal
-      visible={regionModalVisible}
-      region={regionModalRegion}
-      colors={colors}
-      isDark={isDark}
-      onClose={() => setRegionModalVisible(false)}
-    />
-    </>
   );
 };
 
@@ -784,92 +571,70 @@ const styles = StyleSheet.create({
   },
   heroHeadline: {
     fontSize: 30,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.8,
     lineHeight: 36,
     marginBottom: 6,
   },
   heroAccent: {
-    color: '#22C55E',
+    color: '#38BDF8',
   },
   heroSub: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     marginTop: 4,
   },
-  // Search
+  // Search bar
   searchBar: {
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
     marginBottom: 20,
-    gap: 10,
   },
   searchPlaceholder: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    marginLeft: 10,
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
   },
   searchMic: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 4,
   },
-  // Section headers
+  // Sections
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
+    marginTop: 10,
   },
   sectionTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
     letterSpacing: -0.2,
   },
-  seeAll: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans-SemiBold',
-    fontWeight: '600',
-    color: '#22C55E',
-  },
-  // Category chips
+  // Chips
   chipsScroll: {
-    marginBottom: 22,
+    marginBottom: 16,
   },
   chipsRow: {
-    paddingRight: 4,
+    paddingVertical: 4,
   },
-  // Trending
-  trendingScroll: {
-    marginBottom: 22,
-  },
-  trendingRow: {
-    paddingRight: 4,
-  },
-  // Recommended
-  recommendedList: {
+  // Feed
+  feedContainer: {
     marginBottom: 10,
   },
-  // Regions
-  regionsContainer: {
-    marginBottom: 14,
-  },
-  // Map CTA Banner
+  // Banner Map CTA
   mapBannerGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 20,
     paddingVertical: 18,
     paddingHorizontal: 20,
   },
@@ -877,39 +642,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    flex: 1,
   },
   mapBannerIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapBannerTitle: {
-    fontSize: 16,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
-    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
   },
   mapBannerSub: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
     color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
     marginTop: 2,
   },
   mapBannerArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomSpacer: {
-    height: 30,
+    height: 100,
   },
 });

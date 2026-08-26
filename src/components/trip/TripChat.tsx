@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { sendChatMessage as dbSendChat } from '../../services/tripService';
+import { LinearGradient } from 'expo-linear-gradient';
+import { summarizeChatMessages, AI_FEATURES_ENABLED } from '../../services/aiService';
 
 interface TripChatProps {
   trip: any;
@@ -20,6 +22,24 @@ export default function TripChat({
 }: TripChatProps) {
   const [newChatText, setNewChatText] = useState('');
   const chatEndRef = useRef<ScrollView>(null);
+
+  // AI Summarizer states
+  const [aiSummaryModal, setAiSummaryModal] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [chatSummary, setChatSummary] = useState('');
+
+  const handleCatchUp = async () => {
+    setAiLoading(true);
+    setAiSummaryModal(true);
+    try {
+      const summary = await summarizeChatMessages(trip.chatMessages);
+      setChatSummary(summary);
+    } catch (e) {
+      setChatSummary('Failed to summarize chat messages. Try again later!');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleSendChat = async () => {
     if (!newChatText.trim()) return;
@@ -44,12 +64,15 @@ export default function TripChat({
   ) => {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name={icon as any} size={48} color={color} style={{ opacity: 0.8 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title.toLowerCase()}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc.toLowerCase()}</Text>
+        <View style={[styles.emptyIconBox, { backgroundColor: color + '12', borderColor: color + '25', borderWidth: 1 }]}>
+          <Ionicons name={icon as any} size={28} color={color} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc}</Text>
         {actionLabel && onAction && (
-          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color }]} onPress={onAction}>
-            <Text style={styles.emptyActionBtnText}>{actionLabel.toLowerCase()}</Text>
+          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color, flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={onAction} activeOpacity={0.85}>
+            <Ionicons name="add" size={14} color="#FFFFFF" />
+            <Text style={styles.emptyActionBtnText}>{actionLabel}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -60,22 +83,43 @@ export default function TripChat({
     return (
       <TouchableOpacity style={styles.roomBackRow} onPress={onPress}>
         <Ionicons name="arrow-back" size={16} color={colors.brand} />
-        <Text style={[styles.roomBackText, { color: colors.brand }]}>{label.toLowerCase()}</Text>
+        <Text style={[styles.roomBackText, { color: colors.brand }]}>{label}</Text>
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-        {renderRoomBack('Back to People', onBack)}
-        <Text style={[styles.tabContentTitle, { color: colors.text, marginTop: 8 }]}>Group Chat</Text>
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          {renderRoomBack('Back to People', onBack)}
+          <Text style={[styles.tabContentTitle, { color: colors.text, marginTop: 8 }]}>Group Chat</Text>
+        </View>
+        {AI_FEATURES_ENABLED && trip.chatMessages.length > 0 && (
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.brandLight || '#E0F7F5',
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              gap: 4,
+              borderWidth: 1,
+              borderColor: colors.brand,
+              marginTop: 18,
+            }}
+            onPress={handleCatchUp}
+          >
+            <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>Catch me up</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {trip.chatMessages.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          {renderEmptyState("start the conversation", "coordinate with your group in real-time.", "chatbubbles-outline", "#0D9488", "send a hello", () => {
-            setNewChatText("Hello everyone! 👋");
+          {renderEmptyState("Start the Conversation", "Coordinate with your group in real-time.", "chatbubbles-outline", "#0D9488", "Send a Hello", () => {
+            setNewChatText("Hello everyone!");
           })}
         </View>
       ) : (
@@ -89,13 +133,38 @@ export default function TripChat({
             const isMe = msg.sender === currentUserName;
             return (
               <View key={msg.id} style={[styles.chatBubbleWrapper, isMe ? styles.myBubbleWrapper : styles.otherBubbleWrapper]}>
-                {!isMe && <Text style={[styles.chatSenderName, { color: colors.textSecondary }]}>{msg.sender}</Text>}
-                <View style={[styles.chatBubble, isMe ? [styles.myBubble, { backgroundColor: colors.brand }] : [styles.otherBubble, { backgroundColor: colors.surface }]]}>
-                  <Text style={[styles.chatText, isMe ? styles.myChatText : [styles.otherChatText, { color: colors.text }]]}>
-                    {msg.text}
-                  </Text>
-                  <Text style={[styles.chatTime, { color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }]}>{msg.timestamp}</Text>
-                </View>
+                {!isMe && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder, justifyContent: 'center', alignItems: 'center' }}>
+                      {msg.senderAvatar ? (
+                        <Image source={{ uri: msg.senderAvatar }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                      ) : (
+                        <Text style={{ fontSize: 9, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>{msg.sender.charAt(0).toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.chatSenderName, { color: colors.textSecondary }]}>{msg.sender}</Text>
+                  </View>
+                )}
+                {isMe ? (
+                  <LinearGradient
+                    colors={['#0D9488', '#0F766E']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.chatBubble, styles.myBubble]}
+                  >
+                    <Text style={[styles.chatText, styles.myChatText]}>
+                      {msg.text}
+                    </Text>
+                    <Text style={[styles.chatTime, { color: 'rgba(255,255,255,0.7)' }]}>{msg.timestamp}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.chatBubble, styles.otherBubble, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }]}>
+                    <Text style={[styles.chatText, { color: colors.text }]}>
+                      {msg.text}
+                    </Text>
+                    <Text style={[styles.chatTime, { color: colors.textMuted }]}>{msg.timestamp}</Text>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -114,6 +183,39 @@ export default function TripChat({
           <Ionicons name="send" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+
+      {/* AI CHAT SUMMARY MODAL */}
+      <Modal
+        visible={aiSummaryModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAiSummaryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, maxHeight: '60%' }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.brand }]}>Agilito Recap</Text>
+              <TouchableOpacity onPress={() => setAiSummaryModal(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {aiLoading ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color={colors.brand} />
+                <Text style={{ marginTop: 12, color: colors.textSecondary, fontFamily: 'Poppins-Medium' }}>Agilito is summarizing the conversation...</Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+                <Text style={{ fontSize: 13, color: colors.text, lineHeight: 20, fontFamily: 'Poppins-Medium' }}>
+                  {chatSummary}
+                </Text>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -127,13 +229,13 @@ const styles = StyleSheet.create({
   },
   roomBackText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginLeft: 2,
   },
   tabContentTitle: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
   },
   emptyContainer: {
@@ -142,16 +244,56 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 16,
   },
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   emptyTitle: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 12,
     textAlign: 'center',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  modalHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
   emptyDesc: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     marginTop: 4,
     textAlign: 'center',
@@ -165,7 +307,7 @@ const styles = StyleSheet.create({
   emptyActionBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   chatScroll: {
@@ -186,7 +328,7 @@ const styles = StyleSheet.create({
   },
   chatSenderName: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 2,
     marginLeft: 4,
@@ -204,7 +346,7 @@ const styles = StyleSheet.create({
   },
   chatText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     lineHeight: 18,
   },
   myChatText: {
@@ -213,7 +355,7 @@ const styles = StyleSheet.create({
   otherChatText: {},
   chatTime: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     alignSelf: 'flex-end',
     marginTop: 4,
   },
@@ -230,7 +372,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginRight: 10,
   },
   chatSendBtn: {

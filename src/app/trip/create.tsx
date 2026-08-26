@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, TextInput, Switch, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TextInput, Switch, Alert, TouchableOpacity, ActivityIndicator, Modal as RNModal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { TripFeatureSettings } from '../../services/mockData';
 import { createTrip } from '../../services/tripService';
 import { Button } from '../../components/ui/Button';
@@ -33,6 +34,21 @@ interface PlanSuggestion {
   actionValue?: string;
 }
 
+const getFeatureLabelAndIcon = (key: string) => {
+  switch (key) {
+    case 'itinerary': return { label: 'Itinerary Plan', icon: 'calendar-outline' };
+    case 'split_expenses': return { label: 'Expense Splitter', icon: 'wallet-outline' };
+    case 'attendance': return { label: 'Safety Check-in', icon: 'shield-checkmark-outline' };
+    case 'guardian_mode': return { label: 'GPS Guard Mode', icon: 'location-outline' };
+    case 'announcements': return { label: 'Group Notices', icon: 'megaphone-outline' };
+    case 'documents': return { label: 'Document Vault', icon: 'folder-outline' };
+    case 'polls': return { label: 'Decision Polls', icon: 'checkbox-outline' };
+    case 'group_chat': return { label: 'Chat Room', icon: 'chatbubbles-outline' };
+    case 'checklist': return { label: 'Prep Checklist', icon: 'checkmark-circle-outline' };
+    default: return { label: key.replace('_', ' '), icon: 'grid-outline' };
+  }
+};
+
 export default function CreateTripScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -42,13 +58,28 @@ export default function CreateTripScreen() {
   // Progressive 7-Stage Flow
   const [step, setStep] = useState<number>(1);
 
+  const getTodayStr = (offsetDays = 0) => {
+    const d = new Date();
+    if (offsetDays > 0) {
+      d.setDate(d.getDate() + offsetDays);
+    }
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const r = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${r}`;
+  };
+
   // Core Form Fields
   const [tripType, setTripType] = useState<string>('leisure');
   const [tripSubtype, setTripSubtype] = useState<string>('vacation');
-  const [destination, setDestination] = useState('');
-  const [startDate, setStartDate] = useState('2026-08-22');
-  const [endDate, setEndDate] = useState('2026-08-25');
+  const [destination, setDestination] = useState('TBD');
+  const [startDate, setStartDate] = useState(getTodayStr(0));
+  const [endDate, setEndDate] = useState(getTodayStr(3));
   const [travelerCount, setTravelerCount] = useState('1');
+
+  // Calendar picker state
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
   const [budgetCategory, setBudgetCategory] = useState<string>('moderate');
   const [budgetAmount, setBudgetAmount] = useState('15000');
 
@@ -59,14 +90,14 @@ export default function CreateTripScreen() {
   const [preferences, setPreferences] = useState<string[]>([]);
   const [features, setFeatures] = useState<TripFeatureSettings>({
     itinerary: true,
-    split_expenses: true,
+    split_expenses: false,
     attendance: false,
     guardian_mode: false,
-    announcements: true,
-    documents: true,
-    polls: true,
-    group_chat: true,
-    checklist: true,
+    announcements: false,
+    documents: false,
+    polls: false,
+    group_chat: false,
+    checklist: false,
   });
 
   // UI Control States
@@ -82,7 +113,7 @@ export default function CreateTripScreen() {
   const [aiDestSuggestions, setAiDestSuggestions] = useState<RecommendedDestination[]>([]);
   const [aiBudgetEstimate, setAiBudgetEstimate] = useState<BudgetEstimate | null>(null);
   const [aiNameSuggestions, setAiNameSuggestions] = useState<string[]>([]);
-  
+
   // AI suggestions list
   const [aiSuggestions, setAiSuggestions] = useState<AiAnalysisSuggestion[]>([]);
   const [isAnalyzingPlan, setIsAnalyzingPlan] = useState(false);
@@ -103,7 +134,7 @@ export default function CreateTripScreen() {
     if (params.title) {
       setAiNameSuggestions([params.title as string]);
     }
-    
+
     // Set initial default checklist
     const template = getTemplate('leisure', 'vacation');
     if (template) {
@@ -116,33 +147,33 @@ export default function CreateTripScreen() {
   const handleSelectSubtype = (catKey: string, subKey: string) => {
     setTripType(catKey);
     setTripSubtype(subKey);
-    
+
     const template = getTemplate(catKey, subKey);
     if (template) {
       setPreferredTransport(template.strongDefaults.transport);
       setAccommodationType(template.suggestedDefaults.accommodation);
       setTravelPace(template.suggestedDefaults.travelPace);
       setPreferences(template.defaultPreferences);
-      
-      const baseFeatures = {
+
+      const baseFeatures: TripFeatureSettings = {
         itinerary: true,
-        split_expenses: true,
+        split_expenses: false,
         attendance: false,
         guardian_mode: false,
-        announcements: true,
-        documents: true,
-        polls: true,
-        group_chat: true,
-        checklist: true,
+        announcements: false,
+        documents: false,
+        polls: false,
+        group_chat: false,
+        checklist: false,
       };
-      
+
       const mergedFeatures = { ...baseFeatures, ...template.recommendedFeatures };
       setFeatures(mergedFeatures);
-      
+
       setItineraryStops([]);
       setPreloadedPolls([]);
       setAiSuggestions([]);
-      
+
       // Preload the checklist items from template
       const defaultChecklist = template.presetChecklist || [];
       setChecklistItems(['Prepare packing list', ...defaultChecklist]);
@@ -178,14 +209,9 @@ export default function CreateTripScreen() {
 
   const handleAllowLocation = () => {
     setShowLocationDialog(false);
-    setFeatures(prev => {
-      const next = { ...prev };
-      next.attendance = true;
-      if (pendingFeatureToEnable) {
-        next[pendingFeatureToEnable] = true;
-      }
-      return next;
-    });
+    if (pendingFeatureToEnable) {
+      setFeatures(prev => ({ ...prev, [pendingFeatureToEnable]: true }));
+    }
     setPendingFeatureToEnable(null);
   };
 
@@ -212,90 +238,27 @@ export default function CreateTripScreen() {
     } else {
       const baseFeatures: any = {
         itinerary: true,
-        split_expenses: true,
+        split_expenses: false,
         attendance: false,
         guardian_mode: false,
-        announcements: true,
-        documents: true,
-        polls: true,
-        group_chat: true,
-        checklist: true,
+        announcements: false,
+        documents: false,
+        polls: false,
+        group_chat: false,
+        checklist: false,
       };
       const expected = template.recommendedFeatures[type as keyof TripFeatureSettings] !== undefined
         ? template.recommendedFeatures[type as keyof TripFeatureSettings]
         : baseFeatures[type];
       isDefault = value === expected;
     }
-    
+
     return isDefault ? 'TourGo Suggested' : 'You Selected';
   };
 
   // Explanation Mapping for TourGo Smart Decisions
   const getContextualExplanations = () => {
-    const template = getTemplate(tripType, tripSubtype);
     const explanations = [];
-
-    // Transport explanation
-    if (preferredTransport === 'chartered') {
-      if (tripSubtype === 'field_trip') {
-        explanations.push({
-          icon: 'bus-outline',
-          title: 'Bus selected for your field trip',
-          desc: 'This is the usual choice for group field trips to keep everyone together. You can change it anytime.'
-        });
-      } else {
-        explanations.push({
-          icon: 'bus-outline',
-          title: 'Chartered vehicle selected',
-          desc: `Recommended for group activities like a ${template.label} to avoid transport delays.`
-        });
-      }
-    } else if (preferredTransport === 'public') {
-      explanations.push({
-        icon: 'subway-outline',
-        title: 'Public transport suggested',
-        desc: 'City sightseeing is typically best navigated via local subways, buses, or walks to beat city traffic.'
-      });
-    } else if (preferredTransport === 'self_drive') {
-      explanations.push({
-        icon: 'car-outline',
-        title: 'Self-drive selected',
-        desc: 'Recommended for road trips and camping to transport heavy gear and allow flexible stops.'
-      });
-    } else if (preferredTransport === 'walking') {
-      explanations.push({
-        icon: 'walk-outline',
-        title: 'Walking suggested',
-        desc: 'Standard default choice for hiking and trail trekking expeditions.'
-      });
-    }
-
-    // Accommodation explanation
-    if (accommodationType === 'resort') {
-      explanations.push({
-        icon: 'bed-outline',
-        title: 'Resort lodging suggested',
-        desc: 'Vacation packages pre-select resort accommodations for optimal relaxation and relaxation amenities.'
-      });
-    } else if (accommodationType === 'camping') {
-      explanations.push({
-        icon: 'leaf-outline',
-        title: 'Camping suggested',
-        desc: 'Sleep under the stars! Standard accommodation choice for camping and trekking getaways.'
-      });
-    } else if (accommodationType === 'hostel') {
-      explanations.push({
-        icon: 'people-outline',
-        title: 'Hostel lodging suggested',
-        desc: 'Affordable and community-oriented lodging, ideal for backpacking or barkada outings.'
-      });
-    } else {
-      explanations.push({
-        icon: 'business-outline',
-        title: 'Hotel lodging selected',
-        desc: 'Comfortable hotel rooms with working Wi-Fi and seminar halls, suitable for business delegates.'
-      });
-    }
 
     // Pace explanation
     if (travelPace === 'relaxed') {
@@ -327,6 +290,7 @@ export default function CreateTripScreen() {
     try {
       const suggestions = await recommendDestinations(
         tripType,
+        tripSubtype,
         travelerCount,
         preferences,
         budgetCategory,
@@ -516,14 +480,14 @@ export default function CreateTripScreen() {
       const stops = [...dayStops[day]].sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
       for (let i = 0; i < stops.length - 1; i++) {
         const current = stops[i];
-        const next = stops[i+1];
+        const next = stops[i + 1];
         const currentMin = parseTimeToMinutes(current.time);
         const nextMin = parseTimeToMinutes(next.time);
-        
+
         // Assume default duration is 90 mins if unspecified
         const duration = current.duration ? (parseInt(current.duration) || 90) : 90;
         const currentEndMin = currentMin + duration;
-        
+
         if (currentEndMin > nextMin) {
           const formatMinToTime = (min: number) => {
             let h = Math.floor(min / 60);
@@ -533,7 +497,7 @@ export default function CreateTripScreen() {
             if (h === 0) h = 12;
             return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
           };
-          
+
           suggestions.push({
             id: `schedule_overlap_${day}_${i}`,
             type: 'conflict',
@@ -571,7 +535,9 @@ export default function CreateTripScreen() {
   const handleApplyFix = async (suggestion: PlanSuggestion) => {
     if (suggestion.actionType === 'enable_feature') {
       const featKey = suggestion.actionValue as keyof TripFeatureSettings;
-      setFeatures(prev => ({ ...prev, [featKey]: true }));
+      if (!features[featKey]) {
+        toggleFeature(featKey);
+      }
       Alert.alert("Success", `${suggestion.title} activated.`);
     } else if (suggestion.actionType === 'create_poll') {
       const pollObj = JSON.parse(suggestion.actionValue || '{}');
@@ -612,9 +578,37 @@ export default function CreateTripScreen() {
   };
 
   const handleCreateFinal = async () => {
-    const finalTitle = titleState.trim() || `${tripSubtype.replace('_', ' ').toUpperCase()} Trip to ${destination}`;
-    if (!destination.trim() || !startDate || !endDate) {
-      Alert.alert("Required Fields", "Specify destination and dates.");
+    const finalTitle = titleState.trim() || `${tripSubtype.replace('_', ' ').toUpperCase()} Trip`;
+    if (!startDate || !endDate) {
+      Alert.alert("Required Fields", "Specify travel dates.");
+      return;
+    }
+
+    // Validate format & past dates
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      Alert.alert("Invalid Format", "Dates must be in YYYY-MM-DD format.");
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      Alert.alert("Invalid Dates", "One or both of the entered dates are invalid calendar dates.");
+      return;
+    }
+
+    if (start < today) {
+      Alert.alert("Invalid Start Date", "Departure date cannot be in the past.");
+      return;
+    }
+
+    if (end < start) {
+      Alert.alert("Invalid End Date", "Return date must be on or after the departure date.");
       return;
     }
 
@@ -658,7 +652,9 @@ export default function CreateTripScreen() {
 
   const handleCustomBack = () => {
     if (step > 1) {
-      setStep(step - 1);
+      // Steps 4, 5, 6 (Trip Setup/Itinerary/Checklist) were removed — skip them when going back
+      const prevStep = step === 7 ? 3 : step - 1;
+      setStep(prevStep);
     } else {
       router.back();
     }
@@ -678,7 +674,7 @@ export default function CreateTripScreen() {
         <Card style={[styles.helpContextCard, { borderColor: '#E0F2FE', backgroundColor: isDark ? '#082F49' : '#F0F9FF', marginTop: 12 }]} shadow={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="school" size={20} color="#0284C7" />
-            <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>Field Trip Setup Active</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Field Trip Setup Active</Text>
           </View>
           <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
             • Chaperone controls & safety coordinate tracking is active.{'\n'}
@@ -687,13 +683,13 @@ export default function CreateTripScreen() {
         </Card>
       );
     }
-    
+
     if (isOutdoor) {
       return (
         <Card style={[styles.helpContextCard, { borderColor: '#DCFCE7', backgroundColor: isDark ? '#064E3B' : '#F0FDF4', marginTop: 12 }]} shadow={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="trail-sign" size={20} color="#16A34A" />
-            <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>Outdoor Expedition Setup Active</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Outdoor Expedition Setup Active</Text>
           </View>
           <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
             • Safety checkpoints, forest ranger register items, and physical packing lists preloaded.{'\n'}
@@ -708,7 +704,7 @@ export default function CreateTripScreen() {
         <Card style={[styles.helpContextCard, { borderColor: '#F3E8FF', backgroundColor: isDark ? '#3B0764' : '#FAF5FF', marginTop: 12 }]} shadow={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="briefcase" size={20} color="#9333EA" />
-            <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>Corporate Delegate Workspace Active</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Corporate Delegate Workspace Active</Text>
           </View>
           <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
             • Documents vaults automatically structured for corporate passes, QR registry codes, and slide decks.{'\n'}
@@ -723,7 +719,7 @@ export default function CreateTripScreen() {
         <Card style={[styles.helpContextCard, { borderColor: '#FEF3C7', backgroundColor: isDark ? '#78350F' : '#FFFBEB', marginTop: 12 }]} shadow={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="people" size={20} color="#D97706" />
-            <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>Large Group Workspace ({travelerCount} Travelers)</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Large Group Workspace ({travelerCount} Travelers)</Text>
           </View>
           <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
             • Recommended attendance trackers to simplify check-in checklists.{'\n'}
@@ -760,32 +756,33 @@ export default function CreateTripScreen() {
 
   // Linear Progress Tracker
   const renderProgressTracker = () => {
-    const totalSteps = 7;
-    const progressPercent = (step / totalSteps) * 100;
-    
+    const totalSteps = 4;
+    // Steps 4/5/6 removed — remap 7 -> 4 for display and progress
+    const displayStep = step === 7 ? 4 : step;
+    const progressPercent = (displayStep / totalSteps) * 100;
+
     const stepNames = [
       'Trip Type',
       'Trip Purpose',
       'Trip Details',
-      'Trip Setup',
-      'Itinerary',
-      'Checklist',
       'Review'
     ];
-    
+
+    const stepLabel = stepNames[(displayStep - 1)] || '';
+
     return (
       <View style={styles.trackerContainer}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.brand }}>
-            {step} of {totalSteps} — {stepNames[step - 1]}
+          <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+            {displayStep} of {totalSteps} — {stepLabel}
           </Text>
-          <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Medium', color: colors.textMuted }}>
+          <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>
             {Math.round(progressPercent)}% Complete
           </Text>
         </View>
         <View style={[styles.trackerLineBackground, { backgroundColor: colors.cardBorder, top: 0 }]}>
           <LinearGradient
-            colors={['#06B6D4', '#10B981']}
+            colors={[colors.brand, '#0EA5E9']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.trackerLineFill, { width: `${progressPercent}%` }]}
@@ -834,7 +831,7 @@ export default function CreateTripScreen() {
                     <View style={[styles.catIconWrapper, { backgroundColor: isSelected ? colors.brandLight : colors.background }]}>
                       <Ionicons name={cat.icon as any} size={22} color={isSelected ? colors.brand : colors.textSecondary} />
                     </View>
-                    <Text style={[styles.gridName, { color: colors.text, fontFamily: isSelected ? 'PlusJakartaSans-Bold' : 'PlusJakartaSans-SemiBold' }]}>
+                    <Text style={[styles.gridName, { color: colors.text, fontFamily: isSelected ? 'Poppins-Bold' : 'Poppins-SemiBold' }]}>
                       {cat.label}
                     </Text>
                   </TouchableOpacity>
@@ -850,12 +847,28 @@ export default function CreateTripScreen() {
         return (
           <View style={styles.stageContainer}>
             <Text style={[styles.stageHeading, { color: colors.text }]}>What are you doing on this trip?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Select a specific type of travel to load specialized features and default settings.</Text>
+            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Select one of these common trip templates to preload default features, or select "Custom Journey" to start with a blank slate.</Text>
 
             {tripType && (
               <View style={{ gap: 8, marginTop: 4 }}>
                 {TRIP_CATEGORIES.find(c => c.key === tripType)?.subtypes.map(sub => {
+                  // If custom_trip is defined here in subtypes list, let the map handle it. 
+                  // But to avoid double rendering if category is "other", we check:
+                  if (sub.key === 'custom_trip') return null;
+
                   const isSubSelected = tripSubtype === sub.key;
+                  const baseFeatures = {
+                    itinerary: true,
+                    split_expenses: false,
+                    attendance: false,
+                    guardian_mode: false,
+                    announcements: false,
+                    documents: false,
+                    polls: false,
+                    group_chat: false,
+                    checklist: false,
+                  };
+                  const subFeatures = { ...baseFeatures, ...sub.recommendedFeatures };
                   return (
                     <TouchableOpacity
                       key={sub.key}
@@ -872,8 +885,8 @@ export default function CreateTripScreen() {
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flex: 1, paddingRight: 10 }}>
-                          <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{sub.label}</Text>
-                          <Text style={{ fontSize: 10, fontFamily: 'PlusJakartaSans-Medium', color: colors.textSecondary, marginTop: 2 }}>{sub.desc}</Text>
+                          <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>{sub.label}</Text>
+                          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textSecondary, marginTop: 2 }}>{sub.desc}</Text>
                         </View>
                         {isSubSelected ? (
                           <View style={[styles.checkCircle, { backgroundColor: colors.brand }]}>
@@ -883,9 +896,78 @@ export default function CreateTripScreen() {
                           <View style={[styles.checkCircleOutline, { borderColor: colors.cardBorder }]} />
                         )}
                       </View>
+
+                      {isSubSelected && (
+                        <View style={[styles.packageDetailsContainer, { borderTopColor: colors.cardBorder }]}>
+                          {/* Included Workspace Modules */}
+                          <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included Workspace Modules</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {Object.entries(subFeatures)
+                              .filter(([_, enabled]) => enabled)
+                              .map(([key]) => {
+                                const featureInfo = getFeatureLabelAndIcon(key);
+                                return (
+                                  <View key={key} style={[styles.featurePill, { backgroundColor: colors.brandLight, borderColor: colors.brand + '30', borderWidth: 1 }]}>
+                                    <Ionicons name={featureInfo.icon as any} size={11} color={colors.brand} />
+                                    <Text style={[styles.featurePillText, { color: colors.brand }]}>{featureInfo.label}</Text>
+                                  </View>
+                                );
+                              })}
+                          </View>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
+
+                {/* Always append a Custom Journey / Skip option card */}
+                <TouchableOpacity
+                  onPress={() => handleSelectSubtype(tripType, 'custom_trip')}
+                  style={[
+                    styles.subtypeRowItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: tripSubtype === 'custom_trip' ? colors.brand : colors.cardBorder,
+                      borderWidth: tripSubtype === 'custom_trip' ? 2 : 1,
+                      shadowOpacity: tripSubtype === 'custom_trip' ? 0.04 : 0,
+                    }
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Custom Journey (Blank Slate)</Text>
+                      <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textSecondary, marginTop: 2 }}>Build from scratch without preloaded templates or presets.</Text>
+                    </View>
+                    {tripSubtype === 'custom_trip' ? (
+                      <View style={[styles.checkCircle, { backgroundColor: colors.brand }]}>
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <View style={[styles.checkCircleOutline, { borderColor: colors.cardBorder }]} />
+                    )}
+                  </View>
+
+                  {tripSubtype === 'custom_trip' && (
+                    <View style={[styles.packageDetailsContainer, { borderTopColor: colors.cardBorder }]}>
+                      {/* Included Workspace Modules */}
+                      <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included Workspace Modules</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        <View style={[styles.featurePill, { backgroundColor: colors.brandLight, borderColor: colors.brand + '30', borderWidth: 1 }]}>
+                          <Ionicons name="calendar-outline" size={11} color={colors.brand} />
+                          <Text style={[styles.featurePillText, { color: colors.brand }]}>Itinerary Plan</Text>
+                        </View>
+                        <View style={[styles.featurePill, { backgroundColor: colors.brandLight, borderColor: colors.brand + '30', borderWidth: 1 }]}>
+                          <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
+                          <Text style={[styles.featurePillText, { color: colors.brand }]}>Prep Checklist</Text>
+                        </View>
+                        <View style={[styles.featurePill, { backgroundColor: colors.brandLight, borderColor: colors.brand + '30', borderWidth: 1 }]}>
+                          <Ionicons name="chatbubbles-outline" size={11} color={colors.brand} />
+                          <Text style={[styles.featurePillText, { color: colors.brand }]}>Chat Room</Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
               </View>
             )}
 
@@ -897,66 +979,156 @@ export default function CreateTripScreen() {
         return (
           <View style={styles.stageContainer}>
             <Text style={[styles.stageHeading, { color: colors.text }]}>Where and when is the trip?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Add your travel details. Agilito will load smart defaults automatically.</Text>
+            <Text style={[styles.stageSub, { color: colors.textSecondary, marginBottom: 8 }]}>Add your travel details. Agilito will load smart defaults automatically.</Text>
 
-            {/* Destination inputs */}
-            <Text style={styles.sectionLabel}>Where to?</Text>
+            {/* Friendly reminder banner */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.cardBorder, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, marginBottom: 12 }}>
+              <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
+              <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textSecondary, flex: 1 }}>
+                Plans change! You can easily edit your dates, destinations, and travelers in the settings dashboard later.
+              </Text>
+            </View>
+
+
+
+            {/* Name Input */}
+            <Text style={styles.sectionLabel}>Trip Name</Text>
             <View style={styles.searchContainer}>
-              <Ionicons name="location-outline" size={18} color={colors.textMuted} style={styles.searchIcon} />
+              <Ionicons name="sparkles-outline" size={18} color={colors.brand} style={styles.searchIcon} />
               <TextInput
-                value={destination}
-                onChangeText={setDestination}
-                placeholder="Enter City, Province, or Island"
+                value={titleState}
+                onChangeText={setTitleState}
+                placeholder="e.g. Barkada Palawan Getaway 2026"
                 style={[styles.inputField, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
                 placeholderTextColor={colors.textMuted}
               />
             </View>
 
-            {/* AI helper scanner */}
-            <Card style={[styles.aiHelperCard, { marginTop: 12 }]} variant="sky" shadow={false}>
+            <Card style={[styles.aiHelperCard, { marginTop: 12, marginBottom: 20 }]} variant="sky" shadow={false}>
               <View style={styles.aiHelperHeader}>
                 <Ionicons name="sparkles" size={16} color={colors.brand} />
-                <Text style={[styles.aiHelperTitle, { color: colors.text }]}>Need help choosing?</Text>
+                <Text style={[styles.aiHelperTitle, { color: colors.text }]}>Need a creative title?</Text>
               </View>
               <Text style={[styles.aiHelperDesc, { color: colors.textSecondary }]}>
-                Let TourGo suggest destinations matching your trip type.
+                Let TourGo suggest titles based on your trip type and activities.
               </Text>
               <Button
-                title={isAiLoading ? "Scanning..." : "Suggest with AI"}
-                onPress={handleAskAgilitoDestinations}
+                title={isAiLoading ? "Suggesting..." : "Suggest Names"}
+                onPress={handleSuggestNames}
                 variant="accent"
                 size="small"
                 loading={isAiLoading}
                 style={{ alignSelf: 'flex-start', marginTop: 10 }}
               />
+              {aiNameSuggestions.length > 0 && (
+                <View style={styles.aiNameSuggestionsRow}>
+                  {aiNameSuggestions.map((name, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      onPress={() => {
+                        setTitleState(name);
+                        setAiNameSuggestions([]);
+                      }}
+                      style={[styles.aiNameBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    >
+                      <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 11 }}>{name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </Card>
 
             {/* Travel Windows */}
             <Text style={styles.sectionLabel}>When are you travelling?</Text>
             <View style={styles.dateCardsRow}>
-              <Card style={styles.dateCard} shadow={false}>
+              <Card
+                style={styles.dateCard}
+                shadow={false}
+                onPress={() => setShowStartPicker(true)}
+              >
                 <Ionicons name="calendar-outline" size={16} color={colors.brand} style={{ marginBottom: 4 }} />
                 <Text style={[styles.dateCardLabel, { color: colors.textSecondary }]}>Departure Date</Text>
-                <TextInput
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.dateCardInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.background }]}
-                />
+                <View style={[styles.dateCardInput, { borderColor: colors.cardBorder, backgroundColor: colors.background }]}>
+                  <Text style={{ color: colors.text, fontFamily: 'Poppins-SemiBold', fontSize: 13 }}>{startDate}</Text>
+                  <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
+                </View>
               </Card>
-              <Card style={styles.dateCard} shadow={false}>
+              <Card
+                style={styles.dateCard}
+                shadow={false}
+                onPress={() => setShowEndPicker(true)}
+              >
                 <Ionicons name="calendar-outline" size={16} color="#10B981" style={{ marginBottom: 4 }} />
                 <Text style={[styles.dateCardLabel, { color: colors.textSecondary }]}>Return Date</Text>
-                <TextInput
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.dateCardInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.background }]}
-                />
+                <View style={[styles.dateCardInput, { borderColor: colors.cardBorder, backgroundColor: colors.background }]}>
+                  <Text style={{ color: colors.text, fontFamily: 'Poppins-SemiBold', fontSize: 13 }}>{endDate}</Text>
+                  <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
+                </View>
               </Card>
             </View>
+
+            {/* Departure Date Calendar Modal */}
+            <RNModal visible={showStartPicker} transparent animationType="fade" onRequestClose={() => setShowStartPicker(false)}>
+              <View style={styles.modalOverlay}>
+                <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <View style={[styles.modalHeader, { borderBottomColor: colors.cardBorder }]}>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Select Departure Date</Text>
+                    <TouchableOpacity onPress={() => setShowStartPicker(false)}>
+                      <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={new Date(startDate + 'T00:00:00')}
+                    mode="date"
+                    display="inline"
+                    minimumDate={new Date()}
+                    onChange={(event: DateTimePickerEvent, date?: Date) => {
+                      if (event.type === 'dismissed') { setShowStartPicker(false); return; }
+                      if (date) {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        setStartDate(`${y}-${m}-${d}`);
+                        if (new Date(`${y}-${m}-${d}`) > new Date(endDate + 'T00:00:00')) {
+                          setEndDate(`${y}-${m}-${d}`);
+                        }
+                      }
+                      setShowStartPicker(false);
+                    }}
+                  />
+                </View>
+              </View>
+            </RNModal>
+
+            {/* Return Date Calendar Modal */}
+            <RNModal visible={showEndPicker} transparent animationType="fade" onRequestClose={() => setShowEndPicker(false)}>
+              <View style={styles.modalOverlay}>
+                <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <View style={[styles.modalHeader, { borderBottomColor: colors.cardBorder }]}>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Select Return Date</Text>
+                    <TouchableOpacity onPress={() => setShowEndPicker(false)}>
+                      <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={new Date(endDate + 'T00:00:00')}
+                    mode="date"
+                    display="inline"
+                    minimumDate={new Date(startDate + 'T00:00:00')}
+                    onChange={(event: DateTimePickerEvent, date?: Date) => {
+                      if (event.type === 'dismissed') { setShowEndPicker(false); return; }
+                      if (date) {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        setEndDate(`${y}-${m}-${d}`);
+                      }
+                      setShowEndPicker(false);
+                    }}
+                  />
+                </View>
+              </View>
+            </RNModal>
 
             {/* Travelers counter */}
             <Text style={styles.sectionLabel}>How many people are joining?</Text>
@@ -989,607 +1161,135 @@ export default function CreateTripScreen() {
               </View>
             </Card>
 
-            {/* Budget category */}
-            <Text style={styles.sectionLabel}>What is your budget range?</Text>
-            <View style={[styles.budgetGrid, { marginBottom: 12 }]}>
-              {[
-                { key: 'budget', label: 'Budget', desc: '₱5,000 PHP', val: '5000' },
-                { key: 'moderate', label: 'Moderate', desc: '₱15,000 PHP', val: '15000' },
-                { key: 'comfortable', label: 'Comfort', desc: '₱35,000 PHP', val: '35000' },
-                { key: 'premium', label: 'Premium', desc: '₱75,000 PHP', val: '75000' },
-              ].map(b => {
-                const isSelected = budgetCategory === b.key;
-                return (
-                  <TouchableOpacity
-                    key={b.key}
-                    onPress={() => {
-                      setBudgetCategory(b.key);
-                      setBudgetAmount(b.val);
-                    }}
-                    style={[
-                      styles.budgetCard,
-                      {
-                        backgroundColor: colors.card,
-                        borderColor: isSelected ? '#10B981' : colors.cardBorder,
-                        borderWidth: isSelected ? 2 : 1.5,
-                      }
-                    ]}
-                  >
-                    <Text style={[styles.budgetTextName, { color: colors.text }]}>{b.label}</Text>
-                    <Text style={[styles.budgetTextPrice, { color: colors.brand }]}>{b.desc}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Card style={[styles.aiHelperCard, { marginBottom: 16 }]} variant="sky" shadow={false}>
-              <View style={styles.aiHelperHeader}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
-                <Text style={[styles.aiHelperTitle, { color: colors.text }]}>Need a cost projection?</Text>
-              </View>
-              <Text style={[styles.aiHelperDesc, { color: colors.textSecondary }]}>
-                Let TourGo project your trip expenses based on transport and lodging defaults.
-              </Text>
-              <Button
-                title={isAiLoading ? "Estimating..." : "Estimate with AI co-pilot"}
-                onPress={handleGetBudgetEstimate}
-                variant="accent"
-                size="small"
-                loading={isAiLoading}
-                style={{ alignSelf: 'flex-start', marginTop: 10 }}
-              />
-              {aiBudgetEstimate && (
-                <Card style={{ padding: 12, backgroundColor: colors.background, borderColor: colors.cardBorder, marginTop: 12 }} shadow={false}>
-                  <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.brand }}>PROJECTED PHP BREAKDOWNS</Text>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 4 }}>• Transport: {aiBudgetEstimate.transport}</Text>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary }}>• Accommodation: {aiBudgetEstimate.accommodation}</Text>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary }}>• Activities: {aiBudgetEstimate.activities}</Text>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary }}>• Buffer Safety: {aiBudgetEstimate.suggestedBuffer}</Text>
-                </Card>
-              )}
-            </Card>
-
-            {renderNavRow(true, 'Continue to Setup', () => setStep(4))}
-          </View>
-        );
-
-      case 4:
-        const explanations = getContextualExplanations();
-        
-        return (
-          <View style={styles.stageContainer}>
-            <Text style={[styles.stageHeading, { color: colors.text }]}>What has TourGo prepared for you?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Based on your selections, we've preloaded standard defaults and modules. Customize them below if needed.</Text>
-
-            {/* Contextual notifications */}
-            {renderContextualHelp()}
-
-            {/* Smart decisions explanations */}
-            <Text style={styles.sectionLabel}>Smart Decisions Applied</Text>
-            <View style={{ gap: 10 }}>
-              {explanations.map((exp, idx) => (
-                <Card key={idx} style={{ padding: 12, borderColor: colors.cardBorder, backgroundColor: colors.card }} shadow={false}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name={exp.icon as any} size={18} color={colors.brand} />
-                    <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{exp.title}</Text>
-                  </View>
-                  <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 4, lineHeight: 14 }}>{exp.desc}</Text>
-                </Card>
-              ))}
-            </View>
-
-            {/* Inferences overview layout with Decision Source badges */}
-            <Text style={styles.sectionLabel}>Trip Settings Overview</Text>
-            <Card style={{ padding: 16, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1.5, borderRadius: 16 }} shadow={false}>
-              <View style={{ gap: 8 }}>
-                {/* Transport setting */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="bus-outline" size={16} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>Transport: <Text style={{ fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{preferredTransport.toUpperCase()}</Text></Text>
-                  </View>
-                  <View style={[styles.sourceBadge, { backgroundColor: getDecisionBadge('transport', preferredTransport) === 'TourGo Suggested' ? '#EDE9FE' : '#D1FAE5' }]}>
-                    <Text style={[styles.sourceBadgeText, { color: getDecisionBadge('transport', preferredTransport) === 'TourGo Suggested' ? '#6D28D9' : '#047857' }]}>
-                      {getDecisionBadge('transport', preferredTransport)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Lodging setting */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="bed-outline" size={16} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>Lodging: <Text style={{ fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{accommodationType.toUpperCase()}</Text></Text>
-                  </View>
-                  <View style={[styles.sourceBadge, { backgroundColor: getDecisionBadge('accommodation', accommodationType) === 'TourGo Suggested' ? '#EDE9FE' : '#D1FAE5' }]}>
-                    <Text style={[styles.sourceBadgeText, { color: getDecisionBadge('accommodation', accommodationType) === 'TourGo Suggested' ? '#6D28D9' : '#047857' }]}>
-                      {getDecisionBadge('accommodation', accommodationType)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Pace setting */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="speedometer-outline" size={16} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>Travel Pace: <Text style={{ fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{travelPace.toUpperCase()}</Text></Text>
-                  </View>
-                  <View style={[styles.sourceBadge, { backgroundColor: getDecisionBadge('pace', travelPace) === 'TourGo Suggested' ? '#EDE9FE' : '#D1FAE5' }]}>
-                    <Text style={[styles.sourceBadgeText, { color: getDecisionBadge('pace', travelPace) === 'TourGo Suggested' ? '#6D28D9' : '#047857' }]}>
-                      {getDecisionBadge('pace', travelPace)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Active features list */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 10 }}>
-                    <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 11, color: colors.textSecondary, flex: 1 }} numberOfLines={1}>
-                      Modules: <Text style={{ fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>
-                        {Object.keys(features).filter(k => features[k as keyof TripFeatureSettings]).map(k => k.replace('_', ' ')).join(', ')}
-                      </Text>
-                    </Text>
-                  </View>
-                  <View style={[styles.sourceBadge, { backgroundColor: '#EDE9FE' }]}>
-                    <Text style={[styles.sourceBadgeText, { color: '#6D28D9' }]}>TourGo Suggested</Text>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setShowAdvancedPref(!showAdvancedPref)}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 14, borderTopWidth: 1, borderTopColor: colors.cardBorder, paddingTop: 12 }}
-              >
-                <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: colors.brand }}>
-                  {showAdvancedPref ? 'Hide Customization Options' : 'Customize settings & workspace tools'}
-                </Text>
-                <Ionicons name={showAdvancedPref ? "chevron-up" : "chevron-down"} size={16} color={colors.brand} />
-              </TouchableOpacity>
-
-              {showAdvancedPref && (
-                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.cardBorder }}>
-                  {/* Transport custom selector */}
-                  <Text style={styles.customFieldLabel}>Customize Transport</Text>
-                  <View style={styles.choiceRow}>
-                    {['public', 'self_drive', 'chartered', 'walking'].map(t => (
-                      <TouchableOpacity
-                        key={t}
-                        onPress={() => setPreferredTransport(t)}
-                        style={[styles.choiceCard, { backgroundColor: preferredTransport === t ? colors.brandLight : colors.background, borderColor: preferredTransport === t ? colors.brand : colors.cardBorder }]}
-                      >
-                        <Text style={{ fontSize: 10, fontFamily: 'PlusJakartaSans-Bold', color: preferredTransport === t ? colors.brand : colors.text }}>{t.replace('_', ' ')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Lodging custom selector */}
-                  <Text style={styles.customFieldLabel}>Customize Accommodation</Text>
-                  <View style={styles.choiceRow}>
-                    {['hotel', 'hostel', 'resort', 'camping'].map(a => (
-                      <TouchableOpacity
-                        key={a}
-                        onPress={() => setAccommodationType(a)}
-                        style={[styles.choiceCard, { backgroundColor: accommodationType === a ? colors.brandLight : colors.background, borderColor: accommodationType === a ? colors.brand : colors.cardBorder }]}
-                      >
-                        <Text style={{ fontSize: 10, fontFamily: 'PlusJakartaSans-Bold', color: accommodationType === a ? colors.brand : colors.text }}>{a}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Pace custom selector */}
-                  <Text style={styles.customFieldLabel}>Customize Travel Pace</Text>
-                  <View style={styles.choiceRow}>
-                    {['relaxed', 'balanced', 'fast'].map(p => (
-                      <TouchableOpacity
-                        key={p}
-                        onPress={() => setTravelPace(p)}
-                        style={[styles.choiceCard, { backgroundColor: travelPace === p ? colors.brandLight : colors.background, borderColor: travelPace === p ? colors.brand : colors.cardBorder }]}
-                      >
-                        <Text style={{ fontSize: 10, fontFamily: 'PlusJakartaSans-Bold', color: travelPace === p ? colors.brand : colors.text }}>{p}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Features list switches */}
-                  <Text style={styles.customFieldLabel}>Workspace Module Features</Text>
-                  <View style={{ gap: 8 }}>
-                    {Object.keys(features).map(featKey => {
-                      const enabled = features[featKey as keyof TripFeatureSettings];
-                      const badgeLabel = getDecisionBadge(featKey as keyof TripFeatureSettings, enabled);
-                      return (
-                        <View key={featKey} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 11, color: colors.text, textTransform: 'capitalize' }}>{featKey.replace('_', ' ')}</Text>
-                            <View style={[styles.sourceBadge, { paddingVertical: 1, paddingHorizontal: 4, height: 14, justifyContent: 'center', backgroundColor: badgeLabel === 'TourGo Suggested' ? '#EDE9FE' : '#D1FAE5' }]}>
-                              <Text style={{ fontSize: 7, fontFamily: 'PlusJakartaSans-Bold', color: badgeLabel === 'TourGo Suggested' ? '#6D28D9' : '#047857' }}>
-                                {badgeLabel}
-                              </Text>
-                            </View>
-                          </View>
-                          <Switch
-                            value={enabled}
-                            onValueChange={() => toggleFeature(featKey as keyof TripFeatureSettings)}
-                            trackColor={{ false: '#D1D1D6', true: colors.brand }}
-                          />
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </Card>
-
-            {renderNavRow(true, 'Continue to Itinerary', () => setStep(5))}
-          </View>
-        );
-
-      case 5:
-        const localRulesList = runLocalRuleAnalysis();
-        
-        return (
-          <View style={styles.stageContainer}>
-            <Text style={[styles.stageHeading, { color: colors.text }]}>What are you doing during the trip?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Outline your activities. You can plan them manually or get an AI suggested timeline.</Text>
-
-            {/* Empty state or list layout */}
-            {itineraryStops.length === 0 ? (
-              <Card style={{ padding: 24, alignItems: 'center', borderColor: colors.cardBorder, borderStyle: 'dashed', borderWidth: 1.5, marginVertical: 12 }} shadow={false}>
-                <Ionicons name="calendar-outline" size={36} color={colors.textMuted} />
-                <Text style={{ fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', color: colors.text, marginTop: 8 }}>Your itinerary is empty</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', marginTop: 4, marginBottom: 16 }}>
-                  Add activities yourself or let TourGo suggest a schedule.
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Button
-                    title="Add custom activity"
-                    onPress={() => handleAddBlankStop(0)}
-                    variant="outline"
-                    size="small"
-                  />
-                  <Button
-                    title="Suggest with AI"
-                    onPress={handleGenerateAiItinerary}
-                    variant="accent"
-                    size="small"
-                    loading={isGeneratingIti}
-                  />
-                </View>
-              </Card>
-            ) : (
-              <View>
-                <Card style={[styles.aiHelperCard, { marginBottom: 16 }]} variant="sky" shadow={false}>
-                  <View style={styles.aiHelperHeader}>
-                    <Ionicons name="sparkles" size={16} color={colors.brand} />
-                    <Text style={[styles.aiHelperTitle, { color: colors.text }]}>Need help with your schedule?</Text>
-                  </View>
-                  <Text style={[styles.aiHelperDesc, { color: colors.textSecondary }]}>
-                    Let TourGo suggest a daily schedule of activities based on your destination and preferences.
-                  </Text>
-                  <Button
-                    title={isAiLoading ? "Generating..." : "Suggest with AI"}
-                    onPress={handleGenerateAiItinerary}
-                    variant="accent"
-                    size="small"
-                    loading={isGeneratingIti}
-                    style={{ alignSelf: 'flex-start', marginTop: 10 }}
-                  />
-                </Card>
-
-                <View style={styles.timelineBlock}>
-                  <Text style={[styles.timelineLabel, { color: colors.text }]}>Itinerary Stops ({itineraryStops.length})</Text>
-                  <View style={styles.timelineTrackContainer}>
-                    <View style={[styles.timelineLine, { backgroundColor: colors.cardBorder }]} />
-                    {itineraryStops.map((stop, idx) => (
-                      <View key={idx} style={styles.timelineItemWrapper}>
-                        <View style={[styles.timelinePoint, { backgroundColor: colors.brand }]} />
-                        <Card style={[styles.timelineStopCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} shadow={false}>
-                          <View style={styles.timelineCardHeader}>
-                            <View style={[styles.timeBadge, { backgroundColor: colors.brandLight, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                              <Text style={[styles.timeBadgeText, { color: colors.brand }]}>Day {stop.dayIndex + 1} - {stop.time}</Text>
-                              <View style={[styles.sourceBadge, { paddingVertical: 1, paddingHorizontal: 4, height: 14, justifyContent: 'center', backgroundColor: stop.isAiSuggested ? '#E0F2FE' : '#D1FAE5' }]}>
-                                <Text style={{ fontSize: 7, fontFamily: 'PlusJakartaSans-Bold', color: stop.isAiSuggested ? '#0369A1' : '#047857' }}>
-                                  {stop.isAiSuggested ? 'AI Suggested' : 'You Selected'}
-                                </Text>
-                              </View>
-                            </View>
-                            <TouchableOpacity onPress={() => handleRemoveStop(idx)}>
-                              <Ionicons name="trash-outline" size={15} color="#EF4444" />
-                            </TouchableOpacity>
-                          </View>
-                          <TextInput
-                            value={stop.title}
-                            onChangeText={(val) => handleUpdateStop(idx, 'title', val)}
-                            style={[styles.timelineFieldInput, { color: colors.text, borderBottomColor: colors.cardBorder, fontFamily: 'PlusJakartaSans-Bold' }]}
-                          />
-                          <TextInput
-                            value={stop.location}
-                            onChangeText={(val) => handleUpdateStop(idx, 'location', val)}
-                            placeholder="Location"
-                            style={[styles.timelineFieldInput, { color: colors.textSecondary, borderBottomColor: colors.cardBorder, fontSize: 11 }]}
-                          />
-                          <TextInput
-                            value={stop.description}
-                            onChangeText={(val) => handleUpdateStop(idx, 'description', val)}
-                            placeholder="Description"
-                            multiline
-                            style={[styles.timelineFieldInput, { color: colors.textMuted, borderBottomColor: colors.cardBorder, fontSize: 11, height: 36 }]}
-                          />
-                        </Card>
-                      </View>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => handleAddBlankStop(0)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 12 }}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
-                    <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: colors.brand }}>Add custom activity stop</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* AI Co-pilot Risks & Suggestions Panel */}
-            <View style={{ marginTop: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Co-pilot Risks & Suggestions</Text>
-                <TouchableOpacity
-                  onPress={() => triggerAiPlanAnalysis()}
-                  disabled={isAnalyzingPlan}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                >
-                  {isAnalyzingPlan ? (
-                    <ActivityIndicator size="small" color={colors.brand} />
-                  ) : (
-                    <>
-                      <Ionicons name="sync-outline" size={13} color={colors.brand} />
-                      <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.brand }}>Analyze Plan</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ gap: 10 }}>
-                {preloadedPolls.length > 0 && (
-                  <Card style={styles.pollPreloadedCard} shadow={false}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                      <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: '#10B981' }}>Lunch Poll Preloaded</Text>
-                    </View>
-                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4 }}>
-                      • Question: "{preloadedPolls[0].question}"
-                    </Text>
-                  </Card>
-                )}
-
-                {/* Local Rule suggestions & Dynamic Overlaps */}
-                {localRulesList.map((s) => {
-                  const isConflict = s.type === 'conflict';
-                  const border = isConflict ? '#EF4444' : s.type === 'safety' ? '#06B6D4' : '#F59E0B';
-                  const bg = isConflict ? (isDark ? '#451A03' : '#FEF2F2') : s.type === 'safety' ? (isDark ? '#083344' : '#F0F9FF') : (isDark ? '#3C2F0F' : '#FFFBEB');
-                  return (
-                    <Card key={s.id} style={[styles.ruleAlertCard, { borderColor: border, backgroundColor: bg }]} shadow={false}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flex: 1, paddingRight: 8 }}>
-                          <Text style={[styles.ruleAlertTitle, { color: colors.text, fontFamily: 'PlusJakartaSans-Bold' }]}>{s.title}</Text>
-                          <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2, lineHeight: 14 }}>{s.message}</Text>
-                        </View>
-                        {s.actionText && (
-                          <TouchableOpacity
-                            onPress={() => handleApplyFix(s)}
-                            style={[styles.ruleFixBtn, { backgroundColor: border }]}
-                          >
-                            <Text style={styles.ruleFixBtnText}>{s.actionText}</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </Card>
-                  );
-                })}
-              </View>
-            </View>
-
-            {renderNavRow(true, 'Continue to Checklist', () => setStep(6))}
-          </View>
-        );
-
-      case 6:
-        return (
-          <View style={styles.stageContainer}>
-            <Text style={[styles.stageHeading, { color: colors.text }]}>What needs to be prepared?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Confirm your checklist items. Add, edit, or remove tasks before starting your trip.</Text>
-            
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              <TextInput
-                value={newChecklistItem}
-                onChangeText={setNewChecklistItem}
-                placeholder="e.g. Bring dry bag for phone"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.inputField, { flex: 1, height: 44, paddingLeft: 12, backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              />
-              <TouchableOpacity
-                onPress={() => {
-                  if (newChecklistItem.trim()) {
-                    setChecklistItems(prev => [...prev, newChecklistItem.trim()]);
-                    setNewChecklistItem('');
-                  }
-                }}
-                style={{ backgroundColor: colors.brand, borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' }}
-              >
-                <Text style={{ color: '#FFFFFF', fontFamily: 'PlusJakartaSans-Bold', fontSize: 13 }}>Add</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.sectionLabel}>Things to prepare</Text>
-            {checklistItems.length === 0 ? (
-              <Card style={{ padding: 20, alignItems: 'center', borderColor: colors.cardBorder, borderStyle: 'dashed', borderWidth: 1 }} shadow={false}>
-                <Ionicons name="clipboard-outline" size={32} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, color: colors.textSecondary, fontFamily: 'PlusJakartaSans-Bold', marginTop: 8 }}>No preparation tasks yet</Text>
-                <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, textAlign: 'center' }}>Your checklist is currently empty. Add tasks using the input above.</Text>
-              </Card>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {checklistItems.map((item, idx) => (
-                  <Card key={idx} style={{ padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderColor: colors.cardBorder, backgroundColor: colors.card }} shadow={false}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <Ionicons name="square-outline" size={18} color={colors.brand} />
-                      <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Medium', color: colors.text, flex: 1 }}>{item}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setChecklistItems(prev => prev.filter((_, i) => i !== idx));
-                      }}
-                      style={{ padding: 4 }}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                    </TouchableOpacity>
-                  </Card>
-                ))}
-              </View>
-            )}
-
             {renderNavRow(true, 'Continue to Review', () => setStep(7))}
           </View>
         );
 
+
       case 7:
         return (
           <View style={styles.stageContainer}>
-            <Text style={[styles.stageHeading, { color: colors.text }]}>Is everything ready?</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Confirm your trip name and review your digital boarding pass.</Text>
+            <Text style={[styles.stageHeading, { color: colors.text }]}>Almost there!</Text>
+            <Text style={[styles.stageSub, { color: colors.textSecondary, marginBottom: 15 }]}>Review your setup details below before launching the workspace.</Text>
 
-            {/* Name Input */}
-            <Text style={styles.sectionLabel}>Give your trip a name</Text>
-            <View style={styles.searchContainer}>
-              <Ionicons name="sparkles-outline" size={18} color={colors.brand} style={styles.searchIcon} />
-              <TextInput
-                value={titleState}
-                onChangeText={setTitleState}
-                placeholder="e.g. Barkada Palawan Getaway 2026"
-                style={[styles.inputField, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
+            {/* Clean Trip Summary */}
+            <Text style={styles.sectionLabel}>Trip Summary</Text>
+            <Card style={{ padding: 16, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16 }} shadow={false}>
 
-            <Card style={[styles.aiHelperCard, { marginTop: 12, marginBottom: 15 }]} variant="sky" shadow={false}>
-              <View style={styles.aiHelperHeader}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
-                <Text style={[styles.aiHelperTitle, { color: colors.text }]}>Need a creative title?</Text>
-              </View>
-              <Text style={[styles.aiHelperDesc, { color: colors.textSecondary }]}>
-                Let TourGo suggest titles based on your destination and trip activities.
-              </Text>
-              <Button
-                title={isAiLoading ? "Suggesting..." : "Suggest Names"}
-                onPress={handleSuggestNames}
-                variant="accent"
-                size="small"
-                loading={isAiLoading}
-                style={{ alignSelf: 'flex-start', marginTop: 10 }}
-              />
-              {aiNameSuggestions.length > 0 && (
-                <View style={styles.aiNameSuggestionsRow}>
-                  {aiNameSuggestions.map((name, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      onPress={() => {
-                        setTitleState(name);
-                        setAiNameSuggestions([]);
-                      }}
-                      style={[styles.aiNameBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    >
-                      <Text style={{ color: colors.text, fontFamily: 'PlusJakartaSans-Bold', fontSize: 11 }}>✨ {name}</Text>
-                    </TouchableOpacity>
-                  ))}
+              {/* Header row with icon */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="map-outline" size={22} color={colors.brand} />
                 </View>
-              )}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                    {titleState.trim() || `${tripSubtype.replace(/_/g, ' ')} Trip`}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
+                    {tripType.charAt(0).toUpperCase() + tripType.slice(1)} · {tripSubtype.replace(/_/g, ' ')}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Info rows */}
+              <View style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Destination</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                    {destination !== 'TBD' ? destination : 'To Be Decided'}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Dates</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                    {startDate} → {endDate}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Travelers</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                    {travelerCount} {parseInt(travelerCount) === 1 ? 'person' : 'people'}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Workspace Tools</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                    {Object.values(features).filter(Boolean).length} modules active
+                  </Text>
+                </View>
+              </View>
+
+              {/* Active modules pills */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.cardBorder }}>
+                {Object.entries(features)
+                  .filter(([_, enabled]) => enabled)
+                  .map(([key]) => {
+                    const info = getFeatureLabelAndIcon(key);
+                    return (
+                      <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }}>
+                        <Ionicons name={info.icon as any} size={10} color={colors.brand} />
+                        <Text style={{ fontSize: 9, fontFamily: 'Poppins-Bold', color: colors.brand }}>{info.label}</Text>
+                      </View>
+                    );
+                  })}
+              </View>
             </Card>
 
-            {/* Premium Digital Boarding Pass */}
-            <Text style={styles.sectionLabel}>Boarding Ticket Summary</Text>
-            <View style={[styles.boardingPassContainer, { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 }]}>
-              <LinearGradient
-                colors={isDark ? ['#082F49', '#0F172A'] : ['#0284C7', '#0369A1']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.boardingPassHeader}
-              >
-                <View style={styles.boardingPassHeaderTop}>
-                  <View>
-                    <Text style={styles.boardingPassBrand}>TOURGO EXPEDITIONS</Text>
-                    <Text style={styles.boardingPassSubBrand}>BOARDING COMPASS WORKSPACE</Text>
-                  </View>
-                  <Ionicons name="airplane" size={20} color="#FFFFFF" />
-                </View>
-
-                <View style={styles.boardingPassRouteRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.routeCode}>PHL</Text>
-                    <Text style={styles.routeCity}>Philippines</Text>
-                  </View>
-                  <View style={styles.routeIndicator}>
-                    <View style={styles.dotLine} />
-                    <Ionicons name="airplane" size={14} color="#FFFFFF" style={styles.flyingIcon} />
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={styles.routeCode}>{destination ? destination.toUpperCase().slice(0, 3) : 'TBD'}</Text>
-                    <Text style={styles.routeCity}>{destination || 'TBD'}</Text>
-                  </View>
-                </View>
-              </LinearGradient>
-
-              {/* notches and dotted separator */}
-              <View style={[styles.ticketSeparator, { backgroundColor: colors.card }]}>
-                <View style={[styles.ticketNotch, styles.ticketNotchLeft, { backgroundColor: colors.background }]} />
-                <View style={[styles.ticketNotch, styles.ticketNotchRight, { backgroundColor: colors.background }]} />
-                <View style={[styles.ticketDottedLine, { borderColor: colors.cardBorder }]} />
+            {/* Always-on feature indicator */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#0EA5E915', borderRadius: 12, borderWidth: 1, borderColor: '#0EA5E930', marginBottom: 10 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#0EA5E915', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="calendar-outline" size={18} color="#0EA5E9" />
               </View>
-
-              <View style={[styles.boardingPassBody, { backgroundColor: colors.card }]}>
-                <View style={styles.ticketDetailsGrid}>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>EXPEDITION TYPE</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.text }]}>{tripSubtype.toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>CREW CAPACITY</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.text }]}>{travelerCount} EXPLORERS</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.ticketDetailsGrid, { marginTop: 12 }]}>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>DEPARTURE DATE</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.text }]}>{startDate || 'TBD'}</Text>
-                  </View>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>RETURN DATE</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.text }]}>{endDate || 'TBD'}</Text>
-                  </View>
-                </View>
-
-                <View style={[styles.ticketDetailsGrid, { marginTop: 12 }]}>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>BUDGET PROJECTION</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.brand, fontFamily: 'PlusJakartaSans-ExtraBold' }]}>
-                      ₱{parseInt(budgetAmount || '0').toLocaleString()} PHP
-                    </Text>
-                  </View>
-                  <View style={styles.ticketGridCol}>
-                    <Text style={[styles.ticketDetailLabel, { color: colors.textMuted }]}>WORK PLANS</Text>
-                    <Text style={[styles.ticketDetailVal, { color: colors.text }]}>{itineraryStops.length} STOPS</Text>
-                  </View>
-                </View>
-
-                {/* Simulated Barcode */}
-                <View style={styles.barcodeContainer}>
-                  <View style={[styles.barcodeBars, { backgroundColor: colors.text }]} />
-                  <Text style={[styles.barcodeText, { color: colors.textMuted }]}>*TG-{destination ? destination.toUpperCase().slice(0, 4) : 'TEMP'}*</Text>
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Itinerary Plan</Text>
+                <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 1 }}>Timeline schedule of daily spots and activities</Text>
               </View>
+              <Text style={{ fontSize: 9, fontFamily: 'Poppins-Bold', color: '#0EA5E9', backgroundColor: '#0EA5E920', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>ALWAYS ON</Text>
             </View>
+
+            {/* Toggle Features List */}
+            <Text style={[styles.sectionLabel, { marginTop: 12 }]}>Additional Features</Text>
+            <Card style={{ padding: 16, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, gap: 14, marginBottom: 10 }} shadow={false}>
+              {([
+                { key: 'checklist', label: 'Prep Checklist', desc: 'Track group tasks, to-dos and assignments', icon: 'checkmark-circle-outline', color: '#F59E0B' },
+                { key: 'group_chat', label: 'Chat Room', desc: 'Realtime chat board for coordination', icon: 'chatbubbles-outline', color: '#EC4899' },
+                { key: 'polls', label: 'Decision Polls', desc: 'Vote together on restaurants and plans', icon: 'checkbox-outline', color: '#8B5CF6' },
+                { key: 'announcements', label: 'Group Notices', desc: 'Pin important organizer alerts for everyone', icon: 'megaphone-outline', color: '#6366F1' },
+                { key: 'split_expenses', label: 'Expense Splitter', desc: 'Settle bills and track shared costs', icon: 'wallet-outline', color: '#10B981' },
+                { key: 'documents', label: 'Document Vault', desc: 'Keep flight passes, hotel PDFs and tickets close', icon: 'folder-outline', color: '#F97316' },
+                { key: 'attendance', label: 'Safety Check-in', desc: 'Let members confirm terminal/location arrivals', icon: 'shield-checkmark-outline', color: '#14B8A6' },
+                { key: 'guardian_mode', label: 'GPS Guard Mode', desc: 'Monitor active coordinate-sharing of participants', icon: 'location-outline', color: '#EF4444' },
+              ] as const).map((feat, index, arr) => {
+                const isEnabled = features[feat.key];
+                return (
+                  <View key={feat.key} style={{ gap: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: isEnabled ? feat.color + '15' : colors.cardBorder + '50', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name={feat.icon} size={18} color={isEnabled ? feat.color : colors.textMuted} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>{feat.label}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 1 }}>{feat.desc}</Text>
+                      </View>
+                      <Switch
+                        value={isEnabled}
+                        onValueChange={() => toggleFeature(feat.key)}
+                        trackColor={{ false: '#767577', true: feat.color + '40' }}
+                        thumbColor={isEnabled ? feat.color : '#F4F3F4'}
+                      />
+                    </View>
+                    {index < arr.length - 1 && <View style={{ height: 1, backgroundColor: colors.cardBorder, opacity: 0.5 }} />}
+                  </View>
+                );
+              })}
+            </Card>
 
             <View style={styles.navRow}>
               <Button title="Back" onPress={handleCustomBack} variant="secondary" style={{ flex: 1 }} />
@@ -1599,12 +1299,13 @@ export default function CreateTripScreen() {
                 variant="accent"
                 size="large"
                 loading={isCreating}
-                disabled={!destination.trim()}
+                disabled={!startDate || !endDate}
                 style={{ flex: 2 }}
               />
             </View>
           </View>
         );
+
 
       default:
         return null;
@@ -1688,12 +1389,12 @@ const styles = StyleSheet.create({
   },
   customBackText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginLeft: 2,
   },
   customHeaderTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -1738,19 +1439,19 @@ const styles = StyleSheet.create({
   },
   stageHeading: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   stageSub: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 4,
     lineHeight: 16,
     marginBottom: 16,
   },
   sectionLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     color: '#8E8E93',
     textTransform: 'uppercase',
@@ -1780,7 +1481,7 @@ const styles = StyleSheet.create({
   },
   gridDesc: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     textAlign: 'center',
     marginTop: 4,
   },
@@ -1828,7 +1529,7 @@ const styles = StyleSheet.create({
     paddingLeft: 42,
     paddingRight: 14,
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   aiHelperCard: {
     padding: 12,
@@ -1841,12 +1542,12 @@ const styles = StyleSheet.create({
   },
   aiHelperTitle: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginLeft: 6,
   },
   aiHelperDesc: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     lineHeight: 14,
   },
   aiSuggestionsTray: {
@@ -1863,7 +1564,7 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     color: '#22C55E',
     backgroundColor: '#DCFCE7',
     paddingVertical: 1,
@@ -1890,13 +1591,11 @@ const styles = StyleSheet.create({
   },
   dateCardLabel: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginTop: 2,
   },
   dateCardInput: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
-    textAlign: 'center',
+    fontFamily: 'Poppins-Bold',
     marginTop: 6,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -1904,6 +1603,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     width: '100%',
     height: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   durationBadge: {
     flexDirection: 'row',
@@ -1940,11 +1643,11 @@ const styles = StyleSheet.create({
   },
   counterNumberText: {
     fontSize: 24,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
   },
   counterUnitText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
   },
   budgetGrid: {
     flexDirection: 'row',
@@ -1961,11 +1664,11 @@ const styles = StyleSheet.create({
   },
   budgetTextName: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
   },
   budgetTextPrice: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 2,
   },
   inferredRow: {
@@ -1976,7 +1679,7 @@ const styles = StyleSheet.create({
   },
   customFieldLabel: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     color: '#8E8E93',
     textTransform: 'uppercase',
     marginTop: 10,
@@ -1988,7 +1691,7 @@ const styles = StyleSheet.create({
   },
   timelineLabel: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginBottom: 8,
   },
   timelineTrackContainer: {
@@ -2031,13 +1734,13 @@ const styles = StyleSheet.create({
   },
   timeBadgeText: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
   },
   timelineFieldInput: {
     borderBottomWidth: 1,
     paddingVertical: 2,
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 4,
   },
   pollPreloadedCard: {
@@ -2054,7 +1757,7 @@ const styles = StyleSheet.create({
   },
   ruleAlertTitle: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
   },
   ruleFixBtn: {
     borderRadius: 8,
@@ -2065,7 +1768,7 @@ const styles = StyleSheet.create({
   },
   ruleFixBtnText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
   },
   aiSuggestionCard: {
@@ -2112,13 +1815,13 @@ const styles = StyleSheet.create({
   },
   boardingPassBrand: {
     color: '#FFFFFF',
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontSize: 11,
     letterSpacing: 1,
   },
   boardingPassSubBrand: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontSize: 8,
     marginTop: 1,
   },
@@ -2130,12 +1833,12 @@ const styles = StyleSheet.create({
   routeCode: {
     color: '#FFFFFF',
     fontSize: 26,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
   },
   routeCity: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   routeIndicator: {
     flex: 1,
@@ -2191,11 +1894,11 @@ const styles = StyleSheet.create({
   },
   ticketDetailLabel: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
   },
   ticketDetailVal: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginTop: 1,
   },
   barcodeContainer: {
@@ -2209,7 +1912,7 @@ const styles = StyleSheet.create({
   },
   barcodeText: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 4,
     letterSpacing: 2,
   },
@@ -2229,7 +1932,7 @@ const styles = StyleSheet.create({
   },
   dialogTitle: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 6,
     textAlign: 'center',
@@ -2261,7 +1964,73 @@ const styles = StyleSheet.create({
   },
   sourceBadgeText: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     textTransform: 'uppercase',
+  },
+  packageDetailsContainer: {
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 12,
+  },
+  packageMetaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  packageMetaBadgeText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    textTransform: 'uppercase',
+  },
+  packageSectionHeader: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 4,
+    opacity: 0.7,
+  },
+  featurePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  featurePillText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    width: '100%',
+    maxWidth: 380,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
   },
 });

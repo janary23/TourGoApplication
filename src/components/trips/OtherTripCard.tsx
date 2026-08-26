@@ -31,7 +31,7 @@ export default function OtherTripCard({
       ]}
     >
       {/* Destination Photo */}
-      <Image source={{ uri: trip.image }} style={styles.tripPhoto} />
+      <Image source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000' }} style={styles.tripPhoto} />
 
       {/* Information Layout */}
       <View style={styles.tripDetails}>
@@ -92,8 +92,8 @@ export default function OtherTripCard({
               style={[
                 styles.relationshipText,
                 {
-                  color: isOrganizer ? '#22C55E' : colors.textSecondary,
-                  fontFamily: 'PlusJakartaSans-Bold',
+                  color: isOrganizer ? colors.brand : colors.textSecondary,
+                  fontFamily: 'Poppins-Bold',
                 }
               ]}
             >
@@ -128,12 +128,12 @@ const styles = StyleSheet.create({
   },
   tripTitleText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   tripSecondaryText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   },
   tripDateText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   socialAndStatusBlock: {
     flexDirection: 'row',
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
   },
   avatarFallbackText: {
     fontSize: 8,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   membersCountText: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginLeft: 4,
   },
   relationshipRow: {

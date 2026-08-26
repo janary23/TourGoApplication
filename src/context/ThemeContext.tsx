@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { storageGet, storageSet } from '../services/storage';
 
 export interface ThemeColors {
   background: string;
@@ -64,21 +65,43 @@ interface ThemeContextType {
   isDark: boolean;
   toggleTheme: () => void;
   colors: ThemeColors;
+  mascotFlightEnabled: boolean;
+  toggleMascotFlight: () => void;
 }
+
+const MASCOT_FLIGHT_KEY = 'tourgo.mascot.flight.enabled.v1';
 
 const ThemeContext = createContext<ThemeContextType>({
   isDark: false,
   toggleTheme: () => {},
   colors: lightColors,
+  mascotFlightEnabled: true,
+  toggleMascotFlight: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isDark, setIsDark] = useState(false);
+  const [mascotFlightEnabled, setMascotFlightEnabled] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const saved = await storageGet(MASCOT_FLIGHT_KEY);
+      if (saved === 'off') setMascotFlightEnabled(false);
+    })();
+  }, []);
+
   const toggleTheme = () => setIsDark(prev => !prev);
+  const toggleMascotFlight = () => {
+    setMascotFlightEnabled(prev => {
+      const next = !prev;
+      storageSet(MASCOT_FLIGHT_KEY, next ? 'on' : 'off');
+      return next;
+    });
+  };
   const colors = isDark ? darkColors : lightColors;
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme, colors }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme, colors, mascotFlightEnabled, toggleMascotFlight }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -67,12 +67,12 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   optionSubText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginTop: 2,
   },
 });

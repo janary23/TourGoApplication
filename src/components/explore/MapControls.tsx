@@ -8,52 +8,54 @@ interface MapControlsProps {
   onZoomOut: () => void;
   onReset: () => void;
   onLocate: () => void;
+  onShare: () => void;
 }
 
-export const MapControls: React.FC<MapControlsProps> = ({ onZoomIn, onZoomOut, onReset, onLocate }) => {
+export const MapControls: React.FC<MapControlsProps> = ({ onZoomIn, onZoomOut, onReset, onLocate, onShare }) => {
   const { colors } = useTheme();
 
-  const button = (icon: keyof typeof Ionicons.glyphMap, onPress: () => void, color?: string) => (
+  const renderButton = (icon: keyof typeof Ionicons.glyphMap, onPress: () => void, isLast = false) => (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.btn,
-        { backgroundColor: colors.card, borderColor: colors.cardBorder },
-        pressed && { opacity: 0.7 },
+        pressed && { backgroundColor: colors.surface },
+        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.cardBorder },
       ]}
     >
-      <Ionicons name={icon} size={18} color={color ?? colors.text} />
+      <Ionicons name={icon} size={16} color={colors.text} />
     </Pressable>
   );
 
   return (
-    <View style={styles.stack}>
-      {button('add', onZoomIn)}
-      {button('remove', onZoomOut)}
-      {button('compass-outline', onReset, colors.text)}
-      {button('locate-outline', onLocate, colors.text)}
+    <View style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      {renderButton('add', onZoomIn)}
+      {renderButton('remove', onZoomOut)}
+      {renderButton('compass-outline', onReset)}
+      {renderButton('locate-outline', onLocate)}
+      {renderButton('share-social-outline', onShare, true)}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  stack: {
+  capsule: {
     position: 'absolute',
-    right: 16,
-    top: 120,
+    right: 12,
+    top: 90,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+    overflow: 'hidden',
   },
   btn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
   },
 });

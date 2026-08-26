@@ -48,11 +48,10 @@ export default function TabLayout() {
           paddingTop: 0,
         },
         tabBarLabelStyle: {
-          fontFamily: 'PlusJakartaSans-Bold',
+          fontFamily: 'Poppins-Bold',
           fontSize: 10,
           fontWeight: '700',
           marginBottom: 4,
-          textTransform: 'lowercase',
         },
         tabBarIconStyle: {
           marginTop: 2,
@@ -65,7 +64,7 @@ export default function TabLayout() {
           borderBottomColor: colors.headerBorder,
         } as any,
         headerTitleStyle: {
-          fontFamily: 'PlusJakartaSans-Bold',
+          fontFamily: 'Poppins-Bold',
           fontSize: 18,
           color: colors.text,
         },

@@ -72,7 +72,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
           variant="accent"
           size="medium"
           icon={<Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />}
-          style={styles.viewBtn}
+          style={[styles.viewBtn, { backgroundColor: colors.brand, borderColor: colors.brand }]}
         />
       </View>
     </View>
@@ -111,13 +111,13 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   context: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     marginTop: 2,
   },
@@ -130,14 +130,14 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   infoValue: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   tipText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     color: '#0369A1',
     lineHeight: 18,
   },

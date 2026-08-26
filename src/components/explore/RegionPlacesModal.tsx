@@ -205,7 +205,7 @@ const PlaceCard: React.FC<{ item: GooglePlace; colors: ThemeColors; isDark: bool
 
         {/* Plan Trip button */}
         <View style={placeCardStyles.planBtn}>
-          <Ionicons name="add-circle" size={24} color="#22C55E" />
+          <Ionicons name="add-circle" size={24} color={colors.brand} />
         </View>
       </Pressable>
     </Animated.View>
@@ -244,14 +244,14 @@ const placeCardStyles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   name: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.2,
@@ -265,7 +265,7 @@ const placeCardStyles = StyleSheet.create({
   },
   rating: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     color: 'rgba(255,255,255,0.8)',
   },
@@ -402,7 +402,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
               {region ? REGION_SUBTITLES[region] ?? 'Top places to visit' : ''}
             </Text>
           </View>
-          <View style={modalStyles.countBadge}>
+          <View style={[modalStyles.countBadge, { backgroundColor: colors.brand }]}>
             <Text style={modalStyles.countText}>
               {isLoading ? '...' : `${places.length} places`}
             </Text>
@@ -412,7 +412,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
         {/* Body */}
         {isLoading ? (
           <View style={modalStyles.centered}>
-            <ActivityIndicator size="large" color="#22C55E" />
+            <ActivityIndicator size="large" color={colors.brand} />
             <Text style={[modalStyles.loadingText, { color: colors.textMuted }]}>
               Loading destinations...
             </Text>
@@ -480,13 +480,13 @@ const modalStyles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   headerSub: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     marginTop: 2,
   },
   countBadge: {
@@ -497,7 +497,7 @@ const modalStyles = StyleSheet.create({
   },
   countText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -510,11 +510,11 @@ const modalStyles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
   },
   errorText: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textAlign: 'center',
   },

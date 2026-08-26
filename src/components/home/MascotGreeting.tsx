@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, Animated } from 'react-native';
-import { setOnMascotLand } from '../../services/mascotBridge';
+import { setOnMascotLand, setOnMascotLeave } from '../../services/mascotBridge';
 
 interface MascotGreetingProps {
   colors: any;
@@ -82,8 +82,13 @@ export default function MascotGreeting({
       setIsLanded(true);
     });
 
+    setOnMascotLeave(() => {
+      setIsLanded(false);
+    });
+
     return () => {
       setOnMascotLand(null);
+      setOnMascotLeave(null);
     };
   }, []);
 
@@ -198,7 +203,7 @@ export default function MascotGreeting({
             style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 4, fontWeight: '600' }]}
           />
           {line1Complete && (
-            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, fontFamily: 'PlusJakartaSans-Medium', letterSpacing: 0.3 }}>
+            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, fontFamily: 'Poppins-Medium', letterSpacing: 0.3 }}>
               Tap to hear more ✦
             </Text>
           )}
@@ -226,11 +231,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greetingUserText: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   greetingSubText: {
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
   },
 });

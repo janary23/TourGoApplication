@@ -1,8 +1,10 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import TripItinerary from './TripItinerary';
 import TripChecklist from './TripChecklist';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 interface TripPlanProps {
   trip: any;
@@ -18,7 +20,14 @@ export default function TripPlan({
   loadTrip,
 }: TripPlanProps) {
   const isEnabled = (feat: string) => trip.features[feat];
-  const planEnabled = isEnabled('itinerary') || isEnabled('checklist');
+  const itineraryEnabled = true;
+  const checklistEnabled = isEnabled('checklist');
+  const planEnabled = itineraryEnabled || checklistEnabled;
+
+  // Initialize active tab based on which feature is enabled
+  const [activeTab, setActiveTab] = useState<'itinerary' | 'checklist'>(
+    itineraryEnabled ? 'itinerary' : 'checklist'
+  );
 
   const renderEmptyState = (
     title: string,
@@ -28,119 +37,247 @@ export default function TripPlan({
   ) => {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name={icon as any} size={48} color={color} style={{ opacity: 0.8 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title.toLowerCase()}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc.toLowerCase()}</Text>
-      </View>
-    );
-  };
-
-  const renderVisualAnchor = () => {
-    return (
-      <View style={styles.anchorWrapper}>
-        <View style={[styles.anchorBar, { backgroundColor: colors.brand }]} />
-        <Text style={[styles.anchorTitle, { color: colors.text }]}>trip space</Text>
+        <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
+          <Ionicons name={icon as any} size={42} color={color} style={{ opacity: 0.8 }} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc}</Text>
       </View>
     );
   };
 
   if (!planEnabled) {
     return (
-      <ScrollView contentContainerStyle={styles.tabContentContainer}>
-        {renderVisualAnchor()}
-        <View style={{ marginTop: 24 }}>
-          {renderEmptyState(
-            "planning features disabled",
-            "the organizer has turned off timeline and tasks for this trip.",
-            "lock-closed-outline",
-            "#9E9E9E"
-          )}
+      <View style={{ flex: 1 }}>
+        <View style={styles.headerContainer}>
+          <View style={styles.headerTitleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Itinerary</Text>
+            </View>
+          </View>
         </View>
-      </ScrollView>
+        <ScrollView contentContainerStyle={styles.tabContentContainer}>
+          <View style={{ marginTop: 24 }}>
+            {renderEmptyState(
+              "Planning features disabled",
+              "The organizer has turned off timeline and tasks for this trip.",
+              "lock-closed-outline",
+              colors.textMuted
+            )}
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
+  const pendingTasksCount = trip.checklist ? trip.checklist.filter((t: any) => !t.completed).length : 0;
+  const stopsCount = trip.itinerary ? trip.itinerary.length : 0;
+
   return (
-    <ScrollView contentContainerStyle={styles.tabContentContainer} showsVerticalScrollIndicator={false}>
-      {renderVisualAnchor()}
-      
-      <Text style={[styles.tabContentTitle, { color: colors.text, marginTop: 20, marginBottom: 4 }]}>plan</Text>
-      <Text style={[styles.roomSubtitle, { color: colors.textSecondary, marginBottom: 12 }]}>what we're doing, and what's still left to do.</Text>
+    <View style={styles.container}>
+      {/* Header matching TripPeopleHub layout */}
+      <View style={styles.headerContainer}>
+        <View style={styles.headerTitleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Itinerary</Text>
+          </View>
+        </View>
+      </View>
 
-      {/* TIMELINE */}
-      {isEnabled('itinerary') && (
-        <TripItinerary
-          trip={trip}
-          colors={colors}
-          isOrganizer={isOrganizer}
-          loadTrip={loadTrip}
-        />
+      {/* SEGMENTED SWITCHER (only show if both are enabled) */}
+      {itineraryEnabled && checklistEnabled && (
+        <View style={[styles.switcherContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+          {/* Itinerary Tab */}
+          <TouchableOpacity
+            style={[
+              styles.switcherTab,
+              activeTab === 'itinerary' && [styles.switcherTabActive, { backgroundColor: colors.card }],
+            ]}
+            onPress={() => setActiveTab('itinerary')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'itinerary' ? "calendar" : "calendar-outline"}
+              size={16}
+              color={activeTab === 'itinerary' ? colors.brand : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.switcherText,
+                { color: activeTab === 'itinerary' ? colors.text : colors.textSecondary },
+                activeTab === 'itinerary' && styles.switcherTextActive,
+              ]}
+            >
+              Itinerary
+            </Text>
+            {stopsCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: activeTab === 'itinerary' ? colors.brand : colors.cardBorder }]}>
+                <Text style={[styles.badgeText, { color: activeTab === 'itinerary' ? '#FFFFFF' : colors.textSecondary }]}>
+                  {stopsCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Checklist Tab */}
+          <TouchableOpacity
+            style={[
+              styles.switcherTab,
+              activeTab === 'checklist' && [styles.switcherTabActive, { backgroundColor: colors.card }],
+            ]}
+            onPress={() => setActiveTab('checklist')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={activeTab === 'checklist' ? "checkbox" : "checkbox-outline"}
+              size={16}
+              color={activeTab === 'checklist' ? '#10B981' : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.switcherText,
+                { color: activeTab === 'checklist' ? colors.text : colors.textSecondary },
+                activeTab === 'checklist' && styles.switcherTextActive,
+              ]}
+            >
+              Checklist
+            </Text>
+            {pendingTasksCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: activeTab === 'checklist' ? '#10B981' : colors.cardBorder }]}>
+                <Text style={[styles.badgeText, { color: '#FFFFFF' }]}>
+                  {pendingTasksCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
 
-      {/* TASKS */}
-      {isEnabled('checklist') && (
-        <TripChecklist
-          trip={trip}
-          colors={colors}
-          loadTrip={loadTrip}
-        />
-      )}
-    </ScrollView>
+      {/* DYNAMIC CONTENT — each tab manages its own scroll */}
+      <View style={{ flex: 1, paddingHorizontal: 16 }}>
+        {activeTab === 'itinerary' && itineraryEnabled && (
+          <TripItinerary
+            trip={trip}
+            colors={colors}
+            isOrganizer={isOrganizer}
+            loadTrip={loadTrip}
+          />
+        )}
+
+        {activeTab === 'checklist' && checklistEnabled && (
+          <TripChecklist
+            trip={trip}
+            colors={colors}
+            loadTrip={loadTrip}
+          />
+        )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabContentContainer: {
-    padding: 20,
-    paddingBottom: 110,
+  container: {
+    flex: 1,
   },
-  anchorWrapper: {
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  anchorBar: {
-    width: 4,
-    height: 16,
-    borderRadius: 2,
-    marginRight: 8,
-  },
-  anchorTitle: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tabContentTitle: {
+  headerTitle: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
+    flex: 1,
   },
-  roomSubtitle: {
-    fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    lineHeight: 18,
+  tabContentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
+    paddingVertical: 48,
     paddingHorizontal: 16,
   },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   emptyTitle: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-    marginTop: 12,
     textAlign: 'center',
   },
   emptyDesc: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 6,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  switcherContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  switcherTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  switcherTabActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  switcherText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  switcherTextActive: {
+    fontWeight: '700',
+  },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
   },
 });

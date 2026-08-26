@@ -82,6 +82,7 @@ export interface DocumentItem {
 export interface MemberItem {
   id: string;
   name: string;
+  avatar_url?: string;
   role: 'organizer' | 'member';
   checkedIn: boolean;
   lastCheckedInTime?: string;

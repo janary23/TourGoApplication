@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     marginLeft: 8,
     padding: 0,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -254,12 +254,12 @@ const styles = StyleSheet.create({
   },
   rowName: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
   rowSub: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     marginTop: 1,
   },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontWeight: '400',
     paddingHorizontal: 20,
     textAlign: 'center',

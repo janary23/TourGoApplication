@@ -1,5 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle, View } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle, View, StyleProp } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ButtonProps {
   title: string;
@@ -8,8 +9,8 @@ interface ButtonProps {
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   icon?: React.ReactNode;
 }
 
@@ -24,16 +25,40 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   icon
 }) => {
+  const { colors, isDark } = useTheme();
+
   const getButtonStyles = () => {
     const stylesList: ViewStyle[] = [styles.button];
 
     // Variant styles
-    if (variant === 'primary') stylesList.push(styles.primary);
-    else if (variant === 'secondary') stylesList.push(styles.secondary);
-    else if (variant === 'accent') stylesList.push(styles.accent);
-    else if (variant === 'outline') stylesList.push(styles.outline);
-    else if (variant === 'ghost') stylesList.push(styles.ghost);
-    else if (variant === 'danger') stylesList.push(styles.danger);
+    if (variant === 'primary') {
+      stylesList.push({
+        backgroundColor: colors.brand,
+      });
+    } else if (variant === 'secondary') {
+      stylesList.push({
+        backgroundColor: isDark ? colors.brandLight : '#F0F9FF',
+      });
+    } else if (variant === 'accent') {
+      stylesList.push({
+        backgroundColor: colors.brand,
+        shadowColor: colors.brand,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 6,
+        elevation: 2,
+      });
+    } else if (variant === 'outline') {
+      stylesList.push({
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderColor: colors.brand,
+      });
+    } else if (variant === 'ghost') {
+      stylesList.push(styles.ghost);
+    } else if (variant === 'danger') {
+      stylesList.push(styles.danger);
+    }
 
     // Size styles
     if (size === 'small') stylesList.push(styles.small);
@@ -41,7 +66,12 @@ export const Button: React.FC<ButtonProps> = ({
     else stylesList.push(styles.medium);
 
     // Disabled styles
-    if (disabled) stylesList.push(styles.disabled);
+    if (disabled) {
+      stylesList.push({
+        backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+        borderColor: 'transparent',
+      });
+    }
 
     return stylesList;
   };
@@ -52,17 +82,19 @@ export const Button: React.FC<ButtonProps> = ({
     if (variant === 'primary' || variant === 'accent' || variant === 'danger') {
       textStylesList.push(styles.textLight);
     } else if (variant === 'secondary') {
-      textStylesList.push(styles.textDarkTeal);
+      textStylesList.push({ color: colors.brand });
     } else if (variant === 'outline') {
-      textStylesList.push(styles.textTeal);
+      textStylesList.push({ color: colors.brand });
     } else if (variant === 'ghost') {
-      textStylesList.push(styles.textGray);
+      textStylesList.push({ color: colors.textSecondary });
     }
 
     if (size === 'small') textStylesList.push(styles.textSmall);
     else if (size === 'large') textStylesList.push(styles.textLarge);
 
-    if (disabled) textStylesList.push(styles.textDisabled);
+    if (disabled) {
+      textStylesList.push({ color: colors.textMuted });
+    }
 
     return textStylesList;
   };
@@ -71,11 +103,11 @@ export const Button: React.FC<ButtonProps> = ({
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       style={[getButtonStyles(), style]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'outline' || variant === 'ghost' ? '#22C55E' : '#FFFFFF'} />
+        <ActivityIndicator color={variant === 'outline' || variant === 'ghost' ? colors.brand : '#FFFFFF'} />
       ) : (
         <View style={styles.contentContainer}>
           {icon && <View style={styles.iconContainer}>{icon}</View>}
@@ -88,7 +120,7 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
@@ -101,75 +133,38 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginRight: 8,
   },
-  // Variants
-  primary: {
-    backgroundColor: '#22C55E', // Green button background
-  },
-  secondary: {
-    backgroundColor: '#E8F8EE', // Light green tint
-  },
-  accent: {
-    backgroundColor: '#22C55E',
-    shadowColor: '#22C55E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: '#22C55E',
-  },
   ghost: {
     backgroundColor: 'transparent',
   },
   danger: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#EF4444',
   },
   // Sizes
   small: {
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   medium: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
   },
   large: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 24,
     width: '100%',
   },
-  // Statuses
-  disabled: {
-    backgroundColor: '#E0E0E0',
-    borderColor: '#E0E0E0',
-  },
   // Text Styles
   text: {
-    fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 15,
   },
   textLight: {
     color: '#FFFFFF',
   },
-  textTeal: {
-    color: '#22C55E',
-  },
-  textDarkTeal: {
-    color: '#004D40',
-  },
-  textGray: {
-    color: '#757575',
-  },
   textSmall: {
     fontSize: 13,
   },
   textLarge: {
-    fontSize: 17,
-  },
-  textDisabled: {
-    color: '#9E9E9E',
+    fontSize: 16,
   },
 });

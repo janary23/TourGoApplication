@@ -9,16 +9,20 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile } from '../../services/authService';
+import { updateProfile, uploadAvatar } from '../../services/authService';
+import * as ImagePicker from 'expo-image-picker';
+import { storageSet } from '../../services/storage';
+import { WalkthroughModal, markWalkthroughDone, shouldShowWalkthrough } from '../../components/WalkthroughModal';
 import ProfileInfoCard from '../../components/profile/ProfileInfoCard';
 import ProfileSettingRow from '../../components/profile/ProfileSettingRow';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { isDark, toggleTheme, colors } = useTheme();
+  const { isDark, toggleTheme, colors, mascotFlightEnabled, toggleMascotFlight } = useTheme();
   const { profile: authProfile, signOut, refreshProfile } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [name, setName] = useState(authProfile?.name || '');
   const [email, setEmail] = useState(authProfile?.email || '');
   const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
@@ -72,6 +76,30 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleAvatarPress = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow photo library access to change your profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const { url, error } = await uploadAvatar(result.assets[0].uri);
+    if (error) {
+      Alert.alert('Upload failed', error);
+    } else {
+      await refreshProfile();
+    }
+  };
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
@@ -91,6 +119,7 @@ export default function ProfileScreen() {
           setHomeCity={setHomeCity}
           onSave={handleSave}
           onCancel={handleCancel}
+          onAvatarPress={handleAvatarPress}
         />
 
         {/* Application Settings */}
@@ -110,7 +139,28 @@ export default function ProfileScreen() {
                 <Switch
                   value={isDark}
                   onValueChange={toggleTheme}
-                  trackColor={{ false: '#E0E0E0', true: '#22C55E' }}
+                  trackColor={{ false: '#E0E0E0', true: colors.brand }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#E0E0E0"
+                />
+              }
+            />
+
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+            {/* Mascot Flight Animation */}
+            <ProfileSettingRow
+              iconName="airplane"
+              iconColor="#38BDF8"
+              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
+              title="Bird Flight Animation"
+              subtitle={mascotFlightEnabled ? 'Flying bird on screen transitions' : 'Flight disabled — bird stays still'}
+              colors={colors}
+              rightElement={
+                <Switch
+                  value={mascotFlightEnabled}
+                  onValueChange={toggleMascotFlight}
+                  trackColor={{ false: '#E0E0E0', true: colors.brand }}
                   thumbColor="#FFFFFF"
                   ios_backgroundColor="#E0E0E0"
                 />
@@ -122,8 +172,8 @@ export default function ProfileScreen() {
             {/* Push Notifications */}
             <ProfileSettingRow
               iconName="notifications-outline"
-              iconColor="#22C55E"
-              iconBgColor={isDark ? '#1A2E1A' : '#E8F8EE'}
+              iconColor={colors.brand}
+              iconBgColor={colors.brandLight}
               title="Push Notifications"
               subtitle="Manage alerts & reminders"
               colors={colors}
@@ -158,11 +208,24 @@ export default function ProfileScreen() {
 
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
+            {/* Replay App Tour */}
+            <ProfileSettingRow
+              iconName="play-circle-outline"
+              iconColor="#0EA5E9"
+              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
+              title="Replay App Tour"
+              subtitle="See the walkthrough again"
+              colors={colors}
+              onPress={() => setShowWalkthrough(true)}
+            />
+
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
             {/* Help */}
             <ProfileSettingRow
               iconName="help-circle-outline"
-              iconColor="#22C55E"
-              iconBgColor={isDark ? '#1A2E1A' : '#E8F8EE'}
+              iconColor={colors.brand}
+              iconBgColor={colors.brandLight}
               title="Help Center & FAQ"
               subtitle="Support & documentation"
               colors={colors}
@@ -193,6 +256,15 @@ export default function ProfileScreen() {
         </View>
 
       </ScrollView>
+
+      <WalkthroughModal
+        visible={showWalkthrough}
+        colors={colors}
+        onComplete={() => {
+          markWalkthroughDone();
+          setShowWalkthrough(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -245,7 +317,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 22,
-    fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800',
+    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
   },
   userEmail: {
     fontSize: 14,
@@ -259,7 +331,7 @@ const styles = StyleSheet.create({
   },
   userLocation: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
     marginLeft: 4,
   },
   editBtn: {
@@ -274,7 +346,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
@@ -298,7 +370,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+    fontFamily: 'Poppins-Bold', fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 10,
@@ -332,10 +404,10 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-SemiBold', fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
   },
   optionSubText: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     marginTop: 1,
   },
@@ -350,7 +422,7 @@ const styles = StyleSheet.create({
   },
   footerBrand: {
     fontSize: 18,
-    fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800',
+    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
     marginTop: 8,
   },
   footerVersion: {

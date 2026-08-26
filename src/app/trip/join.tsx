@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800',
+    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
     color: '#1A1A1A',
     marginBottom: 8,
   },
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+    fontFamily: 'Poppins-Bold', fontWeight: '700',
     color: '#757575',
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+    fontFamily: 'Poppins-Bold', fontWeight: '700',
     color: '#1A1A1A',
     letterSpacing: 1.5,
   },
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+    fontFamily: 'Poppins-Bold', fontWeight: '700',
     color: '#004D40',
     marginBottom: 6,
   },
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bold: {
-    fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700',
+    fontFamily: 'Poppins-Bold', fontWeight: '700',
   },
   customHeader: {
     flexDirection: 'row',
@@ -219,12 +219,12 @@ const styles = StyleSheet.create({
   },
   customBackText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginLeft: 2,
   },
   customHeaderTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textAlign: 'center',
   },

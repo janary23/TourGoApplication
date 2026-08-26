@@ -121,7 +121,7 @@ export default function CalendarWidget({
                       width: 6,
                       height: 6,
                       borderRadius: 3,
-                      backgroundColor: hasTrip ? '#22C55E' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)'),
+                      backgroundColor: hasTrip ? colors.brand : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)'),
                     }}
                   />
                 </View>
@@ -243,7 +243,7 @@ export default function CalendarWidget({
                     onPress={() => setSelectedDate(cellDate)}
                     style={[
                       styles.dayCellWrapper,
-                      isSelected && styles.selectedDayCell,
+                      isSelected && [styles.selectedDayCell, { backgroundColor: colors.brand }],
                       isToday && !isSelected && [styles.todayDayCell, { borderColor: colors.brand }],
                       !cell.isCurrentMonth && { opacity: 0.3 }
                     ]}
@@ -252,13 +252,13 @@ export default function CalendarWidget({
                       style={[
                         styles.dayCellText,
                         { color: isSelected ? '#FFFFFF' : (isToday ? colors.brand : colors.text) },
-                        isSelected && { fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' }
+                        isSelected && { fontFamily: 'Poppins-Bold', fontWeight: '700' }
                       ]}
                     >
                       {cell.day}
                     </Text>
                     {dayTrip && !isSelected && (
-                      <View style={[styles.tripIndicatorDot, { backgroundColor: '#22C55E' }]} />
+                      <View style={[styles.tripIndicatorDot, { backgroundColor: colors.brand }]} />
                     )}
                   </TouchableOpacity>
                 );
@@ -287,7 +287,7 @@ export default function CalendarWidget({
                       {new Date(activeTripForSelectedDate.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(activeTripForSelectedDate.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </Text>
                   </View>
-                  <View style={styles.tripDetailGoBtn}>
+                  <View style={[styles.tripDetailGoBtn, { backgroundColor: colors.brand }]}>
                     <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
                   </View>
                 </TouchableOpacity>
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   weatherLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   },
   monthPillText: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
   },
   calendarGrid: {
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   expandedTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   calendarNavHeader: {
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   },
   calendarMonthTitle: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   weekdayRow: {
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     width: 40,
     textAlign: 'center',
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   daysGridContainer: {
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   },
   dayCellText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   selectedDayCell: {
     backgroundColor: '#22C55E',
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   detailsDateHeader: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
     marginBottom: 6,
@@ -476,13 +476,13 @@ const styles = StyleSheet.create({
   },
   tripDetailDest: {
     fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   tripDetailTitle: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 1,
     marginBottom: 1,

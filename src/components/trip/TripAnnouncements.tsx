@@ -52,12 +52,15 @@ export default function TripAnnouncements({
   ) => {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name={icon as any} size={48} color={color} style={{ opacity: 0.8 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title.toLowerCase()}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc.toLowerCase()}</Text>
+        <View style={[styles.emptyIconBox, { backgroundColor: color + '12', borderColor: color + '25', borderWidth: 1 }]}>
+          <Ionicons name={icon as any} size={28} color={color} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc}</Text>
         {actionLabel && onAction && (
-          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color }]} onPress={onAction}>
-            <Text style={styles.emptyActionBtnText}>{actionLabel.toLowerCase()}</Text>
+          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color, flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={onAction} activeOpacity={0.85}>
+            <Ionicons name="add" size={14} color="#FFFFFF" />
+            <Text style={styles.emptyActionBtnText}>{actionLabel}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -68,7 +71,7 @@ export default function TripAnnouncements({
     return (
       <TouchableOpacity style={styles.roomBackRow} onPress={onPress}>
         <Ionicons name="arrow-back" size={16} color={colors.brand} />
-        <Text style={[styles.roomBackText, { color: colors.brand }]}>{label.toLowerCase()}</Text>
+        <Text style={[styles.roomBackText, { color: colors.brand }]}>{label}</Text>
       </TouchableOpacity>
     );
   };
@@ -76,49 +79,67 @@ export default function TripAnnouncements({
   return (
     <ScrollView contentContainerStyle={styles.tabContentContainer} showsVerticalScrollIndicator={false}>
       <View style={{ marginTop: 10 }}>
-        {renderRoomBack('back to people', onBack)}
+        {renderRoomBack('Back to Crew Hub', onBack)}
       </View>
       <View style={[styles.tabHeaderRow, { marginTop: 12, marginBottom: 12 }]}>
-        <Text style={[styles.tabContentTitle, { color: colors.text }]}>announcements</Text>
+        <Text style={[styles.tabContentTitle, { color: colors.text }]}>Announcements</Text>
         {isOrganizer && (
-          <TouchableOpacity style={[styles.tabAddBtn, { borderColor: '#0D9488', borderWidth: 1.5 }]} onPress={() => setModalVisible(true)}>
-            <Ionicons name="megaphone-outline" size={16} color="#0D9488" />
-            <Text style={[styles.tabAddBtnText, { color: '#0D9488' }]}>new notice</Text>
+          <TouchableOpacity style={[styles.tabAddBtn, { borderColor: colors.brand, borderWidth: 1.5 }]} onPress={() => setModalVisible(true)}>
+            <Ionicons name="megaphone-outline" size={16} color={colors.brand} />
+            <Text style={[styles.tabAddBtnText, { color: colors.brand }]}>New Notice</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {trip.announcements.length === 0 ? (
         renderEmptyState(
-          "no announcements yet",
-          "important organizer notices will be pinned here.",
+          "No Announcements Yet",
+          "Important organizer notices will be pinned here.",
           "megaphone-outline",
-          "#0D9488",
-          isOrganizer ? "new notice" : undefined,
+          colors.brand,
+          isOrganizer ? "New Notice" : undefined,
           isOrganizer ? () => setModalVisible(true) : undefined
         )
       ) : (
-        trip.announcements.map((ann: any) => (
-          <Card
-            key={ann.id}
-            style={[
-              styles.annCard,
-              { backgroundColor: colors.card, borderColor: colors.cardBorder },
-              ann.important ? [styles.importantAnnCard, { borderColor: '#D97706', backgroundColor: '#FFFDF6' }] : null,
-            ]}
-            shadow={false}
-          >
-            <View style={styles.annHeaderRow}>
-              <View style={styles.annPayerBox}>
-                <Ionicons name="megaphone" size={16} color={ann.important ? '#D97706' : '#0D9488'} />
-                <Text style={[styles.annAuthor, { color: colors.text }]}>{ann.author.toLowerCase()}</Text>
+        trip.announcements.map((ann: any) => {
+          const isImportant = ann.important;
+          const accentColor = isImportant ? '#3B82F6' : colors.brand;
+          const iconBg = isImportant ? 'rgba(59, 130, 246, 0.12)' : colors.brand + '15';
+          return (
+            <Card
+              key={ann.id}
+              style={[
+                styles.annCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                isImportant ? { borderColor: 'rgba(59, 130, 246, 0.25)', backgroundColor: 'rgba(59, 130, 246, 0.06)' } : null,
+              ]}
+              shadow={false}
+            >
+              <View style={styles.annHeaderRow}>
+                <View style={styles.annPayerBox}>
+                  <View style={[styles.annIconCircle, { backgroundColor: iconBg }]}>
+                    <Ionicons name="megaphone" size={14} color={accentColor} />
+                  </View>
+                  <View>
+                    <Text style={[styles.annAuthor, { color: colors.text }]}>{ann.author}</Text>
+                    <View style={[styles.leaderBadge, { backgroundColor: 'rgba(217, 119, 6, 0.08)', borderColor: 'rgba(217, 119, 6, 0.2)' }]}>
+                      <Text style={styles.leaderBadgeText}>Organizer</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.annDateRow}>
+                  <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+                  <Text style={[styles.annDate, { color: colors.textMuted }]}>{ann.date}</Text>
+                </View>
               </View>
-              <Text style={[styles.annDate, { color: colors.textMuted }]}>{ann.date.toLowerCase()}</Text>
-            </View>
-            <Text style={[styles.annTitleText, { color: colors.text }]}>{ann.title}</Text>
-            <Text style={[styles.annDescText, { color: colors.textSecondary }]}>{ann.content}</Text>
-          </Card>
-        ))
+
+              <View style={styles.annBody}>
+                <Text style={[styles.annTitleText, { color: colors.text }]}>{ann.title}</Text>
+                <Text style={[styles.annDescText, { color: colors.textSecondary }]}>{ann.content}</Text>
+              </View>
+            </Card>
+          );
+        })
       )}
 
       {/* CREATE ANNOUNCEMENT MODAL */}
@@ -200,7 +221,7 @@ const styles = StyleSheet.create({
   },
   roomBackText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginLeft: 2,
   },
@@ -212,7 +233,7 @@ const styles = StyleSheet.create({
   },
   tabContentTitle: {
     fontSize: 20,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
   },
   tabAddBtn: {
@@ -225,7 +246,7 @@ const styles = StyleSheet.create({
   },
   tabAddBtnText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   emptyContainer: {
@@ -234,16 +255,24 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: 16,
   },
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   emptyTitle: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginTop: 12,
     textAlign: 'center',
   },
   emptyDesc: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     marginTop: 4,
     textAlign: 'center',
@@ -257,7 +286,7 @@ const styles = StyleSheet.create({
   emptyActionBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   annCard: {
@@ -278,27 +307,59 @@ const styles = StyleSheet.create({
   annPayerBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  annIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  leaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    marginTop: 2,
+    borderWidth: 0.5,
+    alignSelf: 'flex-start',
+  },
+  leaderBadgeText: {
+    fontSize: 8,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  annDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  annBody: {
+    marginTop: 10,
   },
   annAuthor: {
     fontSize: 11,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   annDate: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   annTitleText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 4,
   },
   annDescText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontWeight: '500',
     lineHeight: 16,
   },
@@ -329,7 +390,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   modalCloseBtn: {
@@ -340,7 +401,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 6,
   },
@@ -349,7 +410,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     fontSize: 14,
   },
   submitBtn: {
@@ -363,7 +424,7 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
 });

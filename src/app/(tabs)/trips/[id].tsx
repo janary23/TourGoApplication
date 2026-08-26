@@ -1,40 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, TextInput, ScrollView, Alert, Share, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trip } from '../../services/mockData';
+import { Trip } from '../../../services/mockData';
 import {
   getTripById,
   updateTrip as dbUpdateTrip,
   deleteTrip as dbDeleteTrip,
   subscribeToChatMessages,
-} from '../../services/tripService';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
+} from '../../../services/tripService';
+import { useTheme } from '../../../context/ThemeContext';
+import { useAuth } from '../../../context/AuthContext';
 
 // Import modular trip feature components
-import TripOverview from '../../components/trip/TripOverview';
-import TripPlan from '../../components/trip/TripPlan';
-import TripPeopleHub from '../../components/trip/TripPeopleHub';
-import TripChat from '../../components/trip/TripChat';
-import TripPolls from '../../components/trip/TripPolls';
-import TripAnnouncements from '../../components/trip/TripAnnouncements';
-import TripMembers from '../../components/trip/TripMembers';
-import TripExpenses from '../../components/trip/TripExpenses';
-import TripMoreHub from '../../components/trip/TripMoreHub';
-import TripSafetyHub from '../../components/trip/TripSafetyHub';
+import TripOverview from '../../../components/trip/TripOverview';
+import TripPlan from '../../../components/trip/TripPlan';
+import TripPeopleHub from '../../../components/trip/TripPeopleHub';
+import TripChat from '../../../components/trip/TripChat';
+import TripPolls from '../../../components/trip/TripPolls';
+import TripAnnouncements from '../../../components/trip/TripAnnouncements';
+import TripMembers from '../../../components/trip/TripMembers';
+import TripExpenses from '../../../components/trip/TripExpenses';
+import TripMoreHub from '../../../components/trip/TripMoreHub';
+import TripSafetyHub from '../../../components/trip/TripSafetyHub';
 
 type Section = 'overview' | 'plan' | 'people' | 'money' | 'more';
 type PeopleView = 'hub' | 'chat' | 'polls' | 'announcements' | 'members';
 type MoreView = 'hub' | 'documents' | 'attendance' | 'guardian' | 'safety';
 
 export default function TripHomeScreen() {
-  const { id, openSetup } = useLocalSearchParams();
+  const { id } = useLocalSearchParams();
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { profile } = useAuth();
-
+  
   const [trip, setTrip] = useState<Trip | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,12 +68,6 @@ export default function TripHomeScreen() {
     loadTrip();
   }, [loadTrip]);
 
-  useEffect(() => {
-    if (openSetup === '1') {
-      setSection('more');
-    }
-  }, [openSetup]);
-
   // Real-time chat subscription
   useEffect(() => {
     if (!id) return;
@@ -103,7 +97,7 @@ export default function TripHomeScreen() {
         <Text style={{ fontSize: 16, color: '#FF3B30', marginBottom: 16 }}>{error || 'Trip not found.'}</Text>
         <TouchableOpacity
           style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: colors.brand, borderRadius: 8 }}
-          onPress={() => router.replace('/trips')}
+          onPress={() => router.back()}
         >
           <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Back to Trips</Text>
         </TouchableOpacity>
@@ -155,7 +149,7 @@ export default function TripHomeScreen() {
           onPress: async () => {
             setEditModalVisible(false);
             await dbDeleteTrip(trip.id);
-            router.replace('/trips');
+            router.back();
           },
         },
       ]
@@ -193,7 +187,7 @@ export default function TripHomeScreen() {
       setPeopleView('hub');
       setMoreView('hub');
     } else {
-      router.replace('/trips');
+      router.back();
     }
   };
 
@@ -203,13 +197,7 @@ export default function TripHomeScreen() {
     if (s === 'more') setMoreView('hub');
   };
 
-  const navItems: Array<{ key: Section; label: string; icon: string }> = [
-    { key: 'overview', label: 'Overview', icon: 'home' },
-    { key: 'plan', label: 'Itinerary', icon: 'calendar' },
-    { key: 'people', label: 'People', icon: 'people' },
-    { key: 'money', label: 'Money', icon: 'wallet' },
-    { key: 'more', label: 'Settings', icon: 'settings-outline' },
-  ];
+
 
   // Dynamic router / switcher for current page content
   let content: React.ReactNode = null;
@@ -288,7 +276,7 @@ export default function TripHomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Sticky Trip Context Header — always know which trip you're in */}
@@ -302,7 +290,9 @@ export default function TripHomeScreen() {
             <Text style={[styles.headerDestText, { color: colors.textSecondary }]} numberOfLines={1}>
               {trip.destination}
             </Text>
-
+            <Text style={[styles.headerTitleText, { color: colors.text }]} numberOfLines={1}>
+              {trip.title}
+            </Text>
           </View>
           {isOrganizer ? (
             <TouchableOpacity style={styles.headerSettingsBtn} onPress={openEditModal}>
@@ -315,9 +305,7 @@ export default function TripHomeScreen() {
       </View>
 
       {/* Room content */}
-      <View style={{ flex: 1, overflow: 'visible' }}>{content}</View>
-
-
+      <View style={{ flex: 1 }}>{content}</View>
 
       {/* ── EDIT TRIP MODAL (Organizer Only) ─────────────────────────────── */}
       <Modal
@@ -481,37 +469,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     width: 100,
   },
-  bottomTabBar: {
-    position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
-    marginHorizontal: 16,
-    height: 64,
-    borderRadius: 24,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  bottomTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    height: '100%',
-    paddingVertical: 8,
-  },
-  bottomTabText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginTop: 3,
-  },
+
   // Organizer edit modal styles
   editModalOverlay: {
     flex: 1,
@@ -633,3 +591,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+

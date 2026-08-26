@@ -1,3 +1,5 @@
+import { GOOGLE_MAPS_API_KEY } from '../config/env';
+
 export interface ProvinceGeo {
   id: string;
   latitude: number;
@@ -133,6 +135,7 @@ export interface Destination {
   bestTime: string;
   description: string;
   image: string;
+  address?: string;
 }
 
 export const DESTINATIONS: Destination[] = [
@@ -346,8 +349,152 @@ export function getMunicipalitiesForProvince(provinceId: string): Municipality[]
 }
 
 export function formatAddress(dest: Destination): string {
+  if (dest.address) {
+    return dest.address;
+  }
   const muni = Object.values(MUNICIPALITIES)
     .flat()
     .find(m => m.id === dest.municipalityId);
   return `${muni?.name ?? 'Philippines'}, Philippines`;
+}
+
+export async function fetchWikiImage(title: string): Promise<string | null> {
+  try {
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(title + " Philippines")}&format=json&utf8=1`;
+    const searchRes = await fetch(searchUrl);
+    const searchJson = await searchRes.json();
+    const firstResult = searchJson?.query?.search?.[0];
+    
+    if (firstResult) {
+      const pageTitle = firstResult.title;
+      const imgUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=600&titles=${encodeURIComponent(pageTitle)}&redirects=true`;
+      const imgRes = await fetch(imgUrl);
+      const imgJson = await imgRes.json();
+      const pages = imgJson?.query?.pages;
+      if (pages) {
+        const pageId = Object.keys(pages)[0];
+        return pages[pageId]?.thumbnail?.source || null;
+      }
+    }
+  } catch (e) {
+    console.error('Wikipedia image fetch error for ' + title, e);
+  }
+  return null;
+}
+
+export function getPlaceImageUrl(name: string, types: string[] = []): string {
+  const normalized = name.toLowerCase();
+  
+  if (normalized.includes('batad') || normalized.includes('banaue') || normalized.includes('rice terraces')) {
+    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('fort santiago') || normalized.includes('intramuros')) {
+    return 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('rizal') || normalized.includes('luneta')) {
+    return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('falls') || normalized.includes('waterfall') || normalized.includes('kaparkan') || normalized.includes('pagsanjan')) {
+    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('beach') || normalized.includes('island') || normalized.includes('pundaquit') || normalized.includes('boracay') || normalized.includes('el nido') || normalized.includes('coron')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('museum') || normalized.includes('art')) {
+    return 'https://images.unsplash.com/photo-1582555172866-f73bb12a2abf?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('mines view') || normalized.includes('baguio') || normalized.includes('burnham') || normalized.includes('mountain') || normalized.includes('peak') || normalized.includes('pulag')) {
+    return 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80';
+  }
+  
+  let categoryKeyword = 'scenery';
+  if (types.includes('beach') || types.includes('natural_feature') || types.includes('island')) {
+    categoryKeyword = 'beach';
+  } else if (types.includes('park') || types.includes('zoo')) {
+    categoryKeyword = 'park';
+  } else if (types.includes('historical_landmark') || types.includes('museum') || types.includes('church') || types.includes('place_of_worship')) {
+    categoryKeyword = 'architecture';
+  }
+  
+  return `https://loremflickr.com/600/400/philippines,${categoryKeyword}/all`;
+}
+
+export async function fetchGooglePlacesForProvince(
+  queryName: string,
+  provinceId: string,
+  municipalityId?: string
+): Promise<Destination[]> {
+  try {
+    const query = `tourist spots in ${queryName} Philippines`;
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.location,places.photos'
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        regionCode: 'PH',
+        pageSize: 20
+      })
+    });
+
+    const json = await response.json();
+    if (json && Array.isArray(json.places)) {
+      const places: Destination[] = await Promise.all(
+        json.places.map(async (p: any) => {
+          const name = p.displayName?.text ?? 'Destination';
+          const types = p.types ?? [];
+          
+          let image = '';
+          if (p.photos && p.photos.length > 0) {
+            const photoName = p.photos[0].name;
+            image = `https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_MAPS_API_KEY}&maxWidthPx=800`;
+          } else {
+            const wikiImg = await fetchWikiImage(name);
+            image = wikiImg || getPlaceImageUrl(name, types);
+          }
+
+          const tags = types
+            .filter((t: string) => ['tourist_attraction', 'natural_feature', 'park', 'beach', 'museum', 'church', 'island', 'historical_landmark'].includes(t))
+            .map((t: string) => {
+              const map: Record<string, string> = {
+                tourist_attraction: 'Attraction',
+                natural_feature: 'Nature',
+                park: 'Park',
+                beach: 'Beach',
+                museum: 'Museum',
+                church: 'Heritage',
+                island: 'Island',
+                historical_landmark: 'Heritage',
+              };
+              return map[t] || t;
+            })
+            .slice(0, 3);
+          
+          if (tags.length === 0) tags.push('Spot');
+
+          return {
+            id: `google-${p.id}`,
+            provinceId: provinceId,
+            municipalityId: municipalityId || '',
+            name: name,
+            latitude: p.location?.latitude ?? 0,
+            longitude: p.location?.longitude ?? 0,
+            tags: tags,
+            rating: p.rating ? p.rating.toFixed(1) : '4.5',
+            bestTime: 'Oct – May',
+            description: `A highly-rated destination in ${queryName} registered on Google Maps.`,
+            image: image,
+            address: p.formattedAddress || `${queryName}, Philippines`,
+          };
+        })
+      );
+      return places.filter(p => p.latitude !== 0 && p.longitude !== 0);
+    }
+  } catch (error) {
+    console.error('Error fetching Google Places for ' + queryName, error);
+  }
+  return [];
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image, TextInput } from 'react-native';
+import { StyleSheet, View, Text, Image, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
 
@@ -16,6 +16,7 @@ interface ProfileInfoCardProps {
   setHomeCity: (val: string) => void;
   onSave: () => void;
   onCancel: () => void;
+  onAvatarPress?: () => void;
 }
 
 export default function ProfileInfoCard({
@@ -31,20 +32,22 @@ export default function ProfileInfoCard({
   setHomeCity,
   onSave,
   onCancel,
+  onAvatarPress,
 }: ProfileInfoCardProps) {
   return (
     <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-      <View style={styles.avatarContainer}>
+      <TouchableOpacity style={styles.avatarContainer} onPress={onAvatarPress} activeOpacity={0.7}>
         <Image
+          key={profile?.avatar_url || 'default'}
           source={profile?.avatar_url
             ? { uri: profile.avatar_url }
             : require('../../../assets/images/TourGoLogo.png')}
           style={[styles.avatar, { borderColor: colors.brand }]}
         />
-        <View style={[styles.cameraIcon, { backgroundColor: '#22C55E' }]}>
+        <View style={[styles.cameraIcon, { backgroundColor: colors.brand }]}>
           <Ionicons name="camera" size={16} color="#FFFFFF" />
         </View>
-      </View>
+      </TouchableOpacity>
 
       {isEditing ? (
         <View style={styles.form}>
@@ -91,8 +94,8 @@ export default function ProfileInfoCard({
           <Text style={[styles.userName, { color: colors.text }]}>{profile?.name || 'User'}</Text>
           <Text style={[styles.userEmail, { color: colors.textMuted }]}>{profile?.email || ''}</Text>
           <View style={styles.locationContainer}>
-            <Ionicons name="location-sharp" size={16} color="#22C55E" />
-            <Text style={[styles.userLocation, { color: '#22C55E' }]}>{profile?.home_city || 'Add home city'}</Text>
+            <Ionicons name="location-sharp" size={16} color={colors.brand} />
+            <Text style={[styles.userLocation, { color: colors.brand }]}>{profile?.home_city || 'Add home city'}</Text>
           </View>
           <Button
             title="Edit Profile"
@@ -100,7 +103,7 @@ export default function ProfileInfoCard({
             variant="outline"
             size="small"
             style={styles.editBtn}
-            icon={<Ionicons name="create-outline" size={16} color="#22C55E" />}
+            icon={<Ionicons name="create-outline" size={16} color={colors.brand} />}
           />
         </View>
       )}
@@ -149,7 +152,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 6,
   },
@@ -159,7 +162,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
   btnRow: {
     flexDirection: 'row',
@@ -176,13 +179,13 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 18,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     marginBottom: 2,
   },
   userEmail: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
     marginBottom: 10,
   },
   locationContainer: {
@@ -192,7 +195,7 @@ const styles = StyleSheet.create({
   },
   userLocation: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     marginLeft: 4,
   },

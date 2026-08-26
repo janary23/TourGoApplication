@@ -303,7 +303,7 @@ export default function ActivityScreen() {
       case 'announcement': return { name: 'megaphone', color: colors.brand };
       case 'expense': return { name: 'wallet', color: '#22C55E' };
       case 'poll': return { name: 'bar-chart', color: colors.brand };
-      case 'checklist': return { name: 'checkmark-circle', color: '#22C55E' };
+      case 'checklist': return { name: 'checkmark-circle', color: colors.brand };
     }
   };
 
@@ -329,7 +329,7 @@ export default function ActivityScreen() {
               style={[
                 styles.navPill,
                 { borderColor: colors.cardBorder },
-                active && { backgroundColor: '#22C55E', borderColor: '#22C55E' },
+                active && { backgroundColor: colors.brand, borderColor: colors.brand },
               ]}
             >
               <Text style={[styles.navPillText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
@@ -342,13 +342,13 @@ export default function ActivityScreen() {
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#22C55E" />
+          <ActivityIndicator size="large" color={colors.brand} />
         </View>
       ) : (
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#22C55E"]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
         >
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>Recent updates across all your group trips.</Text>
 
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   headerBrandContainer: {
@@ -400,14 +400,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerLogoImage: {
-    width: 36,
-    height: 36,
-    marginRight: 10,
+    width: 30,
+    height: 30,
+    marginRight: 8,
     resizeMode: 'contain',
   },
   appName: {
-    fontSize: 24,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontSize: 20,
+    fontFamily: 'Poppins-ExtraBold',
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -430,33 +430,34 @@ const styles = StyleSheet.create({
   },
   navPillText: {
     fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },
   activityCard: { marginBottom: 16, borderWidth: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   iconContainer: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerText: { flex: 1 },
-  tripLabel: { fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', textTransform: 'uppercase' },
+  tripLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase' },
   timeLabel: { fontSize: 11, marginTop: 2 },
   urgentBadge: { backgroundColor: '#22C55E', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6 },
-  urgentText: { color: '#FFFFFF', fontSize: 9, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700' },
+  urgentText: { color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   cardBody: { marginBottom: 12 },
-  titleText: { fontSize: 16, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', marginBottom: 4 },
+  titleText: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 4 },
   descText: {
-    fontFamily: 'PlusJakartaSans-Regular', fontSize: 13, lineHeight: 18 },
+    fontFamily: 'Poppins-Regular', fontSize: 13, lineHeight: 18
+  },
   cardFooter: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, paddingTop: 10, marginTop: 4 },
-  viewTripText: { fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', marginRight: 4 },
+  viewTripText: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', marginRight: 4 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, paddingHorizontal: 20 },
   emptyTitle: {
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 6,
     marginTop: 8,
   },
   emptySub: {
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,

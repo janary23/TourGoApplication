@@ -120,7 +120,7 @@ const fl = StyleSheet.create({
     paddingHorizontal: 4,
     zIndex: 10,
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
   },
   inputBox: {
     flexDirection: 'row',
@@ -136,7 +136,7 @@ const fl = StyleSheet.create({
     height: '100%',
     marginLeft: 12,
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
 });
 
@@ -315,7 +315,7 @@ export default function LoginScreen() {
                   activeOpacity={0.85}
                   style={[
                     styles.primaryButton,
-                    { backgroundColor: '#22C55E', shadowColor: '#22C55E' },
+                    { backgroundColor: colors.brand, shadowColor: colors.brand },
                     isLoading && { opacity: 0.7 },
                   ]}
                   onPress={handleSubmit}
@@ -389,19 +389,19 @@ const styles = StyleSheet.create({
   logo:            { width: 44, height: 44 },
   brandName: {
     fontSize: 24,
-    fontFamily: 'PlusJakartaSans-ExtraBold',
+    fontFamily: 'Poppins-ExtraBold',
     marginLeft: 12,
     lineHeight: 44,
   },
   welcomeHeading: {
     fontSize: 32,
     lineHeight: 40,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     marginBottom: 8,
   },
   welcomeSub: {
     fontSize: 15,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
   },
 
   // Form
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 13,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
   },
 
   // Primary button
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: 17,
-    fontFamily: 'PlusJakartaSans-Bold',
+    fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
   },
   guestButtonText: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
 
   // Auth link
@@ -463,11 +463,11 @@ const styles = StyleSheet.create({
   },
   authLinkPrompt: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Regular',
+    fontFamily: 'Poppins-Regular',
   },
   authLinkText: {
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontFamily: 'Poppins-SemiBold',
   },
 
   // Snackbar
@@ -486,6 +486,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Medium',
+    fontFamily: 'Poppins-Medium',
   },
 });
