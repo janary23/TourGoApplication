@@ -150,7 +150,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.9',
     bestTime: 'Nov – May',
     description: 'A majestic lagoon in El Nido enclosed by towering limestone cliffs, best explored by kayak at sunrise.',
-    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-coron-kayangan',
@@ -163,7 +163,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.8',
     bestTime: 'Dec – May',
     description: 'Crystal-clear freshwater lake in Coron framed by dramatic karst cliffs, a must-snorkel spot.',
-    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-boracay-white-beach',
@@ -176,7 +176,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.7',
     bestTime: 'Nov – Apr',
     description: 'Boracay\'s iconic powder-white sand beach stretching four kilometers along calm turquoise water.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1583212292454-1fe6229603b7?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-banaue-rice-terraces',
@@ -189,7 +189,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.8',
     bestTime: 'Dec – Apr',
     description: '2,000-year-old hand-carved rice terraces that climb the mountains like giant green steps.',
-    image: 'https://images.unsplash.com/photo-1523908511403-7fc7b25592f4?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1551044498-f2b76fb0821b?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-batanes-basco',
@@ -202,7 +202,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.9',
     bestTime: 'Mar – Jun',
     description: 'A scenic lighthouse overlooking the rolling green hills and crashing waves of Batanes.',
-    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1513407030348-c983a97b98d8?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-siargao-cloud9',
@@ -228,7 +228,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.7',
     bestTime: 'Dec – May',
     description: 'An 8.2-km navigable underground river winding through a spectacular limestone cave system.',
-    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1522083165195-3427502977a1?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-chocolate-hills',
@@ -241,7 +241,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.7',
     bestTime: 'Dec – May',
     description: 'Over 1,200 perfectly cone-shaped hills that turn chocolate-brown during the dry season.',
-    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-tarsier-sanctuary',
@@ -254,7 +254,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.5',
     bestTime: 'Year-round',
     description: 'Meet the tiny, wide-eyed Philippine tarsier in its natural forest habitat.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1627918544976-12bc1abfae12?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-loboc-river',
@@ -267,7 +267,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.4',
     bestTime: 'Nov – May',
     description: 'A floating restaurant cruise up the emerald Loboc River flanked by jungle.',
-    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1621252179027-94459d278660?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-moalboal-sardines',
@@ -280,7 +280,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.8',
     bestTime: 'Year-round',
     description: 'Swim through a giant shimmering bait ball of sardines just meters off the shore.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1568526381923-caf3fd520382?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-oslob-whalesharks',
@@ -293,7 +293,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.6',
     bestTime: 'Year-round',
     description: 'Come face-to-face with gentle whale sharks in the clear waters of Oslob.',
-    image: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1560275669-46c5a88d6a4c?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-bantayan-island',
@@ -306,7 +306,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.5',
     bestTime: 'Dec – May',
     description: 'Quiet, uncrowded beaches and friendly fishing villages on a laid-back island escape.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-puerto-galera',
@@ -319,7 +319,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.4',
     bestTime: 'Nov – May',
     description: 'White-sand beaches and world-class diving minutes from Manila on Mindoro island.',
-    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=60',
   },
   {
     id: 'dest-ilagan-dam',
@@ -332,7 +332,7 @@ export const DESTINATIONS: Destination[] = [
     rating: '4.3',
     bestTime: 'Nov – Apr',
     description: 'A lush forest reserve with waterfalls, caves, and a pristine river in Isabela.',
-    image: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
+    image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=900&q=60',
   },
 ];
 
@@ -385,38 +385,87 @@ export async function fetchWikiImage(title: string): Promise<string | null> {
 export function getPlaceImageUrl(name: string, types: string[] = []): string {
   const normalized = name.toLowerCase();
   
-  if (normalized.includes('batad') || normalized.includes('banaue') || normalized.includes('rice terraces')) {
-    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=600&q=80';
+  // Hash function to pick a stable index from the string name
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const getIndex = (arr: any[]) => Math.abs(hash) % arr.length;
+
+  if (normalized.includes('clock tower') || normalized.includes('tower')) {
+    return 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=600&q=80'; // Classic brick clock tower monument
+  }
+  if (normalized.includes('church') || normalized.includes('parish') || normalized.includes('cathedral') || normalized.includes('basilica') || normalized.includes('shrine') || normalized.includes('augustine')) {
+    return 'https://images.unsplash.com/photo-1548625361-155deee223c2?auto=format&fit=crop&w=600&q=80'; // Stone Spanish-style colonial church
+  }
+  if (normalized.includes('starbucks')) {
+    return 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('mcdonald') || normalized.includes('jollibee') || normalized.includes('burger') || normalized.includes('pizza') || normalized.includes('kfc')) {
+    return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('batad') || normalized.includes('banaue') || normalized.includes('rice terraces') || normalized.includes('terraces')) {
+    return 'https://images.unsplash.com/photo-1551044498-f2b76fb0821b?auto=format&fit=crop&w=600&q=80';
   }
   if (normalized.includes('fort santiago') || normalized.includes('intramuros')) {
-    return 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=600&q=80';
+    return 'https://images.unsplash.com/photo-1629904869850-8b65287f3ca6?auto=format&fit=crop&w=600&q=80';
   }
-  if (normalized.includes('rizal') || normalized.includes('luneta')) {
-    return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80';
+  if (normalized.includes('rizal') || normalized.includes('luneta') || normalized.includes('park') || normalized.includes('plaza')) {
+    return 'https://images.unsplash.com/photo-1582555762493-57b89701a29f?auto=format&fit=crop&w=600&q=80';
   }
-  if (normalized.includes('falls') || normalized.includes('waterfall') || normalized.includes('kaparkan') || normalized.includes('pagsanjan')) {
-    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80';
+  if (normalized.includes('falls') || normalized.includes('waterfall') || normalized.includes('kaparkan') || normalized.includes('pagsanjan') || normalized.includes('spring')) {
+    return 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80';
   }
-  if (normalized.includes('beach') || normalized.includes('island') || normalized.includes('pundaquit') || normalized.includes('boracay') || normalized.includes('el nido') || normalized.includes('coron')) {
+  if (normalized.includes('beach') || normalized.includes('island') || normalized.includes('pundaquit') || normalized.includes('boracay') || normalized.includes('el nido') || normalized.includes('coron') || normalized.includes('reef')) {
     return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80';
   }
-  if (normalized.includes('museum') || normalized.includes('art')) {
-    return 'https://images.unsplash.com/photo-1582555172866-f73bb12a2abf?auto=format&fit=crop&w=600&q=80';
+  if (normalized.includes('museum') || normalized.includes('art') || normalized.includes('gallery')) {
+    return 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=600&q=80';
   }
-  if (normalized.includes('mines view') || normalized.includes('baguio') || normalized.includes('burnham') || normalized.includes('mountain') || normalized.includes('peak') || normalized.includes('pulag')) {
-    return 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80';
+  if (normalized.includes('mines view') || normalized.includes('baguio') || normalized.includes('burnham') || normalized.includes('mountain') || normalized.includes('peak') || normalized.includes('pulag') || normalized.includes('ridge')) {
+    return 'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?auto=format&fit=crop&w=600&q=80';
+  }
+
+  // Categories rotation fallbacks
+  if (normalized.includes('coffee') || normalized.includes('cafe') || normalized.includes('kape') || normalized.includes('brew')) {
+    const CAFE_IMAGES = [
+      'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1498804103079-a6351b050096?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1445116572660-236099ec97a0?auto=format&fit=crop&w=600&q=80'
+    ];
+    return CAFE_IMAGES[getIndex(CAFE_IMAGES)];
+  }
+
+  if (normalized.includes('restaurant') || normalized.includes('grill') || normalized.includes('diner') || normalized.includes('bistro') || normalized.includes('brunch') || normalized.includes('food') || normalized.includes('kitchen') || normalized.includes('eatery')) {
+    const FOOD_IMAGES = [
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?auto=format&fit=crop&w=600&q=80'
+    ];
+    return FOOD_IMAGES[getIndex(FOOD_IMAGES)];
+  }
+
+  if (normalized.includes('bar') || normalized.includes('lounge') || normalized.includes('pub') || normalized.includes('club') || normalized.includes('nightlife') || normalized.includes('disco')) {
+    const BAR_IMAGES = [
+      'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=600&q=80'
+    ];
+    return BAR_IMAGES[getIndex(BAR_IMAGES)];
+  }
+
+  if (normalized.includes('hotel') || normalized.includes('resort') || normalized.includes('inn') || normalized.includes('stay') || normalized.includes('suites') || normalized.includes('lodge')) {
+    const HOTEL_IMAGES = [
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=600&q=80'
+    ];
+    return HOTEL_IMAGES[getIndex(HOTEL_IMAGES)];
   }
   
-  let categoryKeyword = 'scenery';
-  if (types.includes('beach') || types.includes('natural_feature') || types.includes('island')) {
-    categoryKeyword = 'beach';
-  } else if (types.includes('park') || types.includes('zoo')) {
-    categoryKeyword = 'park';
-  } else if (types.includes('historical_landmark') || types.includes('museum') || types.includes('church') || types.includes('place_of_worship')) {
-    categoryKeyword = 'architecture';
-  }
-  
-  return `https://loremflickr.com/600/400/philippines,${categoryKeyword}/all`;
+  return 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=600&q=80';
 }
 
 export async function fetchGooglePlacesForProvince(

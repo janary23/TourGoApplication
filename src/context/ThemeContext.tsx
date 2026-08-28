@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import { storageGet, storageSet } from '../services/storage';
 
 export interface ThemeColors {
@@ -22,43 +23,43 @@ export interface ThemeColors {
 }
 
 const lightColors: ThemeColors = {
-  background: '#FFFFFF',
+  background: '#F8FAFC',
   card: '#FFFFFF',
-  cardBorder: '#EFEFEF',
-  text: '#1A1A1A',
-  textSecondary: '#424242',
-  textMuted: '#757575',
-  inputBg: '#F9F9F9',
-  inputBorder: '#EFEFEF',
+  cardBorder: '#E2E8F0',
+  text: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
+  inputBg: '#FFFFFF',
+  inputBorder: '#E2E8F0',
   tabBar: '#FFFFFF',
-  tabBarBorder: '#ECECEC',
-  header: '#FFFFFF',
-  headerBorder: '#F5F5F5',
-  surface: '#F9F9F9',
-  divider: '#F5F5F5',
-  brand: '#38BDF8',
+  tabBarBorder: '#E2E8F0',
+  header: '#F8FAFC',
+  headerBorder: '#E2E8F0',
+  surface: '#F1F5F9',
+  divider: '#E2E8F0',
+  brand: '#0284C7',
   brandLight: '#F0F9FF',
-  overlay: 'rgba(0,0,0,0.4)',
+  overlay: 'rgba(15, 23, 42, 0.4)',
 };
 
 const darkColors: ThemeColors = {
-  background: '#0D0D0D',
-  card: '#1C1C1E',
-  cardBorder: '#2C2C2E',
-  text: '#F5F5F5',
-  textSecondary: '#D1D1D6',
-  textMuted: '#8E8E93',
-  inputBg: '#2C2C2E',
-  inputBorder: '#3A3A3C',
-  tabBar: '#1C1C1E',
-  tabBarBorder: '#2C2C2E',
-  header: '#1C1C1E',
-  headerBorder: '#2C2C2E',
-  surface: '#2C2C2E',
-  divider: '#2C2C2E',
+  background: '#000000',
+  card: '#121212',
+  cardBorder: '#1C1C1E',
+  text: '#F5F5F7',
+  textSecondary: '#A1A1A6',
+  textMuted: '#767680',
+  inputBg: '#121212',
+  inputBorder: '#1C1C1E',
+  tabBar: '#000000',
+  tabBarBorder: '#1C1C1E',
+  header: '#000000',
+  headerBorder: '#1C1C1E',
+  surface: '#1C1C1E',
+  divider: '#1C1C1E',
   brand: '#38BDF8',
-  brandLight: '#082F49',
-  overlay: 'rgba(0,0,0,0.65)',
+  brandLight: 'rgba(56, 189, 248, 0.15)',
+  overlay: 'rgba(0, 0, 0, 0.75)',
 };
 
 interface ThemeContextType {
@@ -73,15 +74,20 @@ const MASCOT_FLIGHT_KEY = 'tourgo.mascot.flight.enabled.v1';
 
 const ThemeContext = createContext<ThemeContextType>({
   isDark: false,
-  toggleTheme: () => {},
+  toggleTheme: () => { },
   colors: lightColors,
   mascotFlightEnabled: true,
-  toggleMascotFlight: () => {},
+  toggleMascotFlight: () => { },
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isDark, setIsDark] = useState(false);
+  const systemScheme = useColorScheme();
+  const [isDark, setIsDark] = useState(systemScheme === 'dark');
   const [mascotFlightEnabled, setMascotFlightEnabled] = useState(true);
+
+  useEffect(() => {
+    setIsDark(systemScheme === 'dark');
+  }, [systemScheme]);
 
   useEffect(() => {
     (async () => {

@@ -146,8 +146,6 @@ export default function ProfileScreen() {
               }
             />
 
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
             {/* Mascot Flight Animation */}
             <ProfileSettingRow
               iconName="airplane"
@@ -167,8 +165,6 @@ export default function ProfileScreen() {
               }
             />
 
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
             {/* Push Notifications */}
             <ProfileSettingRow
               iconName="notifications-outline"
@@ -179,8 +175,6 @@ export default function ProfileScreen() {
               colors={colors}
               onPress={() => {}}
             />
-
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* GPS Tracking */}
             <ProfileSettingRow
@@ -193,8 +187,6 @@ export default function ProfileScreen() {
               onPress={() => {}}
             />
 
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
             {/* Privacy */}
             <ProfileSettingRow
               iconName="shield-outline"
@@ -205,8 +197,6 @@ export default function ProfileScreen() {
               colors={colors}
               onPress={() => {}}
             />
-
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* Replay App Tour */}
             <ProfileSettingRow
@@ -219,8 +209,6 @@ export default function ProfileScreen() {
               onPress={() => setShowWalkthrough(true)}
             />
 
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
             {/* Help */}
             <ProfileSettingRow
               iconName="help-circle-outline"
@@ -231,8 +219,6 @@ export default function ProfileScreen() {
               colors={colors}
               onPress={() => {}}
             />
-
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {/* Log Out */}
             <ProfileSettingRow
@@ -249,10 +235,10 @@ export default function ProfileScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Image source={require('../../../assets/images/EagleMascotS5.png')} style={{ width: 80, height: 80, resizeMode: 'contain' }} />
+          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: colors.brand, marginBottom: 8 }} />
           <Text style={[styles.footerBrand, { color: colors.brand }]}>TourGo</Text>
           <Text style={[styles.footerVersion, { color: colors.textMuted }]}>Version 1.0.0 (Expo Go Prototype)</Text>
-          <Text style={[styles.footerCopyright, { color: colors.textMuted }]}>Designed with ❤️ for travelers.</Text>
+          <Text style={[styles.footerCopyright, { color: colors.textMuted }]}>Designed for modern travelers.</Text>
         </View>
 
       </ScrollView>
@@ -376,14 +362,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   settingCard: {
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   optionItem: {
     flexDirection: 'row',

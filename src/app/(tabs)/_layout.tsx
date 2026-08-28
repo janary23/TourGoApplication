@@ -1,20 +1,49 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, View, StyleSheet } from 'react-native';
+import { Image, View, StyleSheet, Text } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
-const TabIcon = ({ name, color, focused }: { name: string; color: string; focused: boolean }) => {
+const TabIcon = ({ name, color, focused, label }: { name: string; color: string; focused: boolean; label: string }) => {
+  const { colors } = useTheme();
+  if (focused) {
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: colors.brand,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          borderRadius: 16,
+          gap: 5,
+          justifyContent: 'center',
+          alignSelf: 'center',
+        }}
+      >
+        <Ionicons name={name as any} size={15} color="#FFFFFF" />
+        <Text
+          numberOfLines={1}
+          style={{
+            color: '#FFFFFF',
+            fontFamily: 'Poppins-SemiBold',
+            fontSize: 11,
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View
       style={{
-        transform: [{ scale: focused ? 1.08 : 1.0 }],
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 4,
       }}
     >
-      <Ionicons name={name as any} size={22} color={color} />
+      <Ionicons name={name as any} size={20} color={color} />
     </View>
   );
 };
@@ -27,7 +56,7 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarShowLabel: true,
+        tabBarShowLabel: false,
         tabBarStyle: {
           position: 'absolute',
           bottom: 20,
@@ -35,26 +64,28 @@ export default function TabLayout() {
           right: 0,
           marginHorizontal: 16,
           height: 64,
-          borderRadius: 24,
-          backgroundColor: isDark ? 'rgba(30, 30, 30, 0.92)' : 'rgba(255, 255, 255, 0.92)',
+          borderRadius: 22,
+          backgroundColor: isDark ? 'rgba(30, 30, 30, 0.97)' : 'rgba(255, 255, 255, 0.97)',
           borderWidth: 1,
           borderColor: colors.cardBorder,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          elevation: 8,
-          paddingBottom: 4,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
+          elevation: 6,
+          paddingBottom: 0,
           paddingTop: 0,
         },
-        tabBarLabelStyle: {
-          fontFamily: 'Poppins-Bold',
-          fontSize: 10,
-          fontWeight: '700',
-          marginBottom: 4,
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
         },
         tabBarIconStyle: {
-          marginTop: 2,
+          width: '100%',
+          height: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         headerStyle: {
           backgroundColor: colors.header,
@@ -64,13 +95,13 @@ export default function TabLayout() {
           borderBottomColor: colors.headerBorder,
         } as any,
         headerTitleStyle: {
-          fontFamily: 'Poppins-Bold',
+          fontFamily: 'Poppins-SemiBold',
           fontSize: 18,
           color: colors.text,
         },
         headerTintColor: colors.brand,
         headerLeft: () => (
-          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 28, height: 28, marginLeft: 16, resizeMode: 'contain' }} />
+          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 26, height: 26, marginLeft: 16, resizeMode: 'contain', tintColor: colors.brand }} />
         ),
       }}
     >
@@ -81,18 +112,7 @@ export default function TabLayout() {
           tabBarLabel: 'Home',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="trips"
-        options={{
-          title: 'My Trips',
-          tabBarLabel: 'Trips',
-          headerShown: false,
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'briefcase' : 'briefcase-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} label="Home" />
           ),
         }}
       />
@@ -103,7 +123,18 @@ export default function TabLayout() {
           tabBarLabel: 'Explore',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'compass' : 'compass-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'compass' : 'compass-outline'} color={color} focused={focused} label="Explore" />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="trips"
+        options={{
+          title: 'My Trips',
+          tabBarLabel: 'Trips',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'bookmark' : 'bookmark-outline'} color={color} focused={focused} label="Trips" />
           ),
         }}
       />
@@ -114,7 +145,7 @@ export default function TabLayout() {
           tabBarLabel: 'Activity',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'notifications' : 'notifications-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'notifications' : 'notifications-outline'} color={color} focused={focused} label="Activity" />
           ),
         }}
       />
@@ -125,7 +156,7 @@ export default function TabLayout() {
           tabBarLabel: 'Profile',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} label="Profile" />
           ),
         }}
       />

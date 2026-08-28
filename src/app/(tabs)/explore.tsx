@@ -24,6 +24,7 @@ import {
   type Destination,
 } from '../../services/destinations';
 import { loadExploreLog, saveExploreLog, type ExploreLog } from '../../services/exploreLog';
+import { getWishlistCatalog, type SavedSpot } from '../../services/wishlistCatalog';
 import { getTrips } from '../../services/tripService';
 import { supabase } from '../../services/supabase';
 import {
@@ -45,19 +46,26 @@ const PRESETS = [
 ];
 
 const MAP_COLORS = [
+  // Solid natural colours
+  { name: 'Pure White', hex: '#FFFFFF' },
+  { name: 'Charcoal', hex: '#2D2D2D' },
   { name: 'Sky Blue', hex: '#38BDF8' },
-  { name: 'Classic Gold', hex: '#D9A441' },
+  { name: 'Ocean', hex: '#0369A1' },
   { name: 'Emerald', hex: '#10B981' },
+  { name: 'Forest', hex: '#166534' },
+  { name: 'Gold', hex: '#D9A441' },
   { name: 'Sunset', hex: '#F97316' },
+  { name: 'Coral', hex: '#FB7185' },
+  { name: 'Crimson', hex: '#DC2626' },
   { name: 'Violet', hex: '#8B5CF6' },
-  { name: 'Crimson', hex: '#EF4444' },
+  { name: 'Sand', hex: '#D4A76A' },
 ];
 
 const MAP_STYLES = [
-  { id: 'ghost', name: 'Ghost White', fill: 'rgba(255, 255, 255, 0.15)', stroke: 'rgba(255, 255, 255, 0.5)' },
+  { id: 'ghost', name: 'Ghost White', fill: 'rgba(255,255,255,0.08)', stroke: 'rgba(255,255,255,0.55)' },
+  { id: 'soft_black', name: 'Soft Black', fill: 'rgba(0,0,0,0.08)', stroke: 'rgba(0,0,0,0.55)' },
   { id: 'obsidian', name: 'Obsidian Dark', fill: 'rgba(15, 23, 42, 0.15)', stroke: 'rgba(15, 23, 42, 0.5)' },
-  { id: 'blue', name: 'Classic Blue', fill: '#B3DDF2', stroke: '#5599CC' },
-  { id: 'invisible', name: 'Outlines Only', fill: 'transparent', stroke: 'rgba(255, 255, 255, 0.4)' },
+  { id: 'invisible', name: 'Outlines Only', fill: 'transparent', stroke: 'rgba(255, 255, 255, 0.45)' },
 ];
 
 const PROVINCE_IMAGES: Record<string, string> = {
@@ -94,7 +102,9 @@ export default function ExploreScreen() {
   const mapRef = useRef<ExploreMapHandle>(null);
   const params = useLocalSearchParams<{ selectProvinceId?: string }>();
 
-  const [viewType, setViewType] = useState<'map' | 'list' | 'province-detail'>('map');
+  const [viewType, setViewType] = useState<'map' | 'list' | 'province-detail'>('list');
+  const [exploreTab, setExploreTab] = useState<'wishlist' | 'albums'>('wishlist');
+  const [albumsSubView, setAlbumsSubView] = useState<'gallery' | 'map'>('gallery');
   const [statusFilter, setStatusFilter] = useState<'all' | 'explored' | 'unexplored'>('all');
   const [regionFilter, setRegionFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,7 +130,7 @@ export default function ExploreScreen() {
   const [useCustomPhoto, setUseCustomPhoto] = useState(false);
   const [exportScale, setExportScale] = useState(0.95);
   const [exportRegion, setExportRegion] = useState<string>('All');
-  const [mapAccentColor, setMapAccentColor] = useState<string>('#38BDF8');
+  const [mapAccentColor, setMapAccentColor] = useState<string>('#FFFFFF');
   const [mapStyleIdx, setMapStyleIdx] = useState(0);
   const [activeControlTab, setActiveControlTab] = useState<'none' | 'background' | 'region' | 'scale' | 'color' | 'style'>('none');
   const [isSaving, setIsSaving] = useState(false);
@@ -150,6 +160,7 @@ export default function ExploreScreen() {
       const uri = await captureRef(cardRef, {
         format: 'png',
         quality: 1.0,
+        result: 'tmpfile',
       });
       setIsExporting(false);
       await MediaLibrary.saveToLibraryAsync(uri);
@@ -343,9 +354,8 @@ export default function ExploreScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [280, 498],
-      quality: 0.9,
+      allowsEditing: false,
+      quality: 1.0,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setCustomImageUri(result.assets[0].uri);
@@ -366,6 +376,48 @@ export default function ExploreScreen() {
   const allDestinations = useMemo(() => {
     return [...DESTINATIONS, ...googlePlaces];
   }, [googlePlaces]);
+
+  const visitedProvincesList = useMemo(() => {
+    return CANONICAL_PROVINCES.filter(p => log.visitedProvinces.includes(p.id));
+  }, [log.visitedProvinces, CANONICAL_PROVINCES]);
+
+  const wishlistDests = useMemo(() => {
+    const known: Record<string, SavedSpot> = {};
+    for (const d of allDestinations) {
+      known[d.id] = {
+        id: d.id,
+        name: d.name,
+        image: d.image,
+        rating: parseFloat(d.rating),
+        bestTime: d.bestTime,
+        provinceId: d.provinceId,
+        municipalityId: d.municipalityId,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        locationLabel: d.address ?? d.name,
+      };
+    }
+    for (const spot of getWishlistCatalog()) {
+      if (!known[spot.id]) known[spot.id] = spot;
+    }
+    const meta = log.savedDestinationsMeta || {};
+    return log.savedDestinations
+      .map(id => {
+        const existing = known[id];
+        if (existing) return existing;
+        const info = meta[id];
+        if (!info) return null;
+        return {
+          id,
+          name: info.name,
+          image: info.image ?? '',
+          rating: typeof info.rating === 'number' ? info.rating : parseFloat(String(info.rating ?? 0)) || 0,
+          bestTime: info.bestTime ?? 'Year-round',
+          locationLabel: info.locationLabel ?? info.name,
+        };
+      })
+      .filter((item): item is SavedSpot => Boolean(item));
+  }, [log.savedDestinations, log.savedDestinationsMeta, allDestinations]);
 
   const destinationMarkers = useMemo(() => {
     return googlePlaces.map(d => ({
@@ -490,28 +542,63 @@ export default function ExploreScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
 
-        {/* Top Header */}
-        <View style={[styles.headerRow, { backgroundColor: colors.background, borderBottomColor: colors.divider }]}>
-          <View style={styles.headerBrand}>
-            <Image source={require('../../../assets/images/TourGoLogo.png')} style={styles.headerLogo} />
-            <Text style={[styles.headerAppName, { color: colors.brand }]}>
-              Tour<Text style={{ color: '#22C55E' }}>Go</Text>
-            </Text>
+        {/* Branded App Header Row */}
+        <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
+          <View style={styles.headerBrandContainer}>
+            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand || '#38BDF8' }]} />
+            <Text style={[styles.appName, { color: colors.brand || '#38BDF8' }]}>TourGo</Text>
           </View>
+        </View>
 
-          {/* Segmented Map vs List tab switch */}
-          <View style={[styles.segmentedSelector, { backgroundColor: colors.inputBg, width: 140, padding: 3 }]}>
+        {/* Sub Header Tab Segmented Control */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 8, backgroundColor: colors.background }}>
+          <View style={{ flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 16, padding: 3 }}>
             <TouchableOpacity
-              onPress={() => setViewType('map')}
-              style={[styles.segmentBtn, viewType === 'map' && [styles.segmentBtnActive, { backgroundColor: colors.card }]]}
+              onPress={() => setExploreTab('wishlist')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 8,
+                borderRadius: 14,
+                backgroundColor: exploreTab === 'wishlist' ? colors.card : 'transparent',
+                gap: 6,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: exploreTab === 'wishlist' ? 0.05 : 0,
+                shadowRadius: 2,
+                elevation: exploreTab === 'wishlist' ? 1 : 0,
+              }}
             >
-              <Ionicons name="map-outline" size={12} color={viewType === 'map' ? colors.brand : colors.textMuted} />
+              <Ionicons name="heart" size={14} color={exploreTab === 'wishlist' ? colors.brand : colors.textMuted} />
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'wishlist' ? 'Poppins-Bold' : 'Poppins-Medium', color: exploreTab === 'wishlist' ? colors.brand : colors.textSecondary }}>
+                Wishlist
+              </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              onPress={() => setViewType('list')}
-              style={[styles.segmentBtn, viewType === 'list' && [styles.segmentBtnActive, { backgroundColor: colors.card }]]}
+              onPress={() => setExploreTab('albums')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 8,
+                borderRadius: 14,
+                backgroundColor: exploreTab === 'albums' ? colors.card : 'transparent',
+                gap: 6,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: exploreTab === 'albums' ? 0.05 : 0,
+                shadowRadius: 2,
+                elevation: exploreTab === 'albums' ? 1 : 0,
+              }}
             >
-              <Ionicons name="list-outline" size={12} color={viewType === 'list' ? colors.brand : colors.textMuted} />
+              <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.brand : colors.textMuted} />
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Poppins-Bold' : 'Poppins-Medium', color: exploreTab === 'albums' ? colors.brand : colors.textSecondary }}>
+                My Albums
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -519,282 +606,7 @@ export default function ExploreScreen() {
         {/* Main Content Area */}
         <View style={{ flex: 1, position: 'relative' }}>
 
-          {viewType === 'map' ? (
-            /* ── Interactive Map (Full Screen) ── */
-            <View style={StyleSheet.absoluteFillObject}>
-              <ExploreMap
-                ref={mapRef}
-                provinces={provincePoints}
-                destinations={destinationMarkers}
-                layer={statusFilter === 'all' ? 'all' : statusFilter === 'explored' ? 'visited' : 'saved'}
-                regionFilter={regionFilter === 'All' ? null : regionFilter as any}
-                focusTarget={focusTarget}
-                selectedProvinceId={selectedProvinceId}
-                selectedDestId={selectedDestId}
-                onSelectProvince={handleMapSelectProvince}
-                onSelectDestination={handleMapSelectDestination}
-                themeKey={isDark ? 'cyberpunk' : 'passport'}
-                visitedColor={colors.brand}
-              />
-
-              {/* Floating search / filter pills at the top, just below header */}
-              <View style={styles.floatingTopPanel}>
-                {/* Clean Floating Search Bar */}
-                <View style={[styles.searchBarContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 0, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 }]}>
-                  <Ionicons name="search" size={14} color={colors.textMuted} />
-                  <TextInput
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search explored provinces..."
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.searchInputText, { color: colors.text }]}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Floating Status Filter Pills */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.floatingFilterPillsRow}>
-                  {(['all', 'explored', 'unexplored'] as const).map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.floatingFilterPill, { backgroundColor: colors.card, borderColor: colors.cardBorder }, statusFilter === s && [styles.filterPillActive, { borderColor: s === 'explored' ? CRIMSON_WAX : s === 'unexplored' ? colors.brand : GOLD }]]}
-                      onPress={() => setStatusFilter(s)}
-                    >
-                      <Text style={[styles.filterPillText, { color: statusFilter === s ? (s === 'explored' ? CRIMSON_WAX : s === 'unexplored' ? colors.brand : GOLD) : colors.textMuted }]}>
-                        {s === 'all' ? 'All Status' : s === 'explored' ? 'Explored' : 'Unexplored'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                {/* Floating Region Filter Pills */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.floatingFilterPillsRow}>
-                  {['All', 'Luzon', 'Visayas', 'Mindanao'].map(r => (
-                    <TouchableOpacity
-                      key={r}
-                      style={[styles.floatingFilterPill, { backgroundColor: colors.card, borderColor: colors.cardBorder }, regionFilter === r && [styles.filterPillActive, { borderColor: colors.brand }]]}
-                      onPress={() => setRegionFilter(r)}
-                    >
-                      <Text style={[styles.filterPillText, { color: regionFilter === r ? colors.text : colors.textMuted }]}>
-                        {r === 'All' ? 'All Regions' : r}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Floating compass overlay right edge */}
-              <TouchableOpacity
-                onPress={() => { setSelectedProvinceId(null); setSelectedDestId(null); setSelectedMuniId(null); mapRef.current?.resetView(); }}
-                style={[styles.floatingMapResetBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: 250 }]}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="compass-outline" size={18} color={colors.text} />
-              </TouchableOpacity>
-
-              {/* Floating Bottom Card: My Philippines Progress Card (above navbar) */}
-              <View style={styles.floatingBottomPanel}>
-                {log.visitedProvinces.length === 0 ? (
-                  /* Welcome card when empty */
-                  <View style={[styles.profileHeaderCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.emptyHeroTitle, { color: colors.text, fontSize: 16, marginBottom: 4 }]}>Your Philippines Journey Starts Here</Text>
-                    <Text style={[styles.emptyHeroSub, { color: colors.textMuted, fontSize: 11, marginBottom: 12, lineHeight: 15 }]}>
-                      Explore destinations, stamp your collection passport, and record your trips.
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.emptyCtaButton, { backgroundColor: colors.brand, paddingVertical: 8 }]}
-                      onPress={() => { setViewType('list'); setSearchQuery(''); }}
-                    >
-                      <Ionicons name="compass" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.emptyCtaButtonText}>Start Exploring</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  /* Floating dashboard panel */
-                  <View style={[styles.profileHeaderCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, padding: 16 }]}>
-                    <View style={styles.profileHeaderTop}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.profileTitleText, { color: colors.text, fontSize: 18 }]}>My Philippines</Text>
-                        <Text style={[styles.profileSubText, { color: colors.textMuted, fontSize: 11 }]}>
-                          {log.visitedProvinces.length} of {TOTAL_PROVINCES} provinces explored
-                        </Text>
-                      </View>
-
-                      {/* Gauge */}
-                      <View style={styles.circularGaugeContainer}>
-                        <Svg width={72} height={72} viewBox="0 0 96 96">
-                          <Circle cx="48" cy="48" r={radius} fill="transparent" stroke={isDark ? '#2C2C2E' : '#EFEAE0'} strokeWidth={strokeWidth} />
-                          <Circle cx="48" cy="48" r={radius} fill="transparent" stroke={GOLD} strokeWidth={strokeWidth}
-                            strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" transform="rotate(-90 48 48)" />
-                        </Svg>
-                        <View style={styles.gaugeInner}>
-                          <Text style={[styles.gaugePercent, { color: colors.text, fontSize: 13 }]}>{progressPercent}%</Text>
-                          <Text style={[styles.gaugeLabel, { color: colors.textMuted, fontSize: 6 }]}>COLLECTED</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Compact stats tally */}
-                    <View style={[styles.statsRow, { marginBottom: 12 }]}>
-                      <View style={[styles.statBox, { backgroundColor: colors.surface, paddingVertical: 6 }]}>
-                        <Text style={[styles.statValue, { fontSize: 13, color: GOLD }]}>{log.visitedProvinces.length}</Text>
-                        <Text style={[styles.statLabelText, { fontSize: 8 }]}>Provinces</Text>
-                      </View>
-                      <View style={[styles.statBox, { backgroundColor: colors.surface, paddingVertical: 6 }]}>
-                        <Text style={[styles.statValue, { fontSize: 13, color: colors.text }]}>{totalRegionsExplored}</Text>
-                        <Text style={[styles.statLabelText, { fontSize: 8 }]}>Regions</Text>
-                      </View>
-                      <View style={[styles.statBox, { backgroundColor: colors.surface, paddingVertical: 6 }]}>
-                        <Text style={[styles.statValue, { fontSize: 13, color: colors.text }]}>{totalVisitedDestinations}</Text>
-                        <Text style={[styles.statLabelText, { fontSize: 8 }]}>Spots</Text>
-                      </View>
-                    </View>
-
-                    {/* Modals trigger actions */}
-                    <View style={styles.actionPillsRow}>
-                      <TouchableOpacity
-                        onPress={() => setMilestonesOpen(true)}
-                        style={[styles.actionPillBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder, paddingVertical: 7 }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="trophy-outline" size={12} color={GOLD} />
-                        <Text style={[styles.actionPillBtnText, { color: colors.textSecondary, fontSize: 10 }]}>Milestones</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => setRecentOpen(true)}
-                        style={[styles.actionPillBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder, paddingVertical: 7 }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="time-outline" size={12} color={colors.brand} />
-                        <Text style={[styles.actionPillBtnText, { color: colors.textSecondary, fontSize: 10 }]}>Timeline</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => setShareOpen(true)}
-                        style={[styles.actionPillBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder, paddingVertical: 7 }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="share-social-outline" size={12} color={colors.brand} />
-                        <Text style={[styles.actionPillBtnText, { color: colors.textSecondary, fontSize: 10 }]}>Share</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
-          ) : viewType === 'list' ? (
-            /* ── Grid List View ── */
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-              {/* Top search & filters rendered inline in list scroll view */}
-              <View style={[styles.filtersBlock, { paddingTop: 16 }]}>
-                <View style={[styles.searchBarContainer, { backgroundColor: colors.inputBg, borderColor: colors.cardBorder }]}>
-                  <Ionicons name="search" size={14} color={colors.textMuted} />
-                  <TextInput
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search province..."
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.searchInputText, { color: colors.text }]}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
-                  {(['all', 'explored', 'unexplored'] as const).map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.filterPill, statusFilter === s && [styles.filterPillActive, { borderColor: s === 'explored' ? CRIMSON_WAX : s === 'unexplored' ? colors.brand : GOLD }]]}
-                      onPress={() => setStatusFilter(s)}
-                    >
-                      <Text style={[styles.filterPillText, { color: statusFilter === s ? (s === 'explored' ? CRIMSON_WAX : s === 'unexplored' ? colors.brand : GOLD) : colors.textMuted }]}>
-                        {s === 'all' ? 'All Status' : s === 'explored' ? 'Explored' : 'Unexplored'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
-                  {['All', 'Luzon', 'Visayas', 'Mindanao'].map(r => (
-                    <TouchableOpacity
-                      key={r}
-                      style={[styles.filterPill, regionFilter === r && [styles.filterPillActive, { borderColor: colors.brand }]]}
-                      onPress={() => setRegionFilter(r)}
-                    >
-                      <Text style={[styles.filterPillText, { color: regionFilter === r ? colors.text : colors.textMuted }]}>
-                        {r === 'All' ? 'All Regions' : r}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.provinceGridContainer}>
-                {filteredProvinces.length > 0 ? (
-                  <View style={styles.gridContent}>
-                    {filteredProvinces.map((item, idx) => {
-                      const isVisited = log.visitedProvinces.includes(item.id);
-                      const bgImage = getProvinceImage(item.id, item.region);
-                      const matchingTrips = userTrips.filter(t => findProvinceIdForDestination(t.destination) === item.id && new Date(t.endDate) < new Date());
-                      const dateStr = matchingTrips.length > 0
-                        ? new Date(matchingTrips[matchingTrips.length - 1].endDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-                        : null;
-                      const rotateAngle = idx % 2 === 0 ? '-1.5deg' : '1.5deg';
-                      return (
-                        <Pressable
-                          key={item.id}
-                          style={({ pressed }) => [
-                            styles.collectibleCard,
-                            {
-                              backgroundColor: isDark ? '#1A1A2E' : '#FAF9F6',
-                              borderColor: isDark ? 'rgba(255,255,255,0.12)' : colors.cardBorder,
-                              borderWidth: 1.2,
-                              padding: 8,
-                              paddingBottom: 14,
-                              width: (windowWidth - 44) / 2,
-                              transform: [
-                                { scale: pressed ? 0.97 : 1 },
-                                { rotate: rotateAngle }
-                              ]
-                            }
-                          ]}
-                          onPress={() => handleSelectProvince(item.id)}
-                        >
-                          <View style={styles.cardTapeTopCenter} />
-                          <View style={{ overflow: 'hidden', borderRadius: 8, aspectRatio: 1.2 }}>
-                            <ImageBackground source={{ uri: bgImage }} style={{ width: '100%', height: '100%', position: 'relative' }} imageStyle={{ opacity: isVisited ? 0.8 : 0.4 }}>
-                              <LinearGradient colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFillObject}>
-                                <View style={[styles.cardStamp, isVisited ? styles.cardStampExplored : styles.cardStampUnexplored]}>
-                                  {isVisited ? <Text style={styles.cardStampText}>EXPLORED</Text> : <Ionicons name="lock-closed" size={8} color="rgba(255,255,255,0.7)" />}
-                                </View>
-                              </LinearGradient>
-                            </ImageBackground>
-                          </View>
-                          <View style={[styles.cardDetails, { paddingHorizontal: 2, paddingTop: 10, paddingBottom: 0 }]}>
-                            <Text style={[styles.cardTitle, { color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }]} numberOfLines={1}>{item.name}</Text>
-                            <Text style={[styles.cardSubTitle, { color: colors.textMuted, fontFamily: 'Poppins-Medium', fontSize: 9 }]} numberOfLines={1}>
-                              {isVisited ? (dateStr ? `Explored ${dateStr}` : 'Explored') : 'Not Explored'}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <Text style={[styles.noMatchingText, { color: colors.textMuted }]}>No provinces match your filters.</Text>
-                )}
-              </View>
-              <View style={{ height: 100 }} />
-            </ScrollView>
-          ) : (
+          {viewType === 'province-detail' ? (
             /* ── Full-Screen Province Detail View ── */
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.provinceDetailContainer}>
               {/* Back Header */}
@@ -1039,6 +851,222 @@ export default function ExploreScreen() {
               </View>
               <View style={{ height: 100 }} />
             </ScrollView>
+          ) : exploreTab === 'albums' ? (
+            /* ── Modern Albums Gallery Screen ── */
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 16 }}>
+                  <Text style={{ fontSize: 28, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, letterSpacing: -0.5 }}>Travel Albums</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Albums of visited destinations in explored provinces</Text>
+                </View>
+                
+                {/* Share Collection Button */}
+                <TouchableOpacity
+                  onPress={() => setShareOpen(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: colors.brandLight,
+                    borderColor: colors.brand,
+                    borderWidth: 1,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 12,
+                    gap: 6,
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="share-social-outline" size={14} color={colors.brand} />
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share</Text>
+                </TouchableOpacity>
+              </View>
+              {visitedProvincesList.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {visitedProvincesList.map((item) => {
+                    const bgImage = getProvinceImage(item.id, item.region);
+                    const matchingDests = allDestinations.filter(d => d.provinceId === item.id && log.visitedDestinations.includes(d.id));
+                    return (
+                      <Pressable
+                        key={item.id}
+                        style={({ pressed }) => [
+                          {
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            borderWidth: 1,
+                            borderRadius: 18,
+                            overflow: 'hidden',
+                            width: (windowWidth - 44) / 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.04,
+                            shadowRadius: 8,
+                            elevation: 2,
+                            transform: [{ scale: pressed ? 0.98 : 1 }]
+                          }
+                        ]}
+                        onPress={() => {
+                          setSelectedProvinceId(item.id);
+                          setSelectedDestId(null);
+                          setSelectedMuniId(null);
+                          setViewType('province-detail');
+                        }}
+                      >
+                        <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
+                          <ImageBackground source={{ uri: bgImage }} style={{ width: '100%', height: '100%' }}>
+                            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
+                            <View
+                              style={{
+                                position: 'absolute',
+                                top: 8,
+                                  left: 8,
+                                  backgroundColor: 'rgba(0,0,0,0.5)',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
+                                  {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
+                                </Text>
+                              </View>
+                            </ImageBackground>
+                          </View>
+                          <View style={{ padding: 12 }}>
+                            <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            <Text style={{ color: colors.textMuted, fontFamily: 'Poppins-Medium', fontSize: 9, marginTop: 2 }} numberOfLines={1}>
+                              {item.region} Region
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+                    <Ionicons name="camera-outline" size={40} color={colors.textMuted} style={{ marginBottom: 12 }} />
+                    <Text style={{ fontSize: 15, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 4 }}>No Albums Yet</Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 16, marginBottom: 18 }}>
+                      Mark destinations as "Visited" during your journeys to build your travel photo collection.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => { router.push('/'); }}
+                      style={{ backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold' }}>Browse Tourist Spots</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+          ) : (
+            /* ── Wishlist Tab ── */
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 160 }}>
+              <View style={{ marginTop: 10, marginBottom: 20 }}>
+                <Text style={{ fontSize: 28, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, letterSpacing: -0.5 }}>My Wishlist</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Your saved spots and destinations for future travels</Text>
+              </View>
+              {wishlistDests.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {wishlistDests.map((item) => {
+                    return (
+                      <Pressable
+                        key={item.id}
+                        style={({ pressed }) => [
+                          {
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            borderWidth: 1,
+                            borderRadius: 18,
+                            overflow: 'hidden',
+                            width: (windowWidth - 44) / 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.04,
+                            shadowRadius: 8,
+                            elevation: 2,
+                            position: 'relative',
+                            transform: [{ scale: pressed ? 0.98 : 1 }]
+                          }
+                        ]}
+                        onPress={() => {
+                          if (item.provinceId) {
+                            setSelectedDestId(item.id);
+                            setSelectedProvinceId(item.provinceId);
+                            setSelectedMuniId(item.municipalityId ?? null);
+                            setViewType('province-detail');
+                          } else {
+                            Alert.alert(item.name, 'This saved spot can be explored from the Home tab.');
+                          }
+                        }}
+                      >
+                        <View style={{ overflow: 'hidden', height: 110 }}>
+                          <ImageBackground source={{ uri: item.image }} style={{ width: '100%', height: '100%' }}>
+                            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
+                          </ImageBackground>
+                        </View>
+                        
+                        <TouchableOpacity
+                          style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.85)',
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 2,
+                            elevation: 2,
+                            zIndex: 20
+                          }}
+                          hitSlop={10}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            toggleDestSaved(item.id);
+                          }}
+                        >
+                          <Ionicons name="heart" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+
+                        <View style={{ padding: 12 }}>
+                          <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13, textAlign: 'left' }} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <Text style={{ fontSize: 9, color: colors.textMuted, fontFamily: 'Poppins-Medium' }}>
+                              {(item.bestTime || 'Year-round').split('–')[0]} Season
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              <Ionicons name="star" size={9} color={GOLD} />
+                              <Text style={{ fontSize: 9, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>{item.rating}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+                  <Ionicons name="bookmark-outline" size={40} color={colors.textMuted} style={{ marginBottom: 12 }} />
+                  <Text style={{ fontSize: 15, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 4 }}>Wishlist is Empty</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 16, marginBottom: 18 }}>
+                    Your saved destinations will appear here so you can easily plan trips for them later.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => { router.push('/'); }}
+                    style={{ backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold' }}>Browse Tourist Spots</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
           )}
 
         </View>
@@ -1158,131 +1186,122 @@ export default function ExploreScreen() {
               <View style={{ flex: 1, position: 'relative' }}>
                 
                 {/* Full-screen Card Canvas (This is the target captured by cardRef) */}
-                <View ref={cardRef} collapsable={false} style={[styles.shareCard, isExporting && { borderRadius: 0 }]}>
+                <View ref={cardRef} collapsable={false} style={styles.shareCard}>
                   {useCustomPhoto && customImageUri ? (
-                    <ImageBackground source={{ uri: customImageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover">
+                    <ImageBackground source={{ uri: customImageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" imageStyle={{ resizeMode: 'cover' }}>
+                      {/* Strava-style: subtle bottom gradient scrim for text legibility only */}
+                      <LinearGradient
+                        colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
+                        style={StyleSheet.absoluteFillObject}
+                        pointerEvents="none"
+                      />
                       <View style={styles.cardOverlay}>
-                        <View style={styles.shareCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                            <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 22, height: 22, resizeMode: 'contain' }} />
-                            <Text style={{ fontSize: 18, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.brand, letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                              Tour<Text style={{ color: '#22C55E' }}>Go</Text>
-                            </Text>
-                          </View>
-                          <Text style={styles.shareAppQuote}>Every stamp is a story.</Text>
+                        {/* TOP-LEFT: Logo + App Name — Strava-style corner branding */}
+                        <View style={styles.stravaTopBrand}>
+                          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
+                          <Text style={styles.stravaBrandName}>TourGo</Text>
                         </View>
+                        {/* MAP fills the middle naturally */}
                         <View style={styles.shareMapWrapper}>
                           <ExploreMap provinces={provincePoints} destinations={destinationMarkers} layer="all" regionFilter={exportRegion === 'All' ? null : exportRegion as any} focusTarget={null}
                             selectedProvinceId={null} selectedDestId={null} onSelectProvince={() => {}} onSelectDestination={() => {}}
                             isExportMode={true} exportScale={exportScale} visitedColor={mapAccentColor} defaultProvinceFill={MAP_STYLES[mapStyleIdx].fill} defaultProvinceStroke={MAP_STYLES[mapStyleIdx].stroke} themeKey={isDark ? 'cyberpunk' : 'passport'} />
                         </View>
-                        <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.45)']} style={[styles.watermarkBadge, { bottom: isExporting ? 40 : 120 }]}>
-                          <Text style={styles.watermarkLabel}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Collection</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 8, gap: 24 }}>
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {log.visitedProvinces.length}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Provinces
-                              </Text>
+                        {/* BOTTOM: Stats burned directly on image — no card/panel */}
+                        <View style={styles.stravaBottomStats}>
+                          <Text style={styles.stravaCollectionTitle}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Journey</Text>
+                          <View style={styles.stravaStatsRow}>
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.visitedProvinces.length}</Text>
+                              <Text style={styles.stravaStatLabel}>PROVINCES</Text>
                             </View>
-                            <View style={{ width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {totalRegionsExplored}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Regions
-                              </Text>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{totalRegionsExplored}</Text>
+                              <Text style={styles.stravaStatLabel}>REGIONS</Text>
+                            </View>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.savedProvinces?.length ?? 0}</Text>
+                              <Text style={styles.stravaStatLabel}>WISHLIST</Text>
                             </View>
                           </View>
-                          <Text style={styles.watermarkFooter}>"My journey so far."</Text>
-                        </LinearGradient>
+                          <Text style={styles.stravaFooterTag}>tourgo.app · Every stamp is a story.</Text>
+                        </View>
                       </View>
                     </ImageBackground>
                   ) : PRESETS[activePresetIdx].source ? (
-                    <ImageBackground source={PRESETS[activePresetIdx].source} style={StyleSheet.absoluteFillObject} resizeMode="cover">
+                    <ImageBackground source={PRESETS[activePresetIdx].source} style={StyleSheet.absoluteFillObject} resizeMode="cover" imageStyle={{ resizeMode: 'cover' }}>
+                      <LinearGradient
+                        colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
+                        style={StyleSheet.absoluteFillObject}
+                        pointerEvents="none"
+                      />
                       <View style={styles.cardOverlay}>
-                        <View style={styles.shareCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                            <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 22, height: 22, resizeMode: 'contain' }} />
-                            <Text style={{ fontSize: 18, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.brand, letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                              Tour<Text style={{ color: '#22C55E' }}>Go</Text>
-                            </Text>
-                          </View>
-                          <Text style={styles.shareAppQuote}>Every stamp is a story.</Text>
+                        <View style={styles.stravaTopBrand}>
+                          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
+                          <Text style={styles.stravaBrandName}>TourGo</Text>
                         </View>
                         <View style={styles.shareMapWrapper}>
                           <ExploreMap provinces={provincePoints} destinations={destinationMarkers} layer="all" regionFilter={exportRegion === 'All' ? null : exportRegion as any} focusTarget={null}
                             selectedProvinceId={null} selectedDestId={null} onSelectProvince={() => {}} onSelectDestination={() => {}}
                             isExportMode={true} exportScale={exportScale} visitedColor={mapAccentColor} defaultProvinceFill={MAP_STYLES[mapStyleIdx].fill} defaultProvinceStroke={MAP_STYLES[mapStyleIdx].stroke} themeKey={isDark ? 'cyberpunk' : 'passport'} />
                         </View>
-                        <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.45)']} style={[styles.watermarkBadge, { bottom: isExporting ? 40 : 120 }]}>
-                          <Text style={styles.watermarkLabel}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Collection</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 8, gap: 24 }}>
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {log.visitedProvinces.length}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Provinces
-                              </Text>
+                        <View style={styles.stravaBottomStats}>
+                          <Text style={styles.stravaCollectionTitle}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Journey</Text>
+                          <View style={styles.stravaStatsRow}>
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.visitedProvinces.length}</Text>
+                              <Text style={styles.stravaStatLabel}>PROVINCES</Text>
                             </View>
-                            <View style={{ width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {totalRegionsExplored}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Regions
-                              </Text>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{totalRegionsExplored}</Text>
+                              <Text style={styles.stravaStatLabel}>REGIONS</Text>
+                            </View>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.savedProvinces?.length ?? 0}</Text>
+                              <Text style={styles.stravaStatLabel}>WISHLIST</Text>
                             </View>
                           </View>
-                          <Text style={styles.watermarkFooter}>"My journey so far."</Text>
-                        </LinearGradient>
+                          <Text style={styles.stravaFooterTag}>tourgo.app · Every stamp is a story.</Text>
+                        </View>
                       </View>
                     </ImageBackground>
                   ) : (
-                    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#0B0F19' }]}>
+                    <View style={StyleSheet.absoluteFillObject}>
+                      <LinearGradient colors={['#0B0F19', '#1E1B4B', '#2E1065']} style={StyleSheet.absoluteFillObject} />
                       <View style={styles.cardOverlay}>
-                        <View style={styles.shareCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                            <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 22, height: 22, resizeMode: 'contain' }} />
-                            <Text style={{ fontSize: 18, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.brand, letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                              Tour<Text style={{ color: '#22C55E' }}>Go</Text>
-                            </Text>
-                          </View>
-                          <Text style={styles.shareAppQuote}>Every stamp is a story.</Text>
+                        <View style={styles.stravaTopBrand}>
+                          <Image source={require('../../../assets/images/TourGoLogo.png')} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
+                          <Text style={styles.stravaBrandName}>TourGo</Text>
                         </View>
                         <View style={styles.shareMapWrapper}>
                           <ExploreMap provinces={provincePoints} destinations={destinationMarkers} layer="all" regionFilter={exportRegion === 'All' ? null : exportRegion as any} focusTarget={null}
                             selectedProvinceId={null} selectedDestId={null} onSelectProvince={() => {}} onSelectDestination={() => {}}
                             isExportMode={true} exportScale={exportScale} visitedColor={mapAccentColor} defaultProvinceFill={MAP_STYLES[mapStyleIdx].fill} defaultProvinceStroke={MAP_STYLES[mapStyleIdx].stroke} themeKey={isDark ? 'cyberpunk' : 'passport'} />
                         </View>
-                        <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)']} style={[styles.watermarkBadge, { bottom: isExporting ? 40 : 120 }]}>
-                          <Text style={styles.watermarkLabel}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Collection</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 8, gap: 24 }}>
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {log.visitedProvinces.length}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Provinces
-                              </Text>
+                        <View style={styles.stravaBottomStats}>
+                          <Text style={styles.stravaCollectionTitle}>My {exportRegion === 'All' ? 'Philippines' : exportRegion} Journey</Text>
+                          <View style={styles.stravaStatsRow}>
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.visitedProvinces.length}</Text>
+                              <Text style={styles.stravaStatLabel}>PROVINCES</Text>
                             </View>
-                            <View style={{ width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                            <View style={{ alignItems: 'center' }}>
-                              <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', fontWeight: '900', color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                                {totalRegionsExplored}
-                              </Text>
-                              <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                                Regions
-                              </Text>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{totalRegionsExplored}</Text>
+                              <Text style={styles.stravaStatLabel}>REGIONS</Text>
+                            </View>
+                            <View style={styles.stravaStatDivider} />
+                            <View style={styles.stravaStatBlock}>
+                              <Text style={styles.stravaStatNum}>{log.savedProvinces?.length ?? 0}</Text>
+                              <Text style={styles.stravaStatLabel}>WISHLIST</Text>
                             </View>
                           </View>
-                          <Text style={styles.watermarkFooter}>"My journey so far."</Text>
-                        </LinearGradient>
+                          <Text style={styles.stravaFooterTag}>tourgo.app · Every stamp is a story.</Text>
+                        </View>
                       </View>
                     </View>
                   )}
@@ -1449,10 +1468,10 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   screen: { flex: 1 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, zIndex: 10 },
-  headerBrand: { flexDirection: 'row', alignItems: 'center' },
-  headerLogo: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
-  headerAppName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', letterSpacing: -0.5 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+  headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
+  headerLogoImage: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
+  appName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', letterSpacing: -0.5 },
   headerCollectionLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   emptyContainer: { padding: 16, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: GOLD },
   emptyHeroTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', textAlign: 'center', marginBottom: 8 },
@@ -1541,13 +1560,24 @@ const styles = StyleSheet.create({
   shareTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   shareScrollContent: { paddingVertical: 20, alignItems: 'center' },
   cardContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  shareCard: { flex: 1, width: '100%', height: '100%', overflow: 'hidden' },
-  cardOverlay: { flex: 1, justifyContent: 'space-between', paddingTop: 60, paddingBottom: 180 },
+  shareCard: { width: '100%', flex: 1, overflow: 'hidden', backgroundColor: '#000' },
+  cardOverlay: { flex: 1, justifyContent: 'space-between', paddingTop: 52, paddingBottom: 36 },
   shareCardHeader: { alignItems: 'center', marginTop: 10 },
   shareAppBrand: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', color: '#FFFFFF', letterSpacing: 0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   shareAppQuote: { fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.8)', marginTop: 2, fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  shareMapWrapper: { flex: 1, width: '100%', transform: [{ scale: 0.95 }] },
+  shareMapWrapper: { flex: 1, width: '100%' },
   watermarkBadge: { position: 'absolute', left: 0, right: 0, paddingTop: 16, paddingBottom: 16, paddingHorizontal: 20, alignItems: 'center' },
+  // Strava-style card branding & stats
+  stravaTopBrand: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 20, paddingTop: 4 },
+  stravaBrandName: { fontSize: 16, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  stravaBottomStats: { paddingHorizontal: 20, paddingBottom: 8 },
+  stravaCollectionTitle: { fontSize: 22, fontFamily: 'Poppins-ExtraBold', fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  stravaStatsRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginBottom: 10 },
+  stravaStatBlock: { alignItems: 'flex-start', flex: 1 },
+  stravaStatNum: { fontSize: 32, fontFamily: 'Poppins-ExtraBold', fontWeight: '900', color: '#FFFFFF', lineHeight: 36, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  stravaStatLabel: { fontSize: 9, fontFamily: 'Poppins-Bold', fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: 1.5, marginTop: 1 },
+  stravaStatDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
+  stravaFooterTag: { fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3, marginTop: 2 },
   floatingGlassBtn: {
     width: 42,
     height: 42,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface WeatherWidgetProps {
   upcomingTrips: any[];
@@ -118,12 +119,12 @@ export default function WeatherWidget({
     const nextTrip = upcomingTrips[0];
     if (nextTrip) {
       return {
-        label: "trip weather",
+        label: "Trip weather",
         data: getWeatherDataForCity(nextTrip.destination)
       };
     }
     return {
-      label: "home weather",
+      label: "Home weather",
       data: getWeatherDataForCity(homeCityName || "Manila")
     };
   };
@@ -141,32 +142,43 @@ export default function WeatherWidget({
   return (
     <>
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={() => {
           setWeatherTab(upcomingTrips.length > 0 ? 'trip' : 'home');
           setIsWeatherExpanded(true);
         }}
         style={[styles.weatherWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
       >
-        <Text style={[styles.weatherLabel, { color: isDark ? '#8E8E93' : '#6B7B8F' }]}>
-          {contextualWeather.label}
-        </Text>
-        <Ionicons
-          name={contextualWeather.data.icon as any}
-          size={20}
-          color={contextualWeather.data.condition === 'sunny' ? '#F59E0B' : (contextualWeather.data.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
-          style={styles.weatherIcon}
-        />
-        <Text style={[styles.weatherTemp, { color: isDark ? '#F5F5F5' : '#2A3C57' }]}>{contextualWeather.data.temp}°</Text>
-        <Text style={[styles.weatherLocation, { color: isDark ? '#8E8E93' : '#6B7B8F' }]} numberOfLines={1}>
-          {contextualWeather.data.city.split(',')[0].toLowerCase()}
+        {/* Top row: Label + Icon */}
+        <View style={styles.weatherHeaderRow}>
+          <Text style={[styles.weatherLabel, { color: colors.textMuted }]}>
+            {contextualWeather.label.split(' ')[0]}
+          </Text>
+          <Ionicons
+            name={contextualWeather.data.icon as any}
+            size={16}
+            color={contextualWeather.data.condition === 'sunny' ? '#FFA500' : (contextualWeather.data.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+          />
+        </View>
+
+        {/* Temperature + Condition */}
+        <View style={styles.weatherTempContainer}>
+          <Text style={[styles.weatherTemp, { color: colors.text }]}>{contextualWeather.data.temp}°</Text>
+          <Text style={[styles.weatherCondText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {contextualWeather.data.conditionText}
+          </Text>
+        </View>
+
+        {/* Location at bottom */}
+        <Text style={[styles.weatherLocation, { color: colors.text }]} numberOfLines={1}>
+          {contextualWeather.data.city.split(',')[0]}
         </Text>
       </TouchableOpacity>
 
-      {/* Weather Details Modal */}
+      {/* Weather Details Modal as Bottom Sheet */}
       <Modal
         visible={isWeatherExpanded}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setIsWeatherExpanded(false)}
       >
@@ -176,20 +188,23 @@ export default function WeatherWidget({
           onPress={() => setIsWeatherExpanded(false)}
         >
           <TouchableOpacity activeOpacity={1} style={[styles.weatherExpandedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            {/* Bottom Sheet Handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.divider || '#E8E8E6', alignSelf: 'center', marginBottom: 16 }} />
+
             <View style={styles.expandedHeader}>
               <Text style={[styles.expandedTitle, { color: colors.text }]}>Destination Weather</Text>
               <TouchableOpacity onPress={() => setIsWeatherExpanded(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            {/* Tabs */}
+            {/* Segmented control */}
             <View style={[styles.weatherTabContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
               <TouchableOpacity
                 onPress={() => setWeatherTab('home')}
                 style={[
                   styles.weatherTabBtn,
-                  weatherTab === 'home' && [styles.weatherTabBtnActive, { backgroundColor: colors.card }]
+                  weatherTab === 'home' && { backgroundColor: colors.card }
                 ]}
               >
                 <Text
@@ -205,7 +220,7 @@ export default function WeatherWidget({
                 onPress={() => setWeatherTab('trip')}
                 style={[
                   styles.weatherTabBtn,
-                  weatherTab === 'trip' && [styles.weatherTabBtnActive, { backgroundColor: colors.card }]
+                  weatherTab === 'trip' && { backgroundColor: colors.card }
                 ]}
               >
                 <Text
@@ -234,8 +249,8 @@ export default function WeatherWidget({
               </View>
               <Ionicons
                 name={activeWeather.icon as any}
-                size={54}
-                color={activeWeather.condition === 'sunny' ? '#F59E0B' : (activeWeather.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+                size={50}
+                color={activeWeather.condition === 'sunny' ? '#FF9F1C' : (activeWeather.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
                 style={styles.weatherMainIcon}
               />
             </View>
@@ -245,17 +260,17 @@ export default function WeatherWidget({
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
                 <Ionicons name="water-outline" size={16} color="#3B82F6" />
                 <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.humidity}%</Text>
-                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>humidity</Text>
+                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>Humidity</Text>
               </View>
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                <Ionicons name="sunny-outline" size={16} color="#F59E0B" />
+                <Ionicons name="sunny-outline" size={16} color="#FF9F1C" />
                 <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.uvIndex}</Text>
-                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>uv index</Text>
+                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>UV Index</Text>
               </View>
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
                 <Ionicons name="thunderstorm-outline" size={16} color="#38BDF8" />
                 <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.windSpeed} km/h</Text>
-                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>wind speed</Text>
+                <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>Wind</Text>
               </View>
             </View>
 
@@ -269,15 +284,15 @@ export default function WeatherWidget({
                     <Ionicons
                       name={fc.icon as any}
                       size={16}
-                      color={fc.condition === 'sunny' ? '#F59E0B' : (fc.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
-                      style={{ marginRight: 6 }}
+                      color={fc.condition === 'sunny' ? '#FF9F1C' : (fc.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+                      style={{ marginRight: 8 }}
                     />
                     <Text style={[styles.forecastCondText, { color: colors.textSecondary }]}>{fc.condition}</Text>
                   </View>
                   <View style={styles.forecastTempRange}>
                     <Text style={[styles.forecastTempText, { color: colors.textMuted }]}>{fc.tempMin}°</Text>
-                    <View style={[styles.forecastTempBarTrack, { backgroundColor: colors.surface }]}>
-                      <View style={[styles.forecastTempBarActive, { backgroundColor: '#22C55E' }]} />
+                    <View style={[styles.forecastTempBarTrack, { backgroundColor: colors.divider }]}>
+                      <View style={[styles.forecastTempBarActive, { backgroundColor: colors.brand }]} />
                     </View>
                     <Text style={[styles.forecastTempText, { color: colors.text }]}>{fc.tempMax}°</Text>
                   </View>
@@ -292,114 +307,114 @@ export default function WeatherWidget({
 }
 
 const styles = StyleSheet.create({
+  // Card: white surface, 1px border, 20 radius
   weatherWidget: {
     width: 125,
     height: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    padding: 8,
+    padding: 14,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  weatherHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%',
   },
   weatherLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
-    fontWeight: '600',
-    marginBottom: 2,
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    letterSpacing: 0.2,
   },
-  weatherIcon: {
-    fontSize: 20,
-    marginBottom: 1,
+  weatherTempContainer: {
+    marginTop: 4,
   },
+  // Hero stat
   weatherTemp: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    lineHeight: 24,
+    fontSize: 28,
+    fontFamily: 'Poppins-SemiBold',
+    lineHeight: 32,
+  },
+  weatherCondText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Regular',
+    marginTop: 1,
   },
   weatherLocation: {
-    fontSize: 9,
+    fontSize: 13,
     fontFamily: 'Poppins-SemiBold',
-    fontWeight: '600',
-    marginTop: 1,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(23, 23, 23, 0.35)',
+    justifyContent: 'flex-end',
   },
   weatherExpandedCard: {
     width: '100%',
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    padding: 16,
-    height: 520,
+    borderBottomWidth: 0,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 40,
+    height: 540,
   },
   expandedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 18,
   },
   expandedTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: -0.2,
   },
   weatherTabContainer: {
     flexDirection: 'row',
     borderRadius: 12,
     borderWidth: 1,
     padding: 3,
-    marginBottom: 12,
+    marginBottom: 18,
   },
   weatherTabBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     alignItems: 'center',
     borderRadius: 9,
   },
-  weatherTabBtnActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
   weatherTabBtnText: {
     fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontFamily: 'Poppins-SemiBold',
   },
   weatherMainCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
   },
   weatherMainInfo: {
     flex: 1,
   },
   weatherCityName: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
   },
   weatherMainCondText: {
-    fontSize: 12,
+    fontSize: 13,
+    fontFamily: 'Poppins-Regular',
     marginTop: 2,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   weatherMainTempText: {
     fontSize: 28,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
+    fontFamily: 'Poppins-SemiBold',
   },
   weatherMainIcon: {
     marginLeft: 12,
@@ -407,47 +422,44 @@ const styles = StyleSheet.create({
   weatherMetricsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 22,
   },
   weatherMetricItem: {
     flex: 1,
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 8,
+    borderRadius: 16,
+    paddingVertical: 14,
   },
   weatherMetricVal: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginTop: 3,
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
+    marginTop: 5,
   },
   weatherMetricLabel: {
-    fontSize: 9,
+    fontSize: 10,
+    fontFamily: 'Poppins-Regular',
     marginTop: 2,
-    textTransform: 'uppercase',
   },
   forecastHeaderTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    marginBottom: 12,
   },
   forecastList: {
-    gap: 8,
+    gap: 12,
   },
   forecastRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 24,
+    height: 28,
   },
   forecastDayName: {
-    width: 32,
+    width: 36,
     fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontFamily: 'Poppins-Medium',
   },
   forecastMidSection: {
     flexDirection: 'row',
@@ -456,7 +468,8 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   forecastCondText: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
   },
   forecastTempRange: {
     flexDirection: 'row',
@@ -464,7 +477,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   forecastTempText: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
   },
   forecastTempBarTrack: {
     width: 44,

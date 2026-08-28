@@ -236,12 +236,11 @@ export default function LoginScreen() {
               <View style={styles.brandingRow}>
                 <Image
                   source={require('../../../assets/images/TourGoLogo.png')}
-                  style={styles.logo}
+                  style={[styles.logo, { tintColor: colors.brand }]}
                   resizeMode="contain"
                 />
                 <Text style={styles.brandName}>
-                  <Text style={{ color: colors.brand }}>Tour</Text>
-                  <Text style={{ color: '#22C55E' }}>Go</Text>
+                  <Text style={{ color: colors.brand }}>TourGo</Text>
                 </Text>
               </View>
               <Text style={[styles.welcomeHeading, { color: colors.text }]}>

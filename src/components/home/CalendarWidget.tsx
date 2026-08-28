@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface CalendarWidgetProps {
@@ -16,8 +16,6 @@ export default function CalendarWidget({
   router,
 }: CalendarWidgetProps) {
   const now = new Date();
-  const currentMonthIdx = now.getMonth();
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthIdx);
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -66,7 +64,49 @@ export default function CalendarWidget({
     return grid;
   };
 
-  const getTripForDate = (day: number, month: number, year: number) => {
+  const getTripDayType = (cellDate: Date) => {
+    const checkDate = new Date(cellDate);
+    checkDate.setHours(0, 0, 0, 0);
+    const time = checkDate.getTime();
+
+    for (const trip of trips) {
+      const start = new Date(trip.startDate);
+      start.setHours(0, 0, 0, 0);
+      const startTime = start.getTime();
+
+      const end = new Date(trip.endDate);
+      end.setHours(0, 0, 0, 0);
+      const endTime = end.getTime();
+
+      if (time === startTime && time === endTime) {
+        return { type: 'single', trip };
+      }
+      if (time === startTime) {
+        return { type: 'start', trip };
+      }
+      if (time === endTime) {
+        return { type: 'end', trip };
+      }
+      if (time > startTime && time < endTime) {
+        return { type: 'middle', trip };
+      }
+    }
+    return null;
+  };
+
+  const getMiniDays = () => {
+    const days = [];
+    const today = new Date();
+    // Show today and the next 4 days (5 days total)
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  };
+
+  const activeTripForSelectedDate = (day: number, month: number, year: number) => {
     const targetDate = new Date(year, month, day);
     targetDate.setHours(0, 0, 0, 0);
 
@@ -79,108 +119,56 @@ export default function CalendarWidget({
     });
   };
 
-  const renderMiniCalendar = () => {
-    const year = now.getFullYear();
-    const daysInMonth = new Date(year, selectedMonth + 1, 0).getDate();
-    const firstDayIndex = new Date(year, selectedMonth, 1).getDay();
+  const selectedDateTrip = activeTripForSelectedDate(selectedDate.getDate(), selectedDate.getMonth(), selectedDate.getFullYear());
 
-    const cells = [];
-    for (let i = 0; i < firstDayIndex; i++) {
-      cells.push({ id: `empty-${i}`, day: null });
-    }
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({ id: `day-${d}`, day: d });
-    }
-
-    const rows = [];
-    for (let i = 0; i < cells.length; i += 7) {
-      rows.push(cells.slice(i, i + 7));
-    }
-
-    return (
-      <View style={styles.calendarGrid}>
-        {rows.map((row, rowIdx) => (
-          <View key={rowIdx} style={styles.dayRow}>
-            {row.map((cell) => {
-              if (cell.day === null) {
-                return <View key={cell.id} style={styles.dayCell} />;
-              }
-
-              const dayNum = cell.day;
-              const hasTrip = trips.some(t => {
-                const start = new Date(t.startDate); start.setHours(0, 0, 0, 0);
-                const end = new Date(t.endDate); end.setHours(0, 0, 0, 0);
-                const current = new Date(year, selectedMonth, dayNum); current.setHours(0, 0, 0, 0);
-                return current >= start && current <= end;
-              });
-
-              return (
-                <View key={cell.id} style={styles.dayCell}>
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: hasTrip ? colors.brand : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)'),
-                    }}
-                  />
-                </View>
-              );
-            })}
-            {row.length < 7 && Array.from({ length: 7 - row.length }).map((_, idx) => (
-              <View key={`fill-${idx}`} style={styles.dayCell} />
-            ))}
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const activeTripForSelectedDate = getTripForDate(selectedDate.getDate(), selectedDate.getMonth(), selectedDate.getFullYear());
+  // Format Today's Date: e.g. "Thu, Aug 27"
+  const formattedToday = now.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
 
   return (
     <>
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={() => setIsCalendarExpanded(true)}
-        style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+        style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderTopWidth: 5, borderTopColor: colors.brand }]}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <Text style={[styles.weatherLabel, { color: colors.textSecondary }]}>calendar</Text>
-          <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
+        {/* Widget Header */}
+        <View style={styles.widgetHeader}>
+          <Text style={[styles.widgetLabel, { color: colors.textMuted }]}>Calendar</Text>
+          <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
         </View>
 
-        {/* Month Picker Row */}
-        <View style={styles.monthScroller}>
-          {months.slice(currentMonthIdx, currentMonthIdx + 3).map((month, index) => {
-            const actualIdx = (currentMonthIdx + index) % 12;
-            const isSelected = selectedMonth === actualIdx;
+        {/* Large Date Summary */}
+        <Text style={[styles.todayText, { color: colors.text }]}>{formattedToday}</Text>
+
+        {/* 5-Day Compact horizontal calendar */}
+        <View style={styles.miniDaysRow}>
+          {getMiniDays().map((d, index) => {
+            const isToday = index === 0;
+            const hasTrip = trips.some(t => {
+              const start = new Date(t.startDate); start.setHours(0, 0, 0, 0);
+              const end = new Date(t.endDate); end.setHours(0, 0, 0, 0);
+              const cur = new Date(d); cur.setHours(0, 0, 0, 0);
+              return cur >= start && cur <= end;
+            });
+            const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
+            const dayNum = d.getDate();
             return (
-              <TouchableOpacity
-                key={month}
-                activeOpacity={0.8}
-                onPress={() => setSelectedMonth(actualIdx)}
-                style={[
-                  styles.monthPill,
-                  isSelected ? [styles.monthPillSelected, { backgroundColor: '#22C55E' }] : { backgroundColor: colors.surface }
-                ]}
-              >
-                <Text style={[styles.monthPillText, { color: isSelected ? '#FFFFFF' : colors.textSecondary }]}>
-                  {month.toLowerCase()}
-                </Text>
-              </TouchableOpacity>
+              <View key={index} style={[styles.miniDayCell, isToday && { backgroundColor: colors.brandLight }]}>
+                <Text style={[styles.miniDayName, { color: isToday ? colors.brand : colors.textMuted }]}>{dayName}</Text>
+                <Text style={[styles.miniDayNum, { color: isToday ? colors.brand : colors.text }]}>{dayNum}</Text>
+                {hasTrip && (
+                  <View style={[styles.miniTripDot, { backgroundColor: colors.brand }]} />
+                )}
+              </View>
             );
           })}
         </View>
-
-        {renderMiniCalendar()}
       </TouchableOpacity>
 
-      {/* Expanded Modal */}
+      {/* Expanded Modal as Bottom Sheet */}
       <Modal
         visible={isCalendarExpanded}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setIsCalendarExpanded(false)}
       >
@@ -190,10 +178,13 @@ export default function CalendarWidget({
           onPress={() => setIsCalendarExpanded(false)}
         >
           <TouchableOpacity activeOpacity={1} style={[styles.calendarExpandedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            {/* Bottom Sheet Handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.divider || '#E8E8E6', alignSelf: 'center', marginBottom: 14 }} />
+
             <View style={styles.expandedHeader}>
               <Text style={[styles.expandedTitle, { color: colors.text }]}>Travel Calendar</Text>
               <TouchableOpacity onPress={() => setIsCalendarExpanded(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -226,6 +217,7 @@ export default function CalendarWidget({
             <View style={styles.daysGridContainer}>
               {getDaysInMonthGrid(calendarDate).map((cell, idx) => {
                 const cellDate = new Date(cell.year, cell.month, cell.day);
+
                 const isSelected = selectedDate.getDate() === cell.day &&
                   selectedDate.getMonth() === cell.month &&
                   selectedDate.getFullYear() === cell.year;
@@ -234,69 +226,71 @@ export default function CalendarWidget({
                   now.getMonth() === cell.month &&
                   now.getFullYear() === cell.year;
 
-                const dayTrip = getTripForDate(cell.day, cell.month, cell.year);
+                const dayTripInfo = getTripDayType(cellDate);
 
                 return (
                   <TouchableOpacity
                     key={idx}
                     activeOpacity={0.8}
-                    onPress={() => setSelectedDate(cellDate)}
+                    onPress={() => {
+                      setSelectedDate(cellDate);
+                      if (dayTripInfo) {
+                        setIsCalendarExpanded(false);
+                        router.push(`/trip/${dayTripInfo.trip.id}`);
+                      }
+                    }}
                     style={[
                       styles.dayCellWrapper,
-                      isSelected && [styles.selectedDayCell, { backgroundColor: colors.brand }],
-                      isToday && !isSelected && [styles.todayDayCell, { borderColor: colors.brand }],
-                      !cell.isCurrentMonth && { opacity: 0.3 }
+                      !cell.isCurrentMonth && { opacity: 0.25 }
                     ]}
                   >
-                    <Text
+                    {/* Continuous range background blocks — neutral, since accent is reserved for the selected state */}
+                    {dayTripInfo && dayTripInfo.type === 'middle' && (
+                      <View style={{ position: 'absolute', left: 0, right: 0, top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                    )}
+                    {dayTripInfo && dayTripInfo.type === 'start' && (
+                      <View style={{ position: 'absolute', left: '50%', right: 0, top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                    )}
+                    {dayTripInfo && dayTripInfo.type === 'end' && (
+                      <View style={{ position: 'absolute', left: 0, right: '50%', top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                    )}
+
+                    {/* Circle endpoint/highlight indicator */}
+                    <View
                       style={[
-                        styles.dayCellText,
-                        { color: isSelected ? '#FFFFFF' : (isToday ? colors.brand : colors.text) },
-                        isSelected && { fontFamily: 'Poppins-Bold', fontWeight: '700' }
+                        styles.dayCircle,
+                        (isToday && !isSelected && !dayTripInfo) && { borderColor: colors.brand, borderWidth: 1.5 },
+                        isSelected && { backgroundColor: colors.brand },
+                        { overflow: 'hidden' }
                       ]}
                     >
-                      {cell.day}
-                    </Text>
-                    {dayTrip && !isSelected && (
-                      <View style={[styles.tripIndicatorDot, { backgroundColor: colors.brand }]} />
-                    )}
+                      {/* Crop trip image as background marker if occupied */}
+                      {dayTripInfo && (
+                        <>
+                          <Image
+                            source={{ uri: dayTripInfo.trip.image && dayTripInfo.trip.image.trim() !== '' ? dayTripInfo.trip.image : 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1000' }}
+                            style={StyleSheet.absoluteFillObject}
+                          />
+                          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isSelected ? 'rgba(2,132,199,0.3)' : 'rgba(0,0,0,0.42)' }]} />
+                        </>
+                      )}
+                      <Text
+                        style={[
+                          styles.dayCellText,
+                          {
+                            color: isSelected || dayTripInfo
+                              ? '#FFFFFF'
+                              : colors.text
+                          },
+                          (isSelected || dayTripInfo) && { fontFamily: 'Poppins-SemiBold' }
+                        ]}
+                      >
+                        {cell.day}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
-            </View>
-
-            {/* Detail Drawer */}
-            <View style={[styles.detailsContainer, { borderTopColor: colors.cardBorder }]}>
-              <Text style={[styles.detailsDateHeader, { color: colors.textMuted }]}>
-                {selectedDate.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase()}
-              </Text>
-              {activeTripForSelectedDate ? (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={[styles.tripDetailCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
-                  onPress={() => {
-                    setIsCalendarExpanded(false);
-                    router.push(`/trip/${activeTripForSelectedDate.id}`);
-                  }}
-                >
-                  <Image source={{ uri: activeTripForSelectedDate.image }} style={styles.tripDetailImage} />
-                  <View style={styles.tripDetailInfo}>
-                    <Text style={[styles.tripDetailDest, { color: colors.brand }]}>{activeTripForSelectedDate.destination.split(',')[0]}</Text>
-                    <Text style={[styles.tripDetailTitle, { color: colors.text }]} numberOfLines={1}>{activeTripForSelectedDate.title}</Text>
-                    <Text style={[styles.tripDetailDates, { color: colors.textSecondary }]}>
-                      {new Date(activeTripForSelectedDate.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(activeTripForSelectedDate.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </Text>
-                  </View>
-                  <View style={[styles.tripDetailGoBtn, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 12 }}>
-                  <Ionicons name="calendar-outline" size={24} color={colors.textMuted} style={{ marginBottom: 4 }} />
-                  <Text style={{ fontSize: 12, color: colors.textMuted }}>No adventures scheduled for this date</Text>
-                </View>
-              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -310,109 +304,111 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     justifyContent: 'space-between',
   },
-  weatherLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  monthScroller: {
+  widgetHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 2,
-    gap: 2,
+    marginBottom: 4,
   },
-  monthPill: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  monthPillSelected: {
-    shadowColor: '#2A3C57',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  monthPillText: {
+  widgetLabel: {
     fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    letterSpacing: 0.2,
+  },
+  // Hero stat — the one place a heavier weight earns its keep
+  todayText: {
+    fontSize: 15,
     fontFamily: 'Poppins-SemiBold',
-    fontWeight: '600',
-  },
-  calendarGrid: {
     marginTop: 4,
-    gap: 2,
+    marginBottom: 2,
   },
-  dayRow: {
+  miniDaysRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    height: 9,
-    paddingHorizontal: 2,
+    marginTop: 6,
   },
-  dayCell: {
-    width: 18,
+  miniDayCell: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    minWidth: 26,
+  },
+  miniDayName: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Medium',
+  },
+  miniDayNum: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    marginTop: 1,
+  },
+  miniTripDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: 'rgba(23, 23, 23, 0.35)',
+    justifyContent: 'flex-end',
   },
   calendarExpandedCard: {
     width: '100%',
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    padding: 16,
-    maxHeight: '90%',
+    borderBottomWidth: 0,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 40,
   },
   expandedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
+  // Modal title, section-heading scale
   expandedTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: -0.2,
   },
   calendarNavHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 18,
   },
+  // Secondary/circular control: white bg, 1px border
   navBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   calendarMonthTitle: {
     fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontFamily: 'Poppins-SemiBold',
   },
   weekdayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   weekdayLabel: {
     width: 40,
     textAlign: 'center',
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
   },
   daysGridContainer: {
     flexDirection: 'row',
@@ -423,80 +419,63 @@ const styles = StyleSheet.create({
   dayCellWrapper: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+  },
+  dayCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   dayCellText: {
     fontSize: 13,
     fontFamily: 'Poppins-Medium',
   },
-  selectedDayCell: {
-    backgroundColor: '#22C55E',
-  },
-  todayDayCell: {
-    borderWidth: 1.5,
-  },
-  tripIndicatorDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
   detailsContainer: {
-    marginTop: 14,
+    marginTop: 20,
     borderTopWidth: 1,
-    paddingTop: 10,
+    paddingTop: 18,
   },
   detailsDateHeader: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 6,
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   tripDetailCard: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 8,
+    borderRadius: 16,
+    padding: 12,
   },
   tripDetailImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    marginRight: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginRight: 12,
   },
   tripDetailInfo: {
     flex: 1,
     justifyContent: 'center',
   },
   tripDetailDest: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontSize: 10,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: 0.2,
   },
   tripDetailTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
     marginTop: 1,
     marginBottom: 1,
   },
   tripDetailDates: {
-    fontSize: 10,
-  },
-  tripDetailGoBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#22C55E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
   },
 });

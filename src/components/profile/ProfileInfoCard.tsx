@@ -35,7 +35,7 @@ export default function ProfileInfoCard({
   onAvatarPress,
 }: ProfileInfoCardProps) {
   return (
-    <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
+    <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <TouchableOpacity style={styles.avatarContainer} onPress={onAvatarPress} activeOpacity={0.7}>
         <Image
           key={profile?.avatar_url || 'default'}
@@ -113,16 +113,16 @@ export default function ProfileInfoCard({
 
 const styles = StyleSheet.create({
   profileCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
     paddingVertical: 24,
     paddingHorizontal: 20,
     marginBottom: 24,
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   avatarContainer: {
     position: 'relative',

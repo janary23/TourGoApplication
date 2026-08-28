@@ -1,6 +1,7 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
+import React, { useRef } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../context/ThemeContext';
 
 interface OtherTripCardProps {
   trip: any;
@@ -17,181 +18,164 @@ export default function OtherTripCard({
   formatTripDate,
   router,
 }: OtherTripCardProps) {
+  const { isDark } = useTheme();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+
+  const onPressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      tension: 140,
+      friction: 9,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 140,
+      friction: 9,
+    }).start();
+  };
+
   return (
-    <TouchableOpacity
-      key={trip.id}
-      onPress={() => router.push(`/trip/${trip.id}`)}
-      activeOpacity={0.8}
-      style={[
-        styles.tripItemCard,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.cardBorder,
-        }
-      ]}
-    >
-      {/* Destination Photo */}
-      <Image source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000' }} style={styles.tripPhoto} />
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        key={trip.id}
+        onPress={() => router.push(`/trip/${trip.id}`)}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        activeOpacity={0.92}
+        style={[
+          styles.tripItemCard,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.cardBorder,
+            borderWidth: 1,
+          }
+        ]}
+      >
+        {/* Destination Photo */}
+        <Image source={{ uri: imageUrl }} style={styles.tripPhoto} />
 
-      {/* Information Layout */}
-      <View style={styles.tripDetails}>
-        <View>
-          <Text style={[styles.tripTitleText, { color: colors.text }]} numberOfLines={2}>
-            {trip.title}
-          </Text>
-          <Text style={[styles.tripSecondaryText, { color: colors.brand }]}>
-            {trip.destination}
-          </Text>
-          <View style={styles.dateContainer}>
-            <Ionicons name="calendar-outline" size={14} color={colors.textMuted} style={{ marginRight: 4 }} />
-            <Text style={[styles.tripDateText, { color: colors.textMuted }]}>
-              {formatTripDate(trip.startDate, trip.endDate)}
+        {/* Information Layout */}
+        <View style={styles.tripDetails}>
+          <View style={styles.topInfo}>
+            <Text style={[styles.tripDestinationText, { color: colors.brand }]}>
+              {trip.destination.toUpperCase()}
+            </Text>
+            <Text style={[styles.tripTitleText, { color: colors.text }]} numberOfLines={2}>
+              {trip.title}
             </Text>
           </View>
-        </View>
 
-        {/* Avatars & Social Pile */}
-        <View style={styles.socialAndStatusBlock}>
-          <View style={styles.avatarsRow}>
-            <View style={styles.avatarPile}>
-              {trip.members.slice(0, 3).map((member: any, index: number) => {
-                const avatarUrl = member.avatar_url || null;
-                return (
-                  <View
-                    key={member.id}
-                    style={[
-                      styles.avatarCircle,
-                      {
-                        marginLeft: index > 0 ? -8 : 0,
-                        zIndex: 10 - index,
-                        borderColor: colors.card,
-                      }
-                    ]}
-                  >
-                    {avatarUrl ? (
-                      <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                    ) : (
-                      <View style={[styles.avatarFallback, { backgroundColor: colors.brandLight }]}>
-                        <Text style={[styles.avatarFallbackText, { color: colors.brand }]}>
-                          {member.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+          {/* Bottom Metadata & Members */}
+          <View style={styles.bottomInfoRow}>
+            <View style={styles.dateAndMembers}>
+              <Text style={[styles.tripDateText, { color: colors.textSecondary }]}>
+                {formatTripDate(trip.startDate, trip.endDate)}
+              </Text>
+              <View style={[styles.statDot, { backgroundColor: colors.textMuted }]} />
+              <Text style={[styles.membersCountText, { color: colors.textSecondary }]}>
+                {trip.members.length} {trip.members.length === 1 ? 'member' : 'members'}
+              </Text>
             </View>
-            <Text style={[styles.membersCountText, { color: colors.textMuted }]}>
-              {trip.members.length > 3 ? `+${trip.members.length - 3}` : `${trip.members.length} member${trip.members.length === 1 ? '' : 's'}`}
-            </Text>
-          </View>
 
-          {/* Understated relationship */}
-          <View style={styles.relationshipRow}>
-            <Text
-              style={[
-                styles.relationshipText,
-                {
-                  color: isOrganizer ? colors.brand : colors.textSecondary,
-                  fontFamily: 'Poppins-Bold',
-                }
-              ]}
-            >
-              {isOrganizer ? 'Organizer' : 'Member'}
-            </Text>
+            {/* Understated relationship role tag */}
+            <View style={[styles.roleBadge, { backgroundColor: isOrganizer ? colors.brandLight : colors.surface }]}>
+              <Text style={[styles.roleBadgeText, { color: isOrganizer ? colors.brand : colors.textSecondary }]}>
+                {isOrganizer ? 'Organizer' : 'Member'}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+
+        {/* Far Right: Arrow indicator */}
+        <View style={styles.arrowContainer}>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   tripItemCard: {
     flexDirection: 'row',
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 18,
     padding: 12,
+    gap: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    elevation: 2,
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
   },
   tripPhoto: {
-    width: 90,
-    height: 90,
+    width: 85,
+    height: 85,
     borderRadius: 14,
+    backgroundColor: '#F3F4F6',
   },
   tripDetails: {
     flex: 1,
-    height: 90,
     justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  topInfo: {
+    gap: 2,
+  },
+  tripDestinationText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1,
   },
   tripTitleText: {
     fontSize: 14,
     fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    lineHeight: 18,
   },
-  tripSecondaryText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 1,
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  tripDateText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  socialAndStatusBlock: {
+  bottomInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
   },
-  avatarsRow: {
+  dateAndMembers: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
-  avatarPile: {
-    flexDirection: 'row',
+  tripDateText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
   },
-  avatarCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarFallback: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarFallbackText: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+  statDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    opacity: 0.5,
   },
   membersCountText: {
-    fontSize: 9,
+    fontSize: 11,
     fontFamily: 'Poppins-Medium',
-    marginLeft: 4,
   },
-  relationshipRow: {
-    flexDirection: 'row',
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  roleBadgeText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+  },
+  arrowContainer: {
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  relationshipText: {
-    fontSize: 10,
+    paddingLeft: 2,
   },
 });

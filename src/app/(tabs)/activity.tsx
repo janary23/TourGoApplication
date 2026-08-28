@@ -309,35 +309,38 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <View style={[styles.headerRow, { borderBottomColor: colors.divider }]}>
+      {/* Branded App Header Row (Borderless & Minimalist) */}
+      <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
         <View style={styles.headerBrandContainer}>
-          <Image source={require('../../../assets/images/TourGoLogo.png')} style={styles.headerLogoImage} />
-          <Text style={[styles.appName, { color: colors.brand }]}>
-            Tour<Text style={{ color: '#22C55E' }}>Go</Text>
+          <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand || '#38BDF8' }]} />
+          <Text style={[styles.appName, { color: colors.brand || '#38BDF8' }]}>
+            TourGo
           </Text>
         </View>
       </View>
 
-      <View style={styles.navPillRow}>
-        {FILTERS.map(f => {
-          const active = activeFilter === f.key;
-          return (
-            <TouchableOpacity
-              key={f.key}
-              activeOpacity={0.85}
-              onPress={() => setActiveFilter(f.key)}
-              style={[
-                styles.navPill,
-                { borderColor: colors.cardBorder },
-                active && { backgroundColor: colors.brand, borderColor: colors.brand },
-              ]}
-            >
-              <Text style={[styles.navPillText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Horizontal Scroll Filter Chips (Capsules) */}
+      <View style={styles.categoryChipsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
+          {FILTERS.map(f => {
+            const active = activeFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                activeOpacity={0.8}
+                onPress={() => setActiveFilter(f.key)}
+                style={[
+                  styles.categoryChip,
+                  active ? { backgroundColor: colors.brand || '#0284C7' } : { backgroundColor: colors.cardBorder || 'rgba(255,255,255,0.08)' }
+                ]}
+              >
+                <Text style={[styles.categoryChipText, active ? { color: '#FFFFFF' } : { color: colors.textSecondary }]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {isLoading ? (
@@ -350,7 +353,11 @@ export default function ActivityScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
         >
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>Recent updates across all your group trips.</Text>
+          {/* Title Section */}
+          <View style={{ marginTop: 10, marginBottom: 20 }}>
+            <Text style={{ fontSize: 28, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, letterSpacing: -0.5 }}>Notifications</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Recent updates across all your group trips.</Text>
+          </View>
 
           {filteredActivities.length > 0 ? (
             filteredActivities.map(item => {
@@ -367,15 +374,9 @@ export default function ActivityScreen() {
             })
           ) : (
             <View style={styles.emptyContainer}>
-              <Image
-                source={require('../../../assets/images/EagleMascotS5.png')}
-                style={{ width: 140, height: 140, resizeMode: 'contain', marginBottom: 12 }}
-              />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              <Ionicons name="notifications-off-outline" size={32} color={colors.textMuted} style={{ marginBottom: 10 }} />
+              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
                 {activeFilter === 'all' ? 'No recent activity' : `No ${activeFilter} updates`}
-              </Text>
-              <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-                Notifications and updates about your trips will appear here.
               </Text>
             </View>
           )}
@@ -393,7 +394,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderBottomWidth: 1,
   },
   headerBrandContainer: {
     flexDirection: 'row',
@@ -411,57 +411,38 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  scrollContent: { padding: 20, paddingBottom: 110 },
-  subtitle: { fontSize: 14, marginBottom: 20 },
-  navPillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
+  categoryChipsContainer: {
+    paddingVertical: 6,
+  },
+  categoryChipsScroll: {
+    paddingHorizontal: 20,
     gap: 8,
   },
-  navPill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  categoryChipText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  scrollContent: { padding: 20, paddingBottom: 110 },
+  subtitle: {
+    fontSize: 12.5,
+    fontFamily: 'Poppins-Medium',
+    marginBottom: 20,
+    paddingHorizontal: 2,
+  },
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 20,
   },
-  navPillText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  activityCard: { marginBottom: 16, borderWidth: 1 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  iconContainer: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  headerText: { flex: 1 },
-  tripLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase' },
-  timeLabel: { fontSize: 11, marginTop: 2 },
-  urgentBadge: { backgroundColor: '#22C55E', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6 },
-  urgentText: { color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  cardBody: { marginBottom: 12 },
-  titleText: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 4 },
-  descText: {
-    fontFamily: 'Poppins-Regular', fontSize: 13, lineHeight: 18
-  },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, paddingTop: 10, marginTop: 4 },
-  viewTripText: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', marginRight: 4 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, paddingHorizontal: 20 },
-  emptyTitle: {
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    fontSize: 18,
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  emptySub: {
-    fontFamily: 'Poppins-Regular',
+  emptySubtitle: {
     fontSize: 13,
+    fontFamily: 'Poppins-Medium',
     textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 8,
-    paddingHorizontal: 10,
   },
 });

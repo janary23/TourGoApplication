@@ -158,18 +158,13 @@ export default function MascotGreeting({
             styles.greetingTextContainer,
             {
               backgroundColor: colors.card,
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
+              borderRadius: 20,
+              paddingHorizontal: 20,
+              paddingVertical: 16,
               borderWidth: 1,
               borderColor: colors.cardBorder,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 3,
-              elevation: 1,
               position: 'relative',
-              marginLeft: 10,
+              marginLeft: 12,
             }
           ]}
         >
@@ -178,7 +173,7 @@ export default function MascotGreeting({
             style={{
               position: 'absolute',
               left: -6,
-              top: 24,
+              top: 28,
               width: 12,
               height: 12,
               backgroundColor: colors.card,
@@ -194,16 +189,16 @@ export default function MascotGreeting({
             startTrigger={isLanded}
             speed={60}
             onComplete={() => setLine1Complete(true)}
-            style={[styles.greetingUserText, { color: colors.text, fontSize: 24 }]}
+            style={[styles.greetingUserText, { color: colors.text, fontSize: 16, fontFamily: 'Poppins-Bold' }]}
           />
           <TypingText
             text={agilitoLine2}
             startTrigger={line1Complete}
             speed={40}
-            style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 4, fontWeight: '600' }]}
+            style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 6, fontFamily: 'Poppins-Medium', fontSize: 13, lineHeight: 18 }]}
           />
           {line1Complete && (
-            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, fontFamily: 'Poppins-Medium', letterSpacing: 0.3 }}>
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8, fontFamily: 'Poppins-Regular' }}>
               Tap to hear more ✦
             </Text>
           )}

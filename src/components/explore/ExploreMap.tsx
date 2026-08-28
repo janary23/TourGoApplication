@@ -463,23 +463,23 @@ export const ExploreMap = forwardRef<ExploreMapHandle, ExploreMapProps>(
               // Premium contour styling
               let fill = t.defaultProvinceFill;
               let stroke = t.defaultProvinceStroke;
-              let opacity = isExportMode ? 0.35 : 0.85;
+              let opacity = isExportMode ? 1.0 : 0.85;
               let strokeWidth = 0.5;
 
               if (isVisited) {
                 fill = visitedColor || t.visitedProvinceStroke;
                 stroke = visitedColor || t.visitedProvinceStroke;
-                opacity = isExportMode ? 0.9 : 1;
+                opacity = isExportMode ? 1.0 : 1;
                 strokeWidth = isSelected ? 2.5 : 1.4;
               } else if (isSaved) {
                 fill = isExportMode ? t.savedProvinceStroke : 'url(#savedGrad)';
                 stroke = t.savedProvinceStroke;
-                opacity = isExportMode ? 0.9 : 1;
+                opacity = isExportMode ? 1.0 : 1;
                 strokeWidth = isSelected ? 2.5 : 1.4;
               } else if (isExportMode) {
                 fill = defaultProvinceFill !== undefined ? defaultProvinceFill : t.defaultProvinceFill;
                 stroke = defaultProvinceStroke !== undefined ? defaultProvinceStroke : t.defaultProvinceStroke;
-                opacity = 0.65;
+                opacity = 1.0;
                 strokeWidth = 0.6;
               }
 
@@ -506,7 +506,9 @@ export const ExploreMap = forwardRef<ExploreMapHandle, ExploreMapProps>(
                     fill={fill}
                     stroke={stroke}
                     strokeWidth={strokeWidth}
-                    opacity={opacity}
+                    fillOpacity={isExportMode ? (isVisited || isSaved ? 0.82 : 0.05) : undefined}
+                    strokeOpacity={isExportMode ? (isVisited || isSaved ? 0.95 : 0.30) : undefined}
+                    opacity={isExportMode ? undefined : opacity}
                     accessible
                     accessibilityLabel={`${prov.name}, ${isVisited ? 'Visited' : 'Not visited'}`}
                     onPress={() => onSelectProvince(prov.id)}

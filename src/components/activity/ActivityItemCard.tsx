@@ -22,6 +22,11 @@ interface ActivityItemCardProps {
   onPress: () => void;
 }
 
+const stripEmojis = (str: string): string => {
+  if (!str) return '';
+  return str.replace(/[\u2600-\u27BF]|[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').trim();
+};
+
 export default function ActivityItemCard({
   item,
   colors,
@@ -29,104 +34,91 @@ export default function ActivityItemCard({
   onPress,
 }: ActivityItemCardProps) {
   return (
-    <Card
+    <TouchableOpacity
+      activeOpacity={0.9}
       onPress={onPress}
       style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
     >
-      <View style={styles.cardHeader}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-          <Ionicons name={icon.name as any} size={18} color={icon.color} />
+      <View style={styles.rowLayout}>
+        <View style={[styles.iconContainer, { backgroundColor: colors.surface || 'rgba(0,0,0,0.03)' }]}>
+          <Ionicons name={icon.name as any} size={15} color={icon.color} />
         </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.tripLabel, { color: colors.textMuted }]}>{item.tripName}</Text>
-          <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{item.time}</Text>
-        </View>
-        {item.important && (
-          <View style={styles.urgentBadge}>
-            <Text style={styles.urgentText}>IMPORTANT</Text>
+        <View style={styles.contentContainer}>
+          <View style={styles.metaRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '70%' }}>
+              <Text style={[styles.tripLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                {stripEmojis(item.tripName)}
+              </Text>
+              {item.important && (
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+              )}
+            </View>
+            <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{item.time}</Text>
           </View>
-        )}
+          
+          <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>
+            {stripEmojis(item.title)}
+          </Text>
+          
+          <Text style={[styles.descText, { color: colors.textSecondary }]} numberOfLines={2}>
+            {stripEmojis(item.description)}
+          </Text>
+        </View>
       </View>
-      <View style={styles.cardBody}>
-        <Text style={[styles.titleText, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.descText, { color: colors.textSecondary }]} numberOfLines={3}>{item.description}</Text>
-      </View>
-      <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
-        <Text style={[styles.viewTripText, { color: colors.brand }]}>Open Trip Dashboard</Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-      </View>
-    </Card>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   activityCard: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  cardHeader: {
+  rowLayout: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginTop: 2,
   },
-  headerText: {
+  contentContainer: {
     flex: 1,
+    gap: 3,
   },
-  tripLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  timeLabel: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  urgentBadge: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  urgentText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  cardBody: {
-    marginBottom: 14,
-  },
-  titleText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  descText: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardFooter: {
+  metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 10,
   },
-  viewTripText: {
-    fontSize: 11,
+  tripLabel: {
+    fontSize: 9.5,
     fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  timeLabel: {
+    fontSize: 9.5,
+    fontFamily: 'Poppins-Medium',
+  },
+  titleText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+  },
+  descText: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Regular',
+    lineHeight: 15,
   },
 });
