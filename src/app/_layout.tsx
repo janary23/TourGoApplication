@@ -27,7 +27,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { GEMINI_API_KEY } from '../config/env';
 import { storageGet, storageSet } from '../services/storage';
-import { WalkthroughModal, shouldShowWalkthrough, markWalkthroughDone } from '../components/WalkthroughModal';
+import { subscribeOnboardingActive, subscribeGlobalLoading } from '../services/mascotBridge';
+import { WalkthroughModal, shouldShowWalkthrough, markWalkthroughDone, onboardingKeyFor } from '../components/WalkthroughModal';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -179,12 +180,16 @@ const renderMessageText = (text: string, isAi: boolean, colors: any) => {
   );
 };
 
-function GlobalMascot() {
+function GlobalMascot({ hide }: { hide?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { colors, isDark, mascotFlightEnabled } = useTheme();
 
+  // Keep the floating mascot hidden for the entire onboarding flow —
+  // including when the tour is replayed from the Profile page.
+  const [onboardingActive, setOnboardingActiveState] = useState(false);
+  const [globalLoading, setGlobalLoadingState] = useState(false);
   const [mascotImageSource, setMascotImageSource] = useState(require('../../assets/images/EagleMascotS5.png'));
   const [travelAngle, setTravelAngle] = useState(0);
   const [showBirdInBadge, setShowBirdInBadge] = useState(false);
@@ -208,12 +213,54 @@ function GlobalMascot() {
 
   // Ref to track if we need first launch slow timing
   const isFirstLaunchRef = useRef(true);
+  const initialFlightDone = useRef(false);
 
   // Ref to track previous pathname — only animate flight on actual navigation
   const prevPathnameRef = useRef(pathname);
 
   // Track coordinates of the floating icon (remembers last dragged position!)
   const floatingPosRef = useRef({ x: SCREEN_WIDTH - 80, y: SCREEN_HEIGHT / 2 - 32 });
+
+  const flapValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const unsubscribe = subscribeOnboardingActive(setOnboardingActiveState);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeGlobalLoading(setGlobalLoadingState);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    let animLoop: any;
+    if (showFlyingBird) {
+      flapValue.setValue(0);
+      animLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(flapValue, {
+            toValue: 1,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(flapValue, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animLoop.start();
+    } else {
+      flapValue.setValue(0);
+    }
+    return () => {
+      if (animLoop) {
+        animLoop.stop();
+      }
+    };
+  }, [showFlyingBird]);
 
   // Use refs to prevent stale closures in the PanResponder handlers
   const showBirdInBadgeRef = useRef(showBirdInBadge);
@@ -492,52 +539,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
     }
     prevPathnameRef.current = pathname;
 
-    const dashPerchX = 24;
-    const dashPerchY = insets.top + 88;
+    const dashPerchX = 6;
+    const dashPerchY = (insets?.top || 0) + 136;
     const floatX = floatingPosRef.current.x;
     const floatY = floatingPosRef.current.y;
     const spawnX = SCREEN_WIDTH * 0.8;
     const spawnY = SCREEN_HEIGHT * 0.7;
 
-    let flapInterval: any;
-    let landingTimeout1: any;
-    let landingTimeout2: any;
-
-    const startFlapping = () => {
-      let flapState = true;
-      setMascotImageSource(require('../../assets/images/FlyingFormS1.png'));
-      flapInterval = setInterval(() => {
-        flapState = !flapState;
-        setMascotImageSource(
-          flapState
-            ? require('../../assets/images/FlyingFormS1.png')
-            : require('../../assets/images/FlyingFormS2.png')
-        );
-      }, 150);
-
-      landingTimeout1 = setTimeout(() => {
-        clearInterval(flapInterval);
-        setMascotImageSource(require('../../assets/images/AboutToLandingFormS4.png'));
-      }, 1500);
-
-      landingTimeout2 = setTimeout(() => {
-        setMascotImageSource(require('../../assets/images/LandingFormS6.png'));
-      }, 1800);
-    };
-
     if (isFirstLaunchRef.current) {
-      // ===== FIRST LAUNCH (LOGIN): no flight animation, bird is already landed! =====
-      isFirstLaunchRef.current = false;
-      setShowBirdInBadge(false);
-      setShowBadge(false);
-      setShowFlyingBird(false);
-      setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
+      // Entrance flight animation is delayed until the home screen finishes skeletal loading.
+      return;
+    }
 
-      if (typeof (globalThis as any).onMascotLand === 'function') {
-        (globalThis as any).onMascotLand();
-      }
-
-    } else if (!isDashboard) {
+    if (!isDashboard) {
       // ===== GOING TO SUB-PAGE =====
       if (typeof (globalThis as any).onMascotLeave === 'function') {
         (globalThis as any).onMascotLeave();
@@ -556,16 +570,13 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         setShowBadge(true);       // Show the empty circle immediately!
         setShowFlyingBird(true);
 
-        // Start flapping wings
-        startFlapping();
-
         // Position badge at its saved floating position
         badgeX.setValue(floatX);
         badgeY.setValue(floatY);
 
         // Bird starts from dashboard perch, flies to badge center
-        const targetBirdX = floatX + 32 - 65; // Center 130px bird on 64px badge
-        const targetBirdY = floatY + 32 - 65;
+        const targetBirdX = floatX - 6; // Center 76px bird on 64px badge
+        const targetBirdY = floatY - 6;
 
         const dx = targetBirdX - dashPerchX;
         const dy = targetBirdY - dashPerchY;
@@ -594,9 +605,6 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
             useNativeDriver: true,
           }),
         ]).start(({ finished }) => {
-          clearInterval(flapInterval);
-          clearTimeout(landingTimeout1);
-          clearTimeout(landingTimeout2);
           if (finished) {
             // Bird arrived! Hide flying bird, show bird inside badge
             setShowFlyingBird(false);
@@ -612,7 +620,6 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         setShowFlyingBird(false);
         setShowBadge(false);
         setShowBirdInBadge(false);
-        setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
         if (typeof (globalThis as any).onMascotLand === 'function') {
           (globalThis as any).onMascotLand();
         }
@@ -621,12 +628,9 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       setShowBirdInBadge(false);  // Remove bird from badge
       setShowFlyingBird(true);
 
-      // Start flapping wings
-      startFlapping();
-
       // Bird starts from badge center
-      const startBirdX = floatX + 32 - 65;
-      const startBirdY = floatY + 32 - 65;
+      const startBirdX = floatX - 6;
+      const startBirdY = floatY - 6;
 
       const dx = dashPerchX - startBirdX;
       const dy = dashPerchY - startBirdY;
@@ -655,13 +659,9 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
-        clearInterval(flapInterval);
-        clearTimeout(landingTimeout1);
-        clearTimeout(landingTimeout2);
         if (finished) {
           setShowFlyingBird(false);
           setShowBadge(false); // Hide badge when back on dashboard
-          setMascotImageSource(require('../../assets/images/EagleMascotS5.png'));
           if (typeof (globalThis as any).onMascotLand === 'function') {
             (globalThis as any).onMascotLand();
           }
@@ -670,12 +670,68 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       }
     }
 
-    return () => {
-      clearInterval(flapInterval);
-      clearTimeout(landingTimeout1);
-      clearTimeout(landingTimeout2);
-    };
+    return () => { };
   }, [pathname, insets, mascotFlightEnabled]);
+
+  // Trigger initial flight when page finishes loading
+  useEffect(() => {
+    if (globalLoading) return; // wait until loading finishes
+    if (initialFlightDone.current) return;
+    if (!isDashboard) {
+      // If we are not on the dashboard, we don't play the perch flight
+      initialFlightDone.current = true;
+      return;
+    }
+    
+    // Play the entrance flight!
+    initialFlightDone.current = true;
+    isFirstLaunchRef.current = false;
+    
+    const dashPerchX = 6;
+    const dashPerchY = (insets?.top || 0) + 136;
+    const spawnX = SCREEN_WIDTH * 0.8;
+    const spawnY = SCREEN_HEIGHT * 0.7;
+
+    flightProgress.setValue(0);
+    setShowBirdInBadge(false);
+    setShowBadge(false);
+    setShowFlyingBird(true);
+
+    const dx = dashPerchX - spawnX;
+    const dy = dashPerchY - spawnY;
+    setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
+
+    birdX.setValue(spawnX);
+    birdY.setValue(spawnY);
+
+    Animated.parallel([
+      Animated.timing(birdX, {
+        toValue: dashPerchX,
+        duration: 2200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(birdY, {
+        toValue: dashPerchY,
+        duration: 2200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(flightProgress, {
+        toValue: 1,
+        duration: 2200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setShowFlyingBird(false);
+        if (typeof (globalThis as any).onMascotLand === 'function') {
+          (globalThis as any).onMascotLand();
+        }
+      }
+    });
+  }, [globalLoading, pathname, insets]);
 
   // Flying bird opacity (fades out as it enters badge on sub-page)
   const flyingBirdOpacity = flightProgress.interpolate({
@@ -689,6 +745,10 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       ? [1, 1, 1, 1]       // going home: no shrink
       : [1, 1, 0.4, 0.2],  // going to badge: shrinks into circle
   });
+
+  // Hide the floating mascot entirely while onboarding is active or page is loading
+  if (hide || onboardingActive || globalLoading) return <></>;
+
 
   return (
     <>
@@ -777,8 +837,8 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
             position: 'absolute',
             left: 0,
             top: 0,
-            width: 130,
-            height: 130,
+            width: 76,
+            height: 76,
             zIndex: 999999,
             elevation: 999999,
             backgroundColor: 'transparent',
@@ -808,10 +868,41 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
             ],
           }}
         >
-          <Image
-            source={mascotImageSource}
-            style={{ width: 130, height: 130, resizeMode: 'contain' }}
-          />
+          {/* Layer 1: Flapping (S1/S2) */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              width: 76,
+              height: 76,
+            }}
+          >
+            <Animated.Image
+              source={require('../../assets/images/FlyingFormS1.png')}
+              style={{
+                position: 'absolute',
+                width: 76,
+                height: 76,
+                resizeMode: 'contain',
+                opacity: flapValue.interpolate({
+                  inputRange: [0, 0.5, 0.501, 1],
+                  outputRange: [1, 1, 0, 0],
+                }),
+              }}
+            />
+            <Animated.Image
+              source={require('../../assets/images/FlyingFormS2.png')}
+              style={{
+                position: 'absolute',
+                width: 76,
+                height: 76,
+                resizeMode: 'contain',
+                opacity: flapValue.interpolate({
+                  inputRange: [0, 0.499, 0.5, 1],
+                  outputRange: [0, 0, 1, 1],
+                }),
+              }}
+            />
+          </Animated.View>
         </Animated.View>
       )}
 
@@ -1093,14 +1184,15 @@ function RootStack() {
     }
   }, [session, isLoading, pathname]);
 
-  // Show walkthrough for new users on first authenticated load
+  // Show walkthrough for new users on first authenticated load (per-account)
+  const uid = session?.user?.id;
   useEffect(() => {
-    if (isLoading || !session) return;
+    if (isLoading || !session || !uid) return;
     (async () => {
-      const shouldShow = await shouldShowWalkthrough();
+      const shouldShow = await shouldShowWalkthrough(uid);
       if (shouldShow) setShowWalkthrough(true);
     })();
-  }, [session, isLoading]);
+  }, [session, isLoading, uid]);
 
   return (
     <>
@@ -1122,6 +1214,7 @@ function RootStack() {
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="day-plan" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="trip/create" options={{ headerShown: false }} />
@@ -1129,12 +1222,13 @@ function RootStack() {
         <Stack.Screen name="trip/settings" options={{ headerShown: false }} />
         <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       </Stack>
-      <GlobalMascot />
+      <GlobalMascot hide={showWalkthrough} />
       <WalkthroughModal
         visible={showWalkthrough}
         colors={colors}
+        storageKey={uid ? onboardingKeyFor(uid) : undefined}
         onComplete={() => {
-          markWalkthroughDone();
+          if (uid) markWalkthroughDone(uid);
           setShowWalkthrough(false);
         }}
       />

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, Image } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface CalendarWidgetProps {
@@ -19,6 +19,26 @@ export default function CalendarWidget({
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 180,
+      friction: 12,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 180,
+      friction: 12,
+    }).start();
+  };
 
   const getDaysInMonthGrid = (date: Date) => {
     const year = date.getFullYear();
@@ -124,46 +144,105 @@ export default function CalendarWidget({
   // Format Today's Date: e.g. "Thu, Aug 27"
   const formattedToday = now.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
 
+  // Find which trip (if any) a given mini-strip day falls inside, plus its
+  // position within that trip's date range so the calendar clearly reflects
+  // the trip's start → end span.
+  const tripForMiniDay = (d: Date) => {
+    const cur = new Date(d); cur.setHours(0, 0, 0, 0);
+    const curTime = cur.getTime();
+    for (const trip of trips) {
+      const start = new Date(trip.startDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(trip.endDate); end.setHours(0, 0, 0, 0);
+      const startTime = start.getTime();
+      const endTime = end.getTime();
+      if (curTime >= startTime && curTime <= endTime) {
+        const dayNum = Math.round((curTime - startTime) / 86400000) + 1;
+        const totalDays = Math.round((endTime - startTime) / 86400000) + 1;
+        return {
+          trip,
+          dest: trip.destination.split(',')[0].trim(),
+          isStart: curTime === startTime,
+          isEnd: curTime === endTime,
+          dayNum,
+          totalDays,
+        };
+      }
+    }
+    return null;
+  };
+
+  // Trips that overlap the currently-viewed month in the expanded calendar,
+  // shown as explicit date-range chips so the calendar ties to trip dates.
+  const monthOverlapTrips = trips.filter(trip => {
+    const start = new Date(trip.startDate);
+    const end = new Date(trip.endDate);
+    return start <= new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0) &&
+      end >= new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+  });
+
   return (
     <>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setIsCalendarExpanded(true)}
-        style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderTopWidth: 5, borderTopColor: colors.brand }]}
-      >
-        {/* Widget Header */}
-        <View style={styles.widgetHeader}>
-          <Text style={[styles.widgetLabel, { color: colors.textMuted }]}>Calendar</Text>
-          <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
-        </View>
+      <Animated.View style={{ transform: [{ scale }], flex: 1 }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setIsCalendarExpanded(true)}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderTopWidth: 5, borderTopColor: colors.brand }]}
+        >
+          {/* Widget Header */}
+          <View style={styles.widgetHeader}>
+            <Text style={[styles.widgetLabel, { color: colors.textMuted }]}>Calendar</Text>
+            <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
+          </View>
 
-        {/* Large Date Summary */}
-        <Text style={[styles.todayText, { color: colors.text }]}>{formattedToday}</Text>
+          {/* Large Date Summary */}
+          <Text style={[styles.todayText, { color: colors.text }]}>{formattedToday}</Text>
 
-        {/* 5-Day Compact horizontal calendar */}
-        <View style={styles.miniDaysRow}>
-          {getMiniDays().map((d, index) => {
-            const isToday = index === 0;
-            const hasTrip = trips.some(t => {
-              const start = new Date(t.startDate); start.setHours(0, 0, 0, 0);
-              const end = new Date(t.endDate); end.setHours(0, 0, 0, 0);
-              const cur = new Date(d); cur.setHours(0, 0, 0, 0);
-              return cur >= start && cur <= end;
-            });
-            const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
-            const dayNum = d.getDate();
+          {/* 5-Day Compact horizontal calendar */}
+          <View style={styles.miniDaysRow}>
+            {getMiniDays().map((d, index) => {
+              const isToday = index === 0;
+              const tripInfo = tripForMiniDay(d);
+              const hasTrip = !!tripInfo;
+              const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
+              const dayNum = d.getDate();
+              return (
+                <View key={index} style={[styles.miniDayCell, { alignItems: 'center' }]}>
+                  <Text style={[styles.miniDayName, { color: isToday ? colors.brand : colors.textMuted }]}>{dayName}</Text>
+                  {/* Subtle range marker behind the day number when the day is
+                      part of a trip, so the start→end span reads at a glance */}
+                  <View style={[
+                    { justifyContent: 'center', alignItems: 'center', marginTop: 2, flexDirection: 'row', height: 24 },
+                    isToday && { backgroundColor: colors.brand, borderRadius: 12, minWidth: 24 },
+                    !isToday && hasTrip && { backgroundColor: colors.brandLight, borderRadius: 12, minWidth: 24 },
+                  ]}>
+                    <Text style={[styles.miniDayNum, { color: isToday ? '#FFFFFF' : hasTrip ? colors.brand : colors.text, fontSize: 11 }]}>{dayNum}</Text>
+                  </View>
+                  {hasTrip && (
+                    <View style={[styles.miniTripDot, { backgroundColor: colors.brand, marginTop: 2 }]} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Trip date-range caption for the selected/today's active trip */}
+          {(() => {
+            const activeTrip = tripForMiniDay(now) || tripForMiniDay(getMiniDays()[0]);
+            if (!activeTrip) return null;
+            const label = activeTrip.isStart && activeTrip.isEnd
+              ? activeTrip.dest
+              : `${activeTrip.dest} · day ${activeTrip.dayNum} of ${activeTrip.totalDays}`;
             return (
-              <View key={index} style={[styles.miniDayCell, isToday && { backgroundColor: colors.brandLight }]}>
-                <Text style={[styles.miniDayName, { color: isToday ? colors.brand : colors.textMuted }]}>{dayName}</Text>
-                <Text style={[styles.miniDayNum, { color: isToday ? colors.brand : colors.text }]}>{dayNum}</Text>
-                {hasTrip && (
-                  <View style={[styles.miniTripDot, { backgroundColor: colors.brand }]} />
-                )}
+              <View style={[styles.miniRangeCaption, { backgroundColor: colors.brandLight }]}>
+                <Ionicons name="calendar" size={11} color={colors.brand} />
+                <Text style={[styles.miniRangeCaptionText, { color: colors.brand }]} numberOfLines={1}>{label}</Text>
               </View>
             );
-          })}
-        </View>
-      </TouchableOpacity>
+          })()}
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Expanded Modal as Bottom Sheet */}
       <Modal
@@ -292,6 +371,36 @@ export default function CalendarWidget({
                 );
               })}
             </View>
+
+            {/* Trip dates for this month — makes the connection between the
+                grid and the user's trips explicit (Destination · Start – End) */}
+            {monthOverlapTrips.length > 0 && (
+              <View style={styles.monthTripsSection}>
+                <Text style={[styles.monthTripsLabel, { color: colors.textMuted }]}>Trips this month</Text>
+                {monthOverlapTrips.map(trip => {
+                  const fmt = (iso: string) => new Date(iso).toLocaleDateString('default', { month: 'short', day: 'numeric' });
+                  return (
+                    <TouchableOpacity
+                      key={trip.id}
+                      activeOpacity={0.7}
+                      onPress={() => router.push(`/trip/${trip.id}`)}
+                      style={[styles.monthTripChip, { backgroundColor: colors.surface }]}
+                    >
+                      <View style={[styles.monthTripDot, { backgroundColor: colors.brand }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.monthTripDest, { color: colors.text }]} numberOfLines={1}>
+                          {trip.destination.split(',')[0].trim()}
+                        </Text>
+                        <Text style={[styles.monthTripDates, { color: colors.textMuted }]}>
+                          {fmt(trip.startDate)} – {fmt(trip.endDate)}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -302,11 +411,16 @@ export default function CalendarWidget({
 const styles = StyleSheet.create({
   calendarWidget: {
     flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 14,
     paddingHorizontal: 14,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   widgetHeader: {
     flexDirection: 'row',
@@ -352,6 +466,22 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     marginTop: 2,
+  },
+  miniRangeCaption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  miniRangeCaptionText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-SemiBold',
+    flexShrink: 1,
   },
   modalBackdrop: {
     flex: 1,
@@ -434,6 +564,38 @@ const styles = StyleSheet.create({
   dayCellText: {
     fontSize: 13,
     fontFamily: 'Poppins-Medium',
+  },
+  monthTripsSection: {
+    marginTop: 20,
+    gap: 10,
+  },
+  monthTripsLabel: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+  },
+  monthTripChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  monthTripDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  monthTripDest: {
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  monthTripDates: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Regular',
+    marginTop: 1,
   },
   detailsContainer: {
     marginTop: 20,

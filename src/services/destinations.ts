@@ -489,6 +489,12 @@ export async function fetchGooglePlacesForProvince(
       })
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Google Places Province API returned error ${response.status} for query "${query}":`, errorText);
+      return [];
+    }
+
     const json = await response.json();
     if (json && Array.isArray(json.places)) {
       const places: Destination[] = await Promise.all(

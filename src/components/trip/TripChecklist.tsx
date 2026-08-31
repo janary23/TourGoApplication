@@ -5,9 +5,6 @@ import { toggleChecklistItem as dbToggleChecklist, addChecklistItem as dbAddChec
 import { useAuth } from '../../context/AuthContext';
 import { generatePackingList, AI_FEATURES_ENABLED } from '../../services/aiService';
 
-const ACCENT = '#22C55E';
-const ACCENT_LIGHT = '#22C55E18';
-
 interface TripChecklistProps {
   trip: any;
   colors: any;
@@ -19,6 +16,8 @@ export default function TripChecklist({
   colors,
   loadTrip,
 }: TripChecklistProps) {
+  const ACCENT = colors.brand;
+  const ACCENT_LIGHT = colors.brand + '18';
   const { profile } = useAuth();
   const currentUserId = profile?.id || '';
 

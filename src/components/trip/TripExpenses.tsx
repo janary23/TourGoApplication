@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity, Modal,
   TextInput, ScrollView, Alert, Dimensions, Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,58 @@ const CATEGORY_ICONS: Record<string, { icon: string; color: string; bg: string }
   Other: { icon: 'ellipsis-horizontal-circle-outline', color: '#6B7280', bg: '#F3F4F6' },
 };
 
+const MOCK_RECEIPTS = [
+  {
+    id: 1,
+    merchant: 'Starbucks Coffee',
+    category: 'Food',
+    amount: 840,
+    items: [
+      '============= RECEIPT =============',
+      'STARBUCKS COFFEE BGC',
+      '1x Iced Caramel Macchiato  - ₱220.00',
+      '1x Espresso Frappuccino    - ₱210.00',
+      '2x Blueberry Cheesecake    - ₱410.00',
+      '-----------------------------------',
+      'TOTAL:                      ₱840.00',
+      '===================================',
+    ],
+    date: 'Aug 30, 2026 14:15',
+  },
+  {
+    id: 2,
+    merchant: 'Seafood Island Diner',
+    category: 'Food',
+    amount: 4250,
+    items: [
+      '============= RECEIPT =============',
+      'SEAFOOD ISLAND DINER MOA',
+      '1x Fiesta Boodle Tray     - ₱3,400.00',
+      '2x Pitcher Iced Tea       - ₱500.00',
+      '1x Grilled Squid          - ₱350.00',
+      '-----------------------------------',
+      'TOTAL:                    ₱4,250.00',
+      '===================================',
+    ],
+    date: 'Aug 30, 2026 19:30',
+  },
+  {
+    id: 3,
+    merchant: 'Shell Petrol Station',
+    category: 'Transport',
+    amount: 1800,
+    items: [
+      '============= RECEIPT =============',
+      'SHELL STATION EDSA',
+      '31.03L Fuel V-Power Diesel - ₱1,800.00',
+      '-----------------------------------',
+      'TOTAL:                    ₱1,800.00',
+      '===================================',
+    ],
+    date: 'Aug 31, 2026 09:10',
+  },
+];
+
 export default function TripExpenses({
   trip,
   colors,
@@ -43,6 +96,62 @@ export default function TripExpenses({
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<any | null>(null);
   const [suggestedCategory, setSuggestedCategory] = useState('');
+
+  // Receipt Scanner States
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [activeReceiptIdx, setActiveReceiptIdx] = useState(0);
+  const [scanPhase, setScanPhase] = useState('Position receipt within frame');
+  const scanAnim = useRef(new Animated.Value(0)).current;
+
+  const handleScanReceipt = () => {
+    if (scanning) return;
+    setScanning(true);
+    setScanPhase('Reading receipt details...');
+
+    // Run laser line animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(scanAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Step through scan phases
+    setTimeout(() => {
+      setScanPhase('Agilito AI parsing items...');
+    }, 1200);
+
+    setTimeout(() => {
+      setScanPhase('Matching categories...');
+    }, 2400);
+
+    setTimeout(() => {
+      const receipt = MOCK_RECEIPTS[activeReceiptIdx];
+      // Set form fields
+      setNewExpTitle(receipt.merchant);
+      setNewExpAmount(receipt.amount.toString());
+      setSelectedCategory(receipt.category);
+      
+      // Auto select payer to user
+      const currentUser = trip.members.find((m: any) => m.name === currentUserName);
+      if (currentUser) {
+        setNewExpPaidByUserId(currentUser.userId);
+      }
+      
+      // Stop scanner
+      setScanning(false);
+      setScanModalVisible(false);
+      scanAnim.setValue(0);
+
+      // Open log modal
+      setModalVisible(true);
+      Alert.alert(
+        'Receipt Scanned! ⚡',
+        `Agilito extracted the details:\n\nMerchant: ${receipt.merchant}\nTotal: ₱${receipt.amount.toLocaleString()}\nCategory: ${receipt.category}\n\nYou can now splits this with the group!`
+      );
+    }, 3800);
+  };
 
   useEffect(() => {
     if (!newExpTitle.trim() || !modalVisible) {
@@ -142,14 +251,25 @@ export default function TripExpenses({
         <View>
           <Text style={[styles.pageTitle, { color: colors.text }]}>Money Room</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.brand }]}
-          onPress={() => setModalVisible(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={18} color="#fff" />
-          <Text style={styles.addBtnText}>Log Bill</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.scanBtn, { borderColor: colors.brand, borderWidth: 1 }]}
+            onPress={() => setScanModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="camera-outline" size={16} color={colors.brand} />
+            <Text style={[styles.scanBtnText, { color: colors.brand }]}>Scan Receipt</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.brand }]}
+            onPress={() => setModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.addBtnText}>Log Bill</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* PREMIUM VIRTUAL SPEND CARD */}
@@ -553,6 +673,114 @@ export default function TripExpenses({
                 <Ionicons name="checkmark-circle" size={18} color="#fff" />
                 <Text style={styles.submitBtnText}>Log Bill</Text>
               </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SCAN RECEIPT MODAL */}
+      <Modal visible={scanModalVisible} animationType="slide" transparent onRequestClose={() => setScanModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, styles.scannerContainer]}>
+            <View style={styles.scannerHeader}>
+              <Text style={styles.scannerTitle}>Agilito AI Receipt Scanner</Text>
+              <TouchableOpacity onPress={() => setScanModalVisible(false)} style={styles.scannerCloseBtn}>
+                <Ionicons name="close" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.viewfinderContainer}>
+                <View style={styles.viewfinderFrame}>
+                  {/* Glowing Laser line moves vertically during scan */}
+                  {scanning && (
+                    <Animated.View
+                      style={[
+                        styles.laserLine,
+                        {
+                          transform: [
+                            {
+                              translateY: scanAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [10, (SCREEN_W - 80) * 1.35 - 15],
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                    />
+                  )}
+
+                  {/* Mock receipt view inside camera viewfinder */}
+                  <View style={{ width: '85%', height: '85%', padding: 14, backgroundColor: '#FFFFFF', borderRadius: 8 }}>
+                    <Text style={[styles.mockReceiptText, { fontSize: 11, fontFamily: 'Courier', textAlign: 'center', marginBottom: 6, fontWeight: 'bold' }]}>
+                      {MOCK_RECEIPTS[activeReceiptIdx].merchant.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.mockReceiptText, { fontSize: 8, fontFamily: 'Courier', textAlign: 'center', color: '#64748B', marginBottom: 12 }]}>
+                      {MOCK_RECEIPTS[activeReceiptIdx].date}
+                    </Text>
+                    {MOCK_RECEIPTS[activeReceiptIdx].items.map((line, lIdx) => (
+                      <Text key={lIdx} style={[styles.mockReceiptText, { fontFamily: 'Courier', color: '#1E293B' }]}>
+                        {line}
+                      </Text>
+                    ))}
+                  </View>
+
+                  {/* Scan Status Badge inside viewfinder */}
+                  {scanning && (
+                    <View style={styles.scanStatusBadge}>
+                      <ActivityIndicator size="small" color="#38BDF8" />
+                      <Text style={styles.scanStatusText}>{scanPhase}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Receipt Carousel selector */}
+              {!scanning && (
+                <View style={{ marginVertical: 12 }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 11, fontFamily: 'Poppins-Bold', textTransform: 'uppercase', textAlign: 'center', marginBottom: 8, letterSpacing: 0.5 }}>
+                    Select Receipt to Scan
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+                    {MOCK_RECEIPTS.map((r, idx) => (
+                      <TouchableOpacity
+                        key={r.id}
+                        activeOpacity={0.8}
+                        onPress={() => setActiveReceiptIdx(idx)}
+                        style={[
+                          styles.mockReceiptCard,
+                          {
+                            borderColor: activeReceiptIdx === idx ? '#38BDF8' : '#334155',
+                            backgroundColor: activeReceiptIdx === idx ? '#0F172A' : '#1E293B',
+                          }
+                        ]}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'Poppins-Bold' }}>
+                          {r.merchant}
+                        </Text>
+                        <Text style={{ color: '#38BDF8', fontSize: 12, fontFamily: 'Poppins-SemiBold' }}>
+                          ₱{r.amount.toLocaleString()}
+                        </Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontFamily: 'Poppins-Medium' }}>
+                          Category: {r.category}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Shutter capture button */}
+              {!scanning && (
+                <TouchableOpacity
+                  style={styles.shutterBtn}
+                  onPress={handleScanReceipt}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="scan" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1111,6 +1339,142 @@ const styles = StyleSheet.create({
   deleteConfirmText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+  },
+  scanBtnText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  scannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+  },
+  scannerCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewfinderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    paddingVertical: 20,
+  },
+  viewfinderFrame: {
+    width: SCREEN_W - 80,
+    height: (SCREEN_W - 80) * 1.35,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#38BDF8',
+    backgroundColor: '#1E293B',
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  laserLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 10,
+  },
+  mockReceiptScroll: {
+    maxHeight: 120,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  mockReceiptCard: {
+    width: SCREEN_W - 80,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  mockReceiptText: {
+    fontFamily: 'Courier',
+    fontSize: 10,
+    color: '#334155',
+    lineHeight: 14,
+  },
+  shutterBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#38BDF8',
+    borderWidth: 5,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 32,
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  scanStatusBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignSelf: 'center',
+    position: 'absolute',
+    bottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 20,
+  },
+  scanStatusText: {
+    color: '#38BDF8',
+    fontSize: 12,
     fontFamily: 'Poppins-Bold',
     fontWeight: '700',
   },

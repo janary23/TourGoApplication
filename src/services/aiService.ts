@@ -1,4 +1,4 @@
-import { GEMINI_API_KEY } from '../config/env';
+import { GEMINI_API_KEY, GOOGLE_MAPS_API_KEY } from '../config/env';
 
 export const AI_FEATURES_ENABLED = true;
 
@@ -465,6 +465,75 @@ Do not wrap in markdown code blocks.`;
   }
 }
 
+export interface SpontaneousDayStop {
+  time: string;           // "8:30 AM"
+  title: string;          // venue / stop name, e.g. "Blue Bottle Coffee"
+  category: string;       // e.g. "Coffee Shop", "Brunch", "Scenic Spot"
+  description: string;    // short 1-line hook
+  durationMinutes: number;
+}
+
+export interface SpontaneousDayPlan {
+  destination: string;
+  stops: SpontaneousDayStop[];
+}
+
+// 14. ONE-MINUTE SPONTANEOUS DAY PLANNER (single-day, no multi-day planning)
+export async function generateSpontaneousDayPlan(
+  destination: string,
+  dateLabel: string,
+  preferences: string[],
+  companions: string,
+  optimizeRouting: boolean = false
+): Promise<SpontaneousDayPlan> {
+  const systemPrompt = `You are Agilito, a smart travel co-pilot. Build a complete, beautifully optimized ONE-DAY itinerary for a spontaneous trip.
+This is NOT a multi-day trip — only a single day (morning to evening). Do not include overnight stays or multiple days.
+Plan 3 to 5 great stops total. Pick quality over quantity: the best local places that match the preferences, placed in a natural geographic order so the route flows (no backtracking).
+Return ONLY a JSON object matching this structure:
+{
+  "destination": "the clean destination name",
+  "stops": [
+    {
+      "time": "8:30 AM",
+      "title": "place name",
+      "category": "short type e.g. Coffee Shop, Brunch, Scenic Spot, Museum, Rooftop Bar",
+      "description": "one punchy sentence describing what to do there",
+      "durationMinutes": 45
+    }
+  ]
+}
+Guidelines:
+- "time" must be 12-hour format like "8:30 AM" or "5:30 PM".
+- "durationMinutes" must be a plain number (between 30 and 150).
+- Stops must be in chronological order (morning first, evening last) and nearby each other.
+- If preferences are empty, pick a balanced mix (cafe, highlight/attraction, lunch, scenic stop, dinner or sunset spot).
+- The final stop should be a satisfying sunset or evening moment.`;
+
+  const userPrompt = `Where: ${destination}
+When: ${dateLabel}
+Preferences: ${preferences.join(', ') || 'General mix'}
+Going with: ${companions || 'Just myself'}
+${optimizeRouting ? 'ACTION: Re-order the same set of stops so the route is the shortest possible (no backtracking) and adjust times accordingly. Keep every stop.' : 'Build the plan now.'}`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    const parsed = JSON.parse(text) as SpontaneousDayPlan;
+    const stops = Array.isArray(parsed?.stops) ? parsed.stops : [];
+    if (stops.length === 0) throw new Error('Empty plan');
+    return { destination: parsed.destination || destination, stops };
+  } catch (error: any) {
+    console.warn('generateSpontaneousDayPlan Gemini error:', error);
+    const seed = destination.split(',')[0].trim() || destination;
+    const fallback: SpontaneousDayStop[] = [
+      { time: '8:30 AM', title: `Local Coffee Start`, category: 'Coffee Shop', description: `Kick off the day in ${seed} with a well-loved local coffee stop.`, durationMinutes: 45 },
+      { time: '10:00 AM', title: `${seed} Highlights`, category: 'Sightseeing', description: 'See the iconic spots, take photos, and soak in the scenery.', durationMinutes: 90 },
+      { time: '12:45 PM', title: 'Local Lunch', category: 'Restaurant', description: `Enjoy a classic ${seed} lunch at a crowd favorite.`, durationMinutes: 75 },
+      { time: '5:30 PM', title: 'Sunset View', category: 'Scenic Spot', description: 'End the day with a beautiful sunset view.', durationMinutes: 60 },
+    ];
+    return { destination, stops: fallback };
+  }
+}
+
 export interface AiAnalysisSuggestion {
   type: 'ambitious' | 'improvement' | 'theme' | 'prep' | 'personalization';
   title: string;
@@ -795,4 +864,290 @@ Generate 3 suggested stops.`;
     ];
   }
 }
+
+export interface AiSearchIntent {
+  searchQuery: string;
+  location: string;
+  budgetCategory: 'free' | 'budget' | 'moderate' | 'luxury';
+  transpoMode: 'car' | 'bus' | 'walk' | 'flight' | 'boat';
+  bestTimeOfDay: 'morning' | 'afternoon' | 'evening' | 'night' | '24/7';
+  category: 'all' | 'outdoors' | 'heritage' | 'art' | 'parks' | 'food';
+  reasoning: string;
+}
+
+export async function parseSearchIntentWithAi(query: string): Promise<AiSearchIntent> {
+  const systemPrompt = `You are an expert travel search assistant for TourGo. Analyze the user's natural language search query and extract structured search parameters.
+The categories are:
+- outdoors (beaches, nature, lagoons, mountains, hiking)
+- heritage (history, historical landmarks, shrines, churches)
+- art (museums, galleries, art events)
+- parks (theme parks, amusement parks, zoos, gardens)
+- food (restaurants, cafes, local eats)
+
+Extract:
+1. searchQuery: A optimized, refined text query to send to Google Places (e.g. "nature spots in Pampanga"). If the user searched for a location name like "Bulacan", generate a query like "tourist spots in Bulacan".
+2. location: The main city/province/region resolved (e.g. "Pampanga", "Manila", "Siargao"). Default to "Philippines".
+3. budgetCategory: 'free', 'budget', 'moderate', or 'luxury'. Default to 'moderate' if not specified.
+4. transpoMode: 'car', 'bus', 'walk', 'flight', or 'boat'. Default to 'car' if not specified.
+5. bestTimeOfDay: 'morning', 'afternoon', 'evening', 'night', or '24/7'. Default to 'morning' if not specified.
+6. category: 'all', 'outdoors', 'heritage', 'art', 'parks', or 'food'. Match to closest categories.
+7. reasoning: A short sentence explaining the parsed parameters to show the user.
+
+Return your output ONLY as a JSON object matching this structure:
+{
+  "searchQuery": "...",
+  "location": "...",
+  "budgetCategory": "free/budget/moderate/luxury",
+  "transpoMode": "car/bus/walk/flight/boat",
+  "bestTimeOfDay": "morning/afternoon/evening/night/24/7",
+  "category": "all/outdoors/heritage/art/parks/food",
+  "reasoning": "..."
+}
+
+Do not wrap in markdown code blocks.`;
+
+  try {
+    const text = await callGemini(systemPrompt, `User search query: "${query}"`);
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('parseSearchIntentWithAi error:', error);
+    const lower = query.toLowerCase();
+    let cat: any = 'all';
+    if (lower.includes('nature') || lower.includes('beach') || lower.includes('outdoor')) cat = 'outdoors';
+    else if (lower.includes('history') || lower.includes('heritage') || lower.includes('church')) cat = 'heritage';
+    else if (lower.includes('museum') || lower.includes('art') || lower.includes('gallery')) cat = 'art';
+    else if (lower.includes('park') || lower.includes('zoo') || lower.includes('amusement')) cat = 'parks';
+    else if (lower.includes('food') || lower.includes('cafe') || lower.includes('eat') || lower.includes('restaurant')) cat = 'food';
+
+    let budget: any = 'moderate';
+    if (lower.includes('free')) budget = 'free';
+    else if (lower.includes('cheap') || lower.includes('budget') || lower.includes('peso')) budget = 'budget';
+    else if (lower.includes('expensive') || lower.includes('luxury') || lower.includes('resort')) budget = 'luxury';
+
+    let transpo: any = 'car';
+    if (lower.includes('walk') || lower.includes('foot')) transpo = 'walk';
+    else if (lower.includes('bus') || lower.includes('commute')) transpo = 'bus';
+    else if (lower.includes('flight') || lower.includes('plane')) transpo = 'flight';
+    else if (lower.includes('boat') || lower.includes('ferry')) transpo = 'boat';
+
+    let time: any = 'morning';
+    if (lower.includes('afternoon') || lower.includes('pm')) time = 'afternoon';
+    else if (lower.includes('evening') || lower.includes('night')) time = 'evening';
+    else if (lower.includes('24h') || lower.includes('24/7') || lower.includes('always')) time = '24/7';
+
+    let loc = 'Philippines';
+    const words = query.split(/\s+/);
+    for (const w of words) {
+      if (w.length > 3 && w[0] === w[0].toUpperCase() && !['best', 'tourist', 'spots', 'visit', 'nature', 'beach', 'parks', 'eats'].some(k => w.toLowerCase().includes(k))) {
+        loc = w.replace(/[^a-zA-Z]/g, '');
+        break;
+      }
+    }
+
+    return {
+      searchQuery: query,
+      location: loc,
+      budgetCategory: budget,
+      transpoMode: transpo,
+      bestTimeOfDay: time,
+      category: cat,
+      reasoning: `AI Search (Fallback): location ${loc}, category ${cat}, budget ${budget}, transport ${transpo}, time ${time}.`
+    };
+  }
+}
+
+export interface InteractiveSuggestedStop {
+  title: string;
+  category: string;
+  description: string;
+  location: string;
+  time: string;
+  costEstimated: string;
+  duration: string;
+  imageUrl?: string;
+}
+
+async function fetchGooglePlacePhoto(title: string): Promise<string | null> {
+  try {
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.photos'
+      },
+      body: JSON.stringify({
+        textQuery: title + " Philippines"
+      })
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      const photoName = json?.places?.[0]?.photos?.[0]?.name;
+      if (photoName) {
+        return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=600&key=${GOOGLE_MAPS_API_KEY}`;
+      }
+    }
+  } catch (e) {
+    console.warn('Google Places photo error for ' + title, e);
+  }
+  return null;
+}
+
+async function fetchWikiImage(title: string): Promise<string | null> {
+  try {
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(title + " Philippines")}&format=json&utf8=1`;
+    const searchRes = await fetch(searchUrl);
+    const searchJson = await searchRes.json();
+    const firstResult = searchJson?.query?.search?.[0];
+    
+    if (firstResult) {
+      const pageTitle = firstResult.title;
+      const imgUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=600&titles=${encodeURIComponent(pageTitle)}&redirects=true`;
+      const imgRes = await fetch(imgUrl);
+      const imgJson = await imgRes.json();
+      const pages = imgJson?.query?.pages;
+      if (pages) {
+        const pageId = Object.keys(pages)[0];
+        const thumbnail = pages[pageId]?.thumbnail?.source;
+        return thumbnail || null;
+      }
+    }
+  } catch (e) {
+    console.warn('Wikipedia image fetch error for ' + title, e);
+  }
+  return null;
+}
+
+function getPlaceImageUrl(name: string, categories: string[] = []): string {
+  const normalized = name.toLowerCase();
+  
+  if (normalized.includes('sardine') || normalized.includes('moalboal')) {
+    return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('kawasan') || normalized.includes('falls')) {
+    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('leah') || normalized.includes('temple')) {
+    return 'https://images.unsplash.com/photo-1582555172866-f73bb12a2abf?auto=format&fit=crop&w=600&q=80';
+  }
+  if (normalized.includes('oslob') || normalized.includes('whale')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80';
+  }
+  
+  let keyword = 'scenery';
+  const catStr = categories.join(',').toLowerCase();
+  if (catStr.includes('beach') || catStr.includes('sea') || catStr.includes('island')) {
+    keyword = 'beach';
+  } else if (catStr.includes('food') || catStr.includes('restaurant') || catStr.includes('caf')) {
+    keyword = 'food';
+  } else if (catStr.includes('nature') || catStr.includes('falls') || catStr.includes('hiking')) {
+    keyword = 'nature';
+  }
+  
+  return `https://loremflickr.com/600/400/philippines,${keyword}/all`;
+}
+
+export async function suggestInteractiveStops(
+  destination: string,
+  dayIndex: number,
+  timeOfDay: string, // Morning, Afternoon, Evening, Night
+  existingStops: { time: string; title: string; location: string }[],
+  preferences: string[],
+  naturalQuery: string,
+  rejectedTitles: string[]
+): Promise<InteractiveSuggestedStop[]> {
+  const systemPrompt = `You are Agilito, the AI Travel Co-pilot for TourGo. You are helping the user build their itinerary step-by-step.
+Based on the current travel plan for the day, suggest exactly 3 relevant place/activity options in ${destination} for Day ${dayIndex + 1}.
+
+Guidelines:
+1. "time": Suggest a realistic start time (12-hour format, e.g. "10:30 AM") for this activity. It should fit logically with existing planned activities for the day: ${JSON.stringify(existingStops)}.
+2. Do NOT suggest duplicate activities or places that are in this rejected list: ${JSON.stringify(rejectedTitles)}.
+3. The suggestions should match user preferences: tags: ${preferences.join(', ')}, natural prompt: "${naturalQuery}".
+4. "duration": How long the activity takes, e.g. "2 hours".
+5. "costEstimated": In PHP, e.g. "Free" or "₱300-₱500/person".
+6. "category": Primary category (must be one of: "Beach", "Nature", "Food", "Sightseeing", "Adventure", "Culture", "Shopping", "Café", "Nightlife", "Relaxing").
+
+Return your output ONLY as a JSON array of 3 objects with these exact fields:
+- title: string
+- category: string
+- description: string
+- location: string
+- time: string
+- duration: string
+- costEstimated: string
+
+Do not wrap in markdown code blocks.`;
+
+  const userPrompt = `Destination: ${destination}
+Day Index: ${dayIndex}
+Time of Day context: ${timeOfDay}
+Existing activities: ${JSON.stringify(existingStops)}
+Preferences: ${preferences.join(', ')}
+User query: "${naturalQuery}"
+Please suggest 3 activities.`;
+
+  try {
+    const text = await callGemini(systemPrompt, userPrompt);
+    const parsed: InteractiveSuggestedStop[] = JSON.parse(text);
+    
+    // Enrich with image fetch in parallel
+    const enriched = await Promise.all(parsed.map(async (item) => {
+      const googleImg = await fetchGooglePlacePhoto(item.title);
+      const wikiImg = googleImg ? null : await fetchWikiImage(item.title);
+      const fallback = (googleImg || wikiImg) ? null : getPlaceImageUrl(item.title, [item.category]);
+      return {
+        ...item,
+        imageUrl: googleImg || wikiImg || fallback || ''
+      };
+    }));
+    
+    return enriched;
+  } catch (error) {
+    console.warn('suggestInteractiveStops error:', error);
+    // Fallback: simple suggestions
+    const seed = destination.split(',')[0].trim() || destination;
+    const fallbackList = [
+      {
+        title: "Sightseeing in " + seed,
+        category: "Sightseeing",
+        description: "A nice, relaxed sightseeing activity to explore the highlights.",
+        location: destination,
+        time: timeOfDay === 'Morning' ? '09:00 AM' : timeOfDay === 'Afternoon' ? '02:00 PM' : '06:00 PM',
+        duration: "2 hours",
+        costEstimated: "Free"
+      },
+      {
+        title: "Lunch Spot in " + seed,
+        category: "Food",
+        description: "Enjoy delicious local delicacies and seafood.",
+        location: destination,
+        time: "12:30 PM",
+        duration: "1.5 hours",
+        costEstimated: "₱300 - ₱500"
+      },
+      {
+        title: "Afternoon Beach Trip",
+        category: "Beach",
+        description: "Relax by the shore and catch the beautiful tropical ocean view.",
+        location: destination,
+        time: timeOfDay === 'Night' ? '08:30 PM' : '03:30 PM',
+        duration: "2.5 hours",
+        costEstimated: "Free"
+      }
+    ];
+
+    return Promise.all(fallbackList.map(async (item) => {
+      const googleImg = await fetchGooglePlacePhoto(item.title);
+      const wikiImg = googleImg ? null : await fetchWikiImage(item.title);
+      const fallback = (googleImg || wikiImg) ? null : getPlaceImageUrl(item.title, [item.category]);
+      return {
+        ...item,
+        imageUrl: googleImg || wikiImg || fallback || ''
+      };
+    }));
+  }
+}
+
+
 

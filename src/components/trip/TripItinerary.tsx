@@ -1,9 +1,42 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, TextInput, ScrollView, Alert, ActivityIndicator, Dimensions, Animated, PanResponder } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  Image,
+  Dimensions,
+  Animated,
+  Pressable
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { addItineraryItem as dbAddItineraryItem, addPoll as dbAddPoll } from '../../services/tripService';
-import { suggestItineraryStopsFromInterview, SuggestedStop } from '../../services/aiService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  addItineraryItem as dbAddItineraryItem,
+  updateItineraryItem as dbUpdateItineraryItem,
+  deleteItineraryItem as dbDeleteItineraryItem,
+  addPoll as dbAddPoll
+} from '../../services/tripService';
+import {
+  suggestInteractiveStops,
+  InteractiveSuggestedStop
+} from '../../services/aiService';
 
+// Enable layout animation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 interface TripItineraryProps {
   trip: any;
@@ -12,169 +45,29 @@ interface TripItineraryProps {
   loadTrip: () => void;
 }
 
-interface DraggableSuggestionCardProps {
-  item: SuggestedStop;
-  index: number;
-  colors: any;
-  onReject: () => void;
-  onAdd: () => void;
-  isHoveringDropZone: boolean;
-  setIsHoveringDropZone: (hovering: boolean) => void;
-  onDropToPoll: () => void;
+interface WarningItem {
+  id: string;
+  type: 'duplicate' | 'overlap' | 'insufficient_travel' | 'too_far_apart' | 'overpacked' | 'early_travel_transition';
+  title: string;
+  message: string;
+  itemId?: string;
+  itemId2?: string;
+  dayIndex?: number;
+  meta?: any;
 }
 
-function DraggableSuggestionCard({
-  item,
-  index,
-  colors,
-  onReject,
-  onAdd,
-  isHoveringDropZone,
-  setIsHoveringDropZone,
-  onDropToPoll,
-}: DraggableSuggestionCardProps) {
-  const pan = useRef(new Animated.ValueXY()).current;
-  const screenHeight = Dimensions.get('window').height;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (e, gestureState) => {
-        pan.setValue({ x: gestureState.dx, y: gestureState.dy });
-        if (gestureState.moveY > screenHeight - 180) {
-          setIsHoveringDropZone(true);
-        } else {
-          setIsHoveringDropZone(false);
-        }
-      },
-      onPanResponderRelease: (e, gestureState) => {
-        setIsHoveringDropZone(false);
-        if (gestureState.moveY > screenHeight - 180) {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
-          onDropToPoll();
-        } else {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  return (
-    <Animated.View
-      style={[
-        styles.suggestionCard,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.cardBorder,
-          transform: [{ translateX: pan.x }, { translateY: pan.y }],
-        },
-      ]}
-      {...panResponder.panHandlers}
-    >
-      <View style={styles.suggestionHeader}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <Ionicons name="time-outline" size={13} color="#0284C7" />
-            <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: '#0284C7' }}>{item.time}</Text>
-          </View>
-          <Text style={{ fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', color: colors.text, marginBottom: 2 }}>{item.title}</Text>
-          <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
-            <Ionicons name="location-outline" size={11} color={colors.textSecondary} /> {item.location}
-          </Text>
-        </View>
-
-        <View style={styles.suggestionControls}>
-          <TouchableOpacity
-            style={[styles.suggestionBtn, { backgroundColor: '#FEE2E2' }]}
-            onPress={onReject}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close" size={14} color="#EF4444" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.suggestionBtn, { backgroundColor: '#E0F2FE' }]}
-            onPress={onAdd}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="checkmark" size={14} color="#0284C7" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 6, lineHeight: 16 }}>
-        {item.description}
-      </Text>
-      
-      <View style={styles.suggestionFooter}>
-        <Text style={{ fontSize: 10, color: colors.textMuted }}>
-          Cost: <Text style={{ color: colors.text, fontWeight: '700' }}>{item.costEstimated}</Text>
-        </Text>
-        <View style={styles.dragIndicator}>
-          <Ionicons name="swap-vertical" size={12} color={colors.textMuted} />
-          <Text style={{ fontSize: 10, color: colors.textMuted, fontFamily: 'PlusJakartaSans-Bold' }}>drag to poll</Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
-const getActivityTypeInfo = (title: string) => {
-  const t = title.toLowerCase();
-  if (t.includes('flight') || t.includes('airport') || t.includes('plane') || t.includes('terminal')) {
-    return { icon: 'airplane', color: '#0EA5E9', bg: '#F0F9FF', bgDark: '#082F49', label: 'Flight' };
-  }
-  if (t.includes('hotel') || t.includes('check-in') || t.includes('check in') || t.includes('stay') || t.includes('room') || t.includes('resort') || t.includes('hostel') || t.includes('lodging')) {
-    return { icon: 'bed', color: '#6366F1', bg: '#EEF2FF', bgDark: '#1E1B4B', label: 'Hotel' };
-  }
-  if (t.includes('restaurant') || t.includes('dinner') || t.includes('lunch') || t.includes('breakfast') || t.includes('eat') || t.includes('snack') || t.includes('brunch') || t.includes('buffet') || t.includes('dining')) {
-    return { icon: 'restaurant', color: '#10B981', bg: '#ECFDF5', bgDark: '#064E3B', label: 'Dining' };
-  }
-  if (t.includes('cafe') || t.includes('coffee') || t.includes('starbucks') || t.includes('tea') || t.includes('boba') || t.includes('drinks') || t.includes('bar') || t.includes('pub') || t.includes('club')) {
-    return { icon: 'cafe', color: '#B45309', bg: '#FEF3C7', bgDark: '#78350F', label: 'Drinks' };
-  }
-  if (t.includes('beach') || t.includes('island') || t.includes('lake') || t.includes('river') || t.includes('waterfall') || t.includes('hike') || t.includes('hiking') || t.includes('mountain') || t.includes('park') || t.includes('nature') || t.includes('forest') || t.includes('outdoor')) {
-    return { icon: 'sunny', color: '#F59E0B', bg: '#FFFBEB', bgDark: '#451A03', label: 'Outdoors' };
-  }
-  if (t.includes('sight') || t.includes('tour') || t.includes('visit') || t.includes('explore') || t.includes('museum') || t.includes('gallery') || t.includes('temple') || t.includes('church') || t.includes('landmark')) {
-    return { icon: 'eye', color: '#8B5CF6', bg: '#F5F3FF', bgDark: '#2E1065', label: 'Sightseeing' };
-  }
-  if (t.includes('bus') || t.includes('train') || t.includes('taxi') || t.includes('drive') || t.includes('ride') || t.includes('transfer') || t.includes('ferry') || t.includes('boat') || t.includes('car') || t.includes('subway') || t.includes('transit')) {
-    return { icon: 'bus', color: '#6B7280', bg: '#F3F4F6', bgDark: '#1F2937', label: 'Transport' };
-  }
-  if (t.includes('shop') || t.includes('store') || t.includes('mall') || t.includes('market') || t.includes('souvenir') || t.includes('boutique') || t.includes('grocery')) {
-    return { icon: 'cart', color: '#EC4899', bg: '#FDF2F8', bgDark: '#500724', label: 'Shopping' };
-  }
-  if (t.includes('movie') || t.includes('theater') || t.includes('show') || t.includes('concert') || t.includes('festival') || t.includes('massage') || t.includes('spa') || t.includes('gym') || t.includes('sport') || t.includes('swim') || t.includes('snorkel') || t.includes('dive') || t.includes('adventure') || t.includes('game') || t.includes('play')) {
-    return { icon: 'sparkles', color: '#F43F5E', bg: '#FFF1F2', bgDark: '#4C0519', label: 'Activity' };
-  }
-  return { icon: 'location', color: '#14B8A6', bg: '#F0FDFA', bgDark: '#042F2E', label: 'Stop' };
-};
-
-const parseTime = (t: string) => {
-  if (!t) return 0;
-  const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-  if (!m) return 0;
-  let h = parseInt(m[1]); const min = parseInt(m[2]); const ap = m[3];
-  if (ap) { if (ap.toUpperCase() === "PM" && h < 12) h += 12; if (ap.toUpperCase() === "AM" && h === 12) h = 0; }
-  return h * 60 + min;
-};
-
-const getTimeDifference = (t1: string, t2: string) => {
-  const mins1 = parseTime(t1);
-  const mins2 = parseTime(t2);
-  if (!mins1 || !mins2) return null;
-  const diff = mins2 - mins1;
-  if (diff <= 0) return null;
-  const hrs = Math.floor(diff / 60);
-  const mins = diff % 60;
-  return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
-};
+const VIBE_OPTIONS = [
+  { label: 'Beaches', icon: 'sunny-outline', value: 'Beaches' },
+  { label: 'Nature', icon: 'leaf-outline', value: 'Nature' },
+  { label: 'Food', icon: 'restaurant-outline', value: 'Food' },
+  { label: 'Sightseeing', icon: 'eye-outline', value: 'Sightseeing' },
+  { label: 'Adventure', icon: 'bicycle-outline', value: 'Adventure' },
+  { label: 'Culture', icon: 'color-palette-outline', value: 'Culture' },
+  { label: 'Shopping', icon: 'cart-outline', value: 'Shopping' },
+  { label: 'Cafés', icon: 'cafe-outline', value: 'Cafés' },
+  { label: 'Nightlife', icon: 'moon-outline', value: 'Nightlife' },
+  { label: 'Relaxing', icon: 'sparkles-outline', value: 'Relaxing' },
+];
 
 export default function TripItinerary({
   trip,
@@ -182,498 +75,1388 @@ export default function TripItinerary({
   isOrganizer,
   loadTrip,
 }: TripItineraryProps) {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newItiTime, setNewItiTime] = useState('');
-  const [newItiTitle, setNewItiTitle] = useState('');
-  const [newItiDesc, setNewItiDesc] = useState('');
-  const [newItiLoc, setNewItiLoc] = useState('');
-  const [newItiDay, setNewItiDay] = useState(0);
-  const [isAiGeneratingItinerary, setIsAiGeneratingItinerary] = useState(false);
-  const [aiGeneratingStatus, setAiGeneratingStatus] = useState('');
+  // Modal states
+  const [copilotModalVisible, setCopilotModalVisible] = useState(false);
+  const [copilotTab, setCopilotTab] = useState<'day' | 'ai' | 'warnings'>('day');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Day selection and destinations
+  const [activeDay, setActiveDay] = useState<number>(0);
+  const [dayDestinations, setDayDestinations] = useState<string[]>([]);
+  const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
+  const [naturalQuery, setNaturalQuery] = useState<string>('');
+  
+  // Suggested places
+  const [aiSuggestions, setAiSuggestions] = useState<InteractiveSuggestedStop[]>([]);
+  const [rejectedSuggestions, setRejectedSuggestions] = useState<string[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
+  const [lastAddedPlace, setLastAddedPlace] = useState<string>('');
 
-  // AI Interview Flow states
-  const [interviewStep, setInterviewStep] = useState(0);
-  const [interviewDayIndex, setInterviewDayIndex] = useState(0);
-  const [interviewTimeRange, setInterviewTimeRange] = useState('Morning');
-  const [interviewNotes, setInterviewNotes] = useState('');
-  const [aiSuggestions, setAiSuggestions] = useState<SuggestedStop[]>([]);
-  const [rejectedSuggestionIds, setRejectedSuggestionIds] = useState<number[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [isHoveringDropZone, setIsHoveringDropZone] = useState(false);
+  // Warnings engine states
+  const [warnings, setWarnings] = useState<WarningItem[]>([]);
+  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<string[]>([]);
 
-  const openInterviewModal = () => {
-    setInterviewStep(0);
-    setInterviewDayIndex(newItiDay);
-    setInterviewTimeRange('Morning');
-    setInterviewNotes('');
-    setAiSuggestions([]);
-    setRejectedSuggestionIds([]);
-    setIsLoadingSuggestions(false);
-    setIsHoveringDropZone(false);
-    setModalVisible(true);
-  };
+  // Manual Edit Modal states
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDayIndex, setEditDayIndex] = useState(0);
+  const [editDuration, setEditDuration] = useState('90 mins');
 
+  // Add Custom Modal states
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customTime, setCustomTime] = useState('09:00 AM');
+  const [customLocation, setCustomLocation] = useState('');
+  const [customDescription, setCustomDescription] = useState('');
+  const [customDayIndex, setCustomDayIndex] = useState(0);
+  const [customDuration, setCustomDuration] = useState('90 mins');
+
+  // Animated translation value for smooth iOS-style bottom sheet
+  const slideAnim = useRef(new Animated.Value(SCREEN_H)).current;
+
+  // Setup trip duration indices
   const getTripDuration = () => {
     if (trip.startDate && trip.endDate && trip.startDate !== 'TBD' && trip.endDate !== 'TBD') {
       const start = new Date(trip.startDate);
       const end = new Date(trip.endDate);
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      return Math.min(Math.max(diffDays, 1), 7);
+      return Math.min(Math.max(diffDays, 1), 14);
     }
-    return 7;
+    return 3;
   };
   const duration = getTripDuration();
   const dayIndices = Array.from({ length: duration }, (_, i) => i);
 
-  const handleAddItinerary = async () => {
-    if (!newItiTime || !newItiTitle) {
-      Alert.alert("Error", "Time and Activity Title are required.");
-      return;
+  // Load and save day destinations locally
+  useEffect(() => {
+    const loadDestinations = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(`day_dests_${trip.id}`);
+        if (stored) {
+          setDayDestinations(JSON.parse(stored));
+        } else {
+          const dests = trip.destination.split(',').map((s: string) => s.trim());
+          const initial = Array.from({ length: duration }, (_, i) => dests[i] || dests[dests.length - 1] || trip.destination);
+          setDayDestinations(initial);
+        }
+      } catch (e) {
+        console.warn('Failed to load day destinations', e);
+      }
+    };
+    loadDestinations();
+  }, [trip.id, duration, trip.destination]);
+
+  const saveDestinations = async (updated: string[]) => {
+    try {
+      await AsyncStorage.setItem(`day_dests_${trip.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save day destinations', e);
     }
-    const { error } = await dbAddItineraryItem(trip.id, newItiDay, newItiTime, newItiTitle, newItiDesc, newItiLoc);
-    if (error) {
-      Alert.alert('Error', error);
-      return;
-    }
-    setNewItiTime('');
-    setNewItiTitle('');
-    setNewItiDesc('');
-    setNewItiLoc('');
-    setModalVisible(false);
-    loadTrip();
-    Alert.alert("Success", "Schedule activity added!");
   };
 
-  const handleAcceptSuggestion = async (s: SuggestedStop, idx: number) => {
+  // Animate sliding sheet modal open/close
+  useEffect(() => {
+    if (copilotModalVisible) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        speed: 12,
+        bounciness: 2,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_H,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [copilotModalVisible]);
+
+  // Time parsing helpers
+  const parseTimeToMin = (t: string) => {
+    if (!t) return 0;
+    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return 0;
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const ap = m[3];
+    if (ap) {
+      if (ap.toUpperCase() === "PM" && h < 12) h += 12;
+      if (ap.toUpperCase() === "AM" && h === 12) h = 0;
+    }
+    return h * 60 + min;
+  };
+
+  const getDurationMin = (item: any) => {
+    if (item.description) {
+      const match = item.description.match(/Duration:\s*(\d+)\s*(hour|hr|min|minute)/i);
+      if (match) {
+        const val = parseInt(match[1]);
+        if (match[2].toLowerCase().startsWith('h')) return val * 60;
+        return val;
+      }
+    }
+    return 90; // default 90 mins
+  };
+
+  const formatMinToTime = (min: number) => {
+    let h = Math.floor(min / 60);
+    const m = min % 60;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
+
+  // Local travel estimation (in minutes)
+  const getTravelTimeMinutes = (locA: string, locB: string) => {
+    if (!locA || !locB) return 30;
+    const cleanA = locA.trim().toLowerCase();
+    const cleanB = locB.trim().toLowerCase();
+    if (cleanA === cleanB) return 10;
+
+    const isCebu = (s: string) => s.includes('cebu') || s.includes('mactan') || s.includes('airport') || s.includes('ocean park') || s.includes('temple of leah') || s.includes('tops');
+    const isMoalboal = (s: string) => s.includes('moalboal') || s.includes('sardine') || s.includes('panagsama');
+    const isOslob = (s: string) => s.includes('oslob') || s.includes('whale') || s.includes('sumilon');
+    const isKawasan = (s: string) => s.includes('kawasan') || s.includes('badian') || s.includes('falls');
+
+    if (isCebu(cleanA) && isMoalboal(cleanB)) return 150;
+    if (isMoalboal(cleanA) && isCebu(cleanB)) return 150;
+    if (isCebu(cleanA) && isOslob(cleanB)) return 180;
+    if (isOslob(cleanA) && isCebu(cleanB)) return 180;
+    if (isCebu(cleanA) && isKawasan(cleanB)) return 150;
+    if (isKawasan(cleanA) && isCebu(cleanB)) return 150;
+    
+    if (isMoalboal(cleanA) && isKawasan(cleanB)) return 45;
+    if (isKawasan(cleanA) && isMoalboal(cleanB)) return 45;
+    if (isMoalboal(cleanA) && isOslob(cleanB)) return 90;
+    if (isOslob(cleanA) && isMoalboal(cleanB)) return 90;
+
+    return 30;
+  };
+
+  // Warning rules engine
+  useEffect(() => {
+    const evalWarnings = () => {
+      const list: WarningItem[] = [];
+      const itinerary = trip.itinerary || [];
+      
+      const dayCounts: Record<number, number> = {};
+      itinerary.forEach((item: any) => {
+        dayCounts[item.dayIndex] = (dayCounts[item.dayIndex] || 0) + 1;
+      });
+      Object.keys(dayCounts).forEach(dayKey => {
+        const dayIdx = parseInt(dayKey);
+        if (dayCounts[dayIdx] > 4) {
+          list.push({
+            id: `overpacked_${dayIdx}`,
+            type: 'overpacked',
+            title: 'Overpacked Schedule',
+            message: `Day ${dayIdx + 1} has ${dayCounts[dayIdx]} activities. It looks a bit tight and might limit rest.`,
+            dayIndex: dayIdx
+          });
+        }
+      });
+
+      const itemsByDay: Record<number, any[]> = {};
+      itinerary.forEach((item: any) => {
+        if (!itemsByDay[item.dayIndex]) itemsByDay[item.dayIndex] = [];
+        itemsByDay[item.dayIndex].push(item);
+      });
+
+      Object.keys(itemsByDay).forEach(dayKey => {
+        const dayIdx = parseInt(dayKey);
+        const dayStops = [...itemsByDay[dayIdx]].sort((a, b) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
+
+        // Duplicates
+        for (let i = 0; i < dayStops.length; i++) {
+          for (let j = i + 1; j < dayStops.length; j++) {
+            const itemA = dayStops[i];
+            const itemB = dayStops[j];
+            const titleA = itemA.title.toLowerCase();
+            const titleB = itemB.title.toLowerCase();
+
+            if (titleA === titleB || 
+                (titleA.includes('lunch') && titleB.includes('lunch')) || 
+                (titleA.includes('dinner') && titleB.includes('dinner')) || 
+                (titleA.includes('breakfast') && titleB.includes('breakfast')) ||
+                (titleA.includes('kawasan') && titleB.includes('kawasan')) ||
+                (titleA.includes('sardine') && titleB.includes('sardine'))) {
+              list.push({
+                id: `duplicate_${itemA.id}_${itemB.id}`,
+                type: 'duplicate',
+                title: 'Duplicate Activity Warning',
+                message: `"${itemA.title}" and "${itemB.title}" appear to be duplicate events on Day ${dayIdx + 1}.`,
+                itemId: itemA.id,
+                itemId2: itemB.id,
+                dayIndex: dayIdx
+              });
+            }
+          }
+        }
+
+        // Overlaps & Buffers
+        for (let i = 0; i < dayStops.length - 1; i++) {
+          const current = dayStops[i];
+          const next = dayStops[i + 1];
+          const startMin = parseTimeToMin(current.time);
+          const nextStartMin = parseTimeToMin(next.time);
+          const duration = getDurationMin(current);
+          const endMin = startMin + duration;
+          const travelTime = getTravelTimeMinutes(current.location || current.title, next.location || next.title);
+
+          if (endMin > nextStartMin) {
+            list.push({
+              id: `overlap_${current.id}_${next.id}`,
+              type: 'overlap',
+              title: 'Overlap Encountered',
+              message: `"${current.title}" ends at ${formatMinToTime(endMin)}, but your next activity "${next.title}" starts at ${next.time}.`,
+              itemId: current.id,
+              itemId2: next.id,
+              dayIndex: dayIdx,
+              meta: { recommendedTime: formatMinToTime(endMin) }
+            });
+          } else if (endMin + travelTime > nextStartMin) {
+            const timeGap = nextStartMin - endMin;
+            list.push({
+              id: `travel_${current.id}_${next.id}`,
+              type: 'insufficient_travel',
+              title: 'Tight Travel Buffer',
+              message: `You only have ${timeGap} minutes between "${current.title}" and "${next.title}", but travel takes ${travelTime} minutes.`,
+              itemId: current.id,
+              itemId2: next.id,
+              dayIndex: dayIdx,
+              meta: { travelTime, recommendedTime: formatMinToTime(endMin + travelTime) }
+            });
+          } else if (travelTime >= 120) {
+            list.push({
+              id: `too_far_${current.id}_${next.id}`,
+              type: 'too_far_apart',
+              title: 'Distant Locations',
+              message: `"${current.title}" and "${next.title}" are far apart. Travel takes over ${Math.round(travelTime/60)} hours.`,
+              itemId: current.id,
+              itemId2: next.id,
+              dayIndex: dayIdx,
+              meta: { travelTime }
+            });
+          }
+        }
+      });
+
+      // Travel transition between days
+      const sortedDays = Object.keys(itemsByDay).map(Number).sort((a, b) => a - b);
+      for (let i = 0; i < sortedDays.length - 1; i++) {
+        const dayA = sortedDays[i];
+        const dayB = sortedDays[i + 1];
+        const destA = dayDestinations[dayA] || '';
+        const destB = dayDestinations[dayB] || '';
+
+        if (destA && destB && destA.toLowerCase() !== destB.toLowerCase()) {
+          const dayBStops = [...itemsByDay[dayB]].sort((a, b) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
+          if (dayBStops.length > 0) {
+            const firstOfB = dayBStops[0];
+            const firstOfBMin = parseTimeToMin(firstOfB.time);
+            if (firstOfBMin < 11 * 60) {
+              list.push({
+                id: `interday_${dayA}_${dayB}`,
+                type: 'early_travel_transition',
+                title: 'Early Transit Morning',
+                message: `First activity starts early at ${firstOfB.time}. You'll need to transfer from ${destA} to ${destB} very early.`,
+                itemId: firstOfB.id,
+                dayIndex: dayB,
+                meta: { recommendedTime: '11:00 AM' }
+              });
+            }
+          }
+        }
+      }
+
+      setWarnings(list);
+    };
+
+    evalWarnings();
+  }, [trip.itinerary, dayDestinations]);
+
+  // AI co-pilot actions
+  const handleConfirmDestination = (destText: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const updated = [...dayDestinations];
+    updated[activeDay] = destText.trim() || trip.destination;
+    setDayDestinations(updated);
+    saveDestinations(updated);
+    // Switch to Ask AI tab automatically after confirming
+    setCopilotTab('ai');
+  };
+
+  const getPlaceWarning = (placeTitle: string) => {
+    const titleLower = placeTitle.toLowerCase();
+    const itinerary = trip.itinerary || [];
+    const dayStops = itinerary.filter((item: any) => item.dayIndex === activeDay);
+
+    const exactDup = dayStops.some((item: any) => item.title.toLowerCase() === titleLower);
+    if (exactDup) return "Duplicate Name";
+
+    if (titleLower.includes('lunch') && dayStops.some((item: any) => item.title.toLowerCase().includes('lunch'))) {
+      return "Already has Lunch";
+    }
+    if (titleLower.includes('dinner') && dayStops.some((item: any) => item.title.toLowerCase().includes('dinner'))) {
+      return "Already has Dinner";
+    }
+    if (titleLower.includes('breakfast') && dayStops.some((item: any) => item.title.toLowerCase().includes('breakfast'))) {
+      return "Already has Breakfast";
+    }
+    return null;
+  };
+
+  const toggleSelectSuggestion = (title: string) => {
+    setSelectedSuggestions(prev => {
+      if (prev.includes(title)) {
+        return prev.filter(t => t !== title);
+      } else {
+        return [...prev, title];
+      }
+    });
+  };
+
+  const handleAddSelectedStops = async () => {
+    const toAdd = aiSuggestions.filter(p => selectedSuggestions.includes(p.title));
+    if (toAdd.length === 0) return;
+
+    const duplicatesList: string[] = [];
+    toAdd.forEach(place => {
+      const warn = getPlaceWarning(place.title);
+      if (warn) {
+        duplicatesList.push(`"${place.title}" (${warn})`);
+      }
+    });
+
+    const performBatchAdd = async () => {
+      setIsAiLoading(true);
+      try {
+        for (const place of toAdd) {
+          const desc = `${place.description}\n\nCost: ${place.costEstimated}\nDuration: ${place.duration}\nImage: ${place.imageUrl}`;
+          await dbAddItineraryItem(
+            trip.id,
+            activeDay,
+            place.time,
+            place.title,
+            desc,
+            place.location
+          );
+        }
+        setAiSuggestions(prev => prev.filter(p => !selectedSuggestions.includes(p.title)));
+        setSelectedSuggestions([]);
+        loadTrip();
+        Alert.alert("Success", `${toAdd.length} stops added to Day ${activeDay + 1}!`);
+      } catch (e) {
+        Alert.alert("Error", "Could not complete batch addition.");
+      } finally {
+        setIsAiLoading(false);
+      }
+    };
+
+    if (duplicatesList.length > 0) {
+      Alert.alert(
+        "Duplicate Activities Detected",
+        `The following selected stops appear to be duplicates:\n\n${duplicatesList.join('\n')}\n\nDo you want to add them anyway?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Add Anyway", onPress: performBatchAdd }
+        ]
+      );
+    } else {
+      await performBatchAdd();
+    }
+  };
+
+  const handleFetchSuggestions = async () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsAiLoading(true);
+    setSelectedSuggestions([]);
+    try {
+      const currentDayStops = (trip.itinerary || [])
+        .filter((item: any) => item.dayIndex === activeDay)
+        .map((item: any) => ({ time: item.time, title: item.title, location: item.location }));
+
+      const suggestions = await suggestInteractiveStops(
+        dayDestinations[activeDay] || trip.destination,
+        activeDay,
+        currentDayStops.length === 0 ? 'Morning' : 'Afternoon',
+        currentDayStops,
+        selectedVibes,
+        naturalQuery,
+        rejectedSuggestions
+      );
+
+      setAiSuggestions(suggestions);
+    } catch (e) {
+      Alert.alert('AI Offline', 'Could not retrieve AI recommendations. Check network.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleAddStopFromAi = async (s: InteractiveSuggestedStop) => {
+    const cleanTitle = s.title.trim();
+    const isDup = (trip.itinerary || []).some((item: any) => 
+      item.dayIndex === activeDay && 
+      (item.title.toLowerCase() === cleanTitle.toLowerCase() ||
+       (cleanTitle.toLowerCase().includes('lunch') && item.title.toLowerCase().includes('lunch')))
+    );
+
+    if (isDup) {
+      Alert.alert(
+        'Duplicate Activity',
+        `"${cleanTitle}" already exists on Day ${activeDay + 1}. Add it anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Keep Both', onPress: async () => await performAdd(s) }
+        ]
+      );
+    } else {
+      await performAdd(s);
+    }
+  };
+
+  const performAdd = async (s: InteractiveSuggestedStop) => {
+    const desc = `${s.description}\n\nCost: ${s.costEstimated}\nDuration: ${s.duration}\nImage: ${s.imageUrl}`;
     const { error } = await dbAddItineraryItem(
       trip.id,
-      s.dayIndex,
+      activeDay,
       s.time,
       s.title,
-      s.description || 'AI Suggested Stop',
+      desc,
       s.location
     );
     if (error) {
       Alert.alert('Error', error);
       return;
     }
-    // Filter out accepted one
-    setRejectedSuggestionIds(prev => [...prev, idx]);
+    setLastAddedPlace(s.title);
+    setAiSuggestions(prev => prev.filter(p => p.title !== s.title));
     loadTrip();
-    Alert.alert("Success", `"${s.title}" has been added to Day ${s.dayIndex + 1}!`);
   };
 
-  const handleRejectSuggestion = (idx: number) => {
-    setRejectedSuggestionIds(prev => [...prev, idx]);
+  const handleRejectStop = (title: string) => {
+    setRejectedSuggestions(prev => [...prev, title]);
+    setAiSuggestions(prev => prev.filter(p => p.title !== title));
   };
 
-  const handleDropToPoll = async (s: SuggestedStop, idx: number) => {
-    const question = `Should we do "${s.title}" on Day ${s.dayIndex + 1} at ${s.time}?`;
+  // Warning fixes
+  const handleResolveWarning = async (warning: WarningItem, action: 'fix' | 'ignore' | 'delete') => {
+    if (action === 'ignore') {
+      setAcknowledgedWarnings(prev => [...prev, warning.id]);
+      return;
+    }
+
+    if (action === 'delete') {
+      if (warning.itemId) {
+        await dbDeleteItineraryItem(warning.itemId);
+      }
+      setAcknowledgedWarnings(prev => [...prev, warning.id]);
+      loadTrip();
+      return;
+    }
+
+    if (action === 'fix') {
+      if (warning.type === 'overlap' || warning.type === 'insufficient_travel' || warning.type === 'early_travel_transition') {
+        const targetId = warning.itemId2 || warning.itemId;
+        if (targetId && warning.meta?.recommendedTime) {
+          await dbUpdateItineraryItem(targetId, { time_label: warning.meta.recommendedTime });
+          loadTrip();
+        }
+      } else if (warning.type === 'overpacked') {
+        // Shift programmatically to spacing of 2 hours starting at 8:30 AM
+        const dayStops = (trip.itinerary || [])
+          .filter((i: any) => i.dayIndex === warning.dayIndex)
+          .sort((a: any, b: any) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
+        
+        let curMin = 8.5 * 60;
+        for (let stop of dayStops) {
+          const timeStr = formatMinToTime(curMin);
+          await dbUpdateItineraryItem(stop.id, { time_label: timeStr });
+          curMin += 120; // 2 hour intervals
+        }
+        loadTrip();
+      }
+    }
+  };
+
+  // Edit Stop modal actions
+  const handleOpenEdit = (item: any) => {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditTime(item.time);
+    setEditLocation(item.location);
+    setEditDescription(item.description || '');
+    setEditDayIndex(item.dayIndex);
+
+    const durMatch = (item.description || '').match(/Duration:\s*([^\n]+)/);
+    setEditDuration(durMatch ? durMatch[1] : '90 mins');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTitle.trim() || !editTime.trim()) {
+      Alert.alert('Required Info', 'Title and Time are required.');
+      return;
+    }
+
+    let baseDesc = editDescription.replace(/Cost:[^\n]+/, '').replace(/Duration:[^\n]+/, '').trim();
+    const costMatch = (editingItem.description || '').match(/Cost:\s*([^\n]+)/);
+    const cost = costMatch ? costMatch[1] : 'Free';
+    const finalDesc = `${baseDesc}\n\nCost: ${cost}\nDuration: ${editDuration}`;
+
+    const { error } = await dbUpdateItineraryItem(editingItem.id, {
+      title: editTitle.trim(),
+      time_label: editTime.trim(),
+      location: editLocation.trim(),
+      description: finalDesc,
+      day_index: editDayIndex
+    });
+
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
+
+    setEditModalVisible(false);
+    loadTrip();
+  };
+
+  const handleRemoveActivity = async (itemId: string) => {
+    Alert.alert('Remove Activity Stop', 'Do you want to permanently delete this stop?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await dbDeleteItineraryItem(itemId);
+          setEditModalVisible(false);
+          loadTrip();
+        }
+      }
+    ]);
+  };
+
+  // Custom Stop Modal actions
+  const handleOpenCustomAdd = () => {
+    setCustomTitle('');
+    setCustomTime('09:00 AM');
+    setCustomLocation('');
+    setCustomDescription('');
+    setCustomDayIndex(activeDay);
+    setCustomDuration('90 mins');
+    setCustomModalVisible(true);
+  };
+
+  const handleSaveCustom = async () => {
+    if (!customTitle.trim() || !customTime.trim()) {
+      Alert.alert('Required Info', 'Title and Time are required.');
+      return;
+    }
+
+    const finalDesc = `${customDescription.trim()}\n\nCost: Free\nDuration: ${customDuration}`;
+    const { error } = await dbAddItineraryItem(
+      trip.id,
+      customDayIndex,
+      customTime.trim(),
+      customTitle.trim(),
+      finalDesc,
+      customLocation.trim()
+    );
+
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
+
+    setCustomModalVisible(false);
+    loadTrip();
+  };
+
+  const handleCreatePollForStop = async (s: InteractiveSuggestedStop) => {
+    const question = `Should we do "${s.title}" on Day ${activeDay + 1} at ${s.time}?`;
     const options = ["Yes, let's do it!", "No, skip this one"];
     const { error } = await dbAddPoll(trip.id, question, options, false);
     if (error) {
       Alert.alert('Error', error);
       return;
     }
-    setRejectedSuggestionIds(prev => [...prev, idx]);
-    loadTrip();
-    Alert.alert(
-      "Poll Created!",
-      `A new group decision poll has been created for "${s.title}". Let your tripmates vote!`
-    );
+    setRejectedSuggestions(prev => [...prev, s.title]);
+    setAiSuggestions(prev => prev.filter(p => p.title !== s.title));
+    Alert.alert('Poll Created!', `Group poll created for "${s.title}".`);
   };
 
-  const handleGenerateSuggestions = async () => {
-    setIsLoadingSuggestions(true);
-    setInterviewStep(2);
-    try {
-      const suggestions = await suggestItineraryStopsFromInterview(
-        trip.destination,
-        interviewDayIndex,
-        interviewTimeRange,
-        interviewNotes
-      );
-      setAiSuggestions(suggestions);
-    } catch (e: any) {
-      Alert.alert("Error", e?.message || "Failed to generate suggestions.");
-    } finally {
-      setIsLoadingSuggestions(false);
+  // Slide Sheet close helper
+  const handleCloseCopilot = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_H,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => setCopilotModalVisible(false));
+  };
+
+  // Open Co-pilot flow directly at first step
+  const handleOpenCopilot = () => {
+    setCopilotTab('day');
+    setCopilotModalVisible(true);
+  };
+
+  const isDarkTheme = colors.background === '#121212' || colors.surface === '#1E1E1E' || colors.card === '#1E1E1E';
+
+  // Get active tab speech bubble guidelines
+  const getContextMessage = () => {
+    const dest = dayDestinations[activeDay] || trip.destination;
+    if (copilotTab === 'day') {
+      return `Agilito co-pilot: Select which day of your ${duration}-day trip you'd like to plan out, and verify the destination context.`;
     }
-  };
-
-
-  const renderEmptyState = (
-    title: string,
-    desc: string,
-    icon: string,
-    color: string,
-    actionLabel?: string,
-    onAction?: () => void
-  ) => {
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name={icon as any} size={48} color={color} style={{ opacity: 0.8 }} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title.toLowerCase()}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc.toLowerCase()}</Text>
-        {actionLabel && onAction && (
-          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color }]} onPress={onAction}>
-            <Text style={styles.emptyActionBtnText}>{actionLabel.toLowerCase()}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
-  const nextActivityIcon = (title: string) => {
-    const t = title.toLowerCase();
-    if (t.includes('flight') || t.includes('airport')) return 'airplane';
-    if (t.includes('ferry') || t.includes('boat')) return 'boat';
-    if (t.includes('check-in') || t.includes('check in') || t.includes('hotel')) return 'bed';
-    return 'location';
+    if (copilotTab === 'ai') {
+      return `Which vibes should we prioritize for ${dest} on Day ${activeDay + 1}? I'll find nearby spots and match them with ideal time brackets.`;
+    }
+    const count = warnings.filter(w => !acknowledgedWarnings.includes(w.id)).length;
+    return count === 0 
+      ? `Agilito schedule analysis complete: No overlaps or transit conflicts detected on Day ${activeDay + 1}.`
+      : `I detected ${count} warning markers. Select fix parameters below to let me automatically align the durations.`;
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.tabHeaderRow}>
-        <Text style={[styles.subHeaderTitle, { color: colors.text }]}>timeline</Text>
-        <TouchableOpacity style={[styles.tabAddBtn, { borderColor: '#0284C7', borderWidth: 1.5 }]} onPress={openInterviewModal}>
-          <Ionicons name="add" size={16} color="#0284C7" />
-          <Text style={[styles.tabAddBtnText, { color: "#0284C7" }]}>{isOrganizer ? "add stop" : "suggest stop"}</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      {/* ── STICKY TOP ACTION ROW ────────────────────────────────────── */}
+      <View style={[styles.timelineHeader, { borderBottomColor: colors.cardBorder }]}>
+        <View>
+          <Text style={[styles.timelineHeaderTitle, { color: colors.text }]}>Timeline Schedule</Text>
+          <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: 'Poppins-Medium' }}>
+            {trip.destination} • {duration} day plan
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity 
+            style={[styles.headerActionBtn, { backgroundColor: colors.brand }]} 
+            onPress={handleOpenCopilot}
+          >
+            <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+            <Text style={styles.headerActionText}>Ask AI</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.headerActionBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 }]} 
+            onPress={handleOpenCustomAdd}
+          >
+            <Ionicons name="add" size={15} color={colors.textSecondary} />
+            <Text style={[styles.headerActionText, { color: colors.text }]}>Add stop</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {trip.itinerary.length === 0 ? (
-        renderEmptyState(
-          "start building your itinerary",
-          "outline stops, times, and travel details.",
-          "calendar-outline",
-          "#0284C7",
-          isOrganizer ? "add stop" : "suggest stop",
-          openInterviewModal
-        )
-      ) : (
-        [0, 1, 2, 3, 4, 5, 6].map(day => {
-          const dayActivities = trip.itinerary
+      {/* ── TIMELINE TIMELINE LIST ────────────────────────────────────── */}
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 120, paddingTop: 10 }} 
+        showsVerticalScrollIndicator={false}
+      >
+        {dayIndices.map(day => {
+          const dayActivities = (trip.itinerary || [])
             .filter((i: any) => i.dayIndex === day)
-            .sort((a: any, b: any) => parseTime(a.time) - parseTime(b.time));
-          if (dayActivities.length === 0) return null;
-          const isDark = colors.background === '#121212' || colors.surface === '#1E1E1E' || colors.card === '#1E1E1E';
+            .sort((a: any, b: any) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
+
+          const hasTransitions = dayDestinations[day] !== dayDestinations[day - 1] && day > 0;
+
           return (
             <View key={day} style={{ marginBottom: 20 }}>
-              <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-ExtraBold', fontWeight: '800', color: '#0284C7', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>day {day + 1}</Text>
-              <View style={{ paddingLeft: 2 }}>
-                {dayActivities.map((act: any, actIdx: number) => {
-                  const isLast = actIdx === dayActivities.length - 1;
-                  const ti = getActivityTypeInfo(act.title);
-                  
-                  // Compute time gap to next item
-                  const nextItem = dayActivities[actIdx + 1];
-                  const timeGap = nextItem ? getTimeDifference(act.time, nextItem.time) : null;
+              
+              {/* Day Destination Context Header */}
+              <View style={[styles.dayHeader, { borderBottomColor: colors.cardBorder }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-ExtraBold', color: colors.brand, textTransform: 'uppercase' }}>Day {day + 1}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>• {dayDestinations[day] || trip.destination}</Text>
+                </View>
+                {hasTransitions && (
+                  <View style={[styles.transitionBadge, { backgroundColor: isDarkTheme ? '#1E293B' : '#FFFBEB', borderColor: '#F59E0B' }]}>
+                    <Ionicons name="airplane-outline" size={10} color="#F59E0B" />
+                    <Text style={{ fontSize: 8, color: '#F59E0B', fontFamily: 'Poppins-Bold' }}>TRANSITION DAY</Text>
+                  </View>
+                )}
+              </View>
 
-                  return (
-                    <View key={act.id || actIdx}>
-                      <View style={{ flexDirection: 'row', minHeight: 64 }}>
-                        {/* Timeline track with rich icon circle */}
-                        <View style={styles.itinStopTrack}>
-                          <View style={[
-                            styles.itinStopIconCircle,
-                            { backgroundColor: isDark ? ti.bgDark : ti.bg }
-                          ]}>
-                            <Ionicons name={ti.icon as any} size={11} color={ti.color} />
+              {dayActivities.length === 0 ? (
+                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: colors.textMuted, fontStyle: 'italic' }}>
+                    No stops planned for this day. Tap Ask AI at the top to build it collaboratively.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ paddingLeft: 4 }}>
+                  {dayActivities.map((act: any, idx: number) => {
+                    const isLast = idx === dayActivities.length - 1;
+                    const nextAct = dayActivities[idx + 1];
+                    const gapTime = nextAct ? getTimeDifference(act.time, nextAct.time) : null;
+                    const isOverlapped = warnings.some(w => w.type === 'overlap' && (w.itemId === act.id && w.itemId2 === nextAct?.id));
+
+                    // Time split helper
+                    const [timeVal, ampm] = (act.time || 'TBD').split(' ');
+
+                    // Thumbnail image resolver
+                    const imgUrl = getImgUrl(act);
+
+                    // Category inferrer
+                    const categoryLabel = inferCategory(act.title);
+                    const catColors = getCategoryColor(categoryLabel);
+
+                    // Clean description preview
+                    const cleanDesc = getCleanDesc(act.description);
+
+                    // Duration parsed label
+                    const durationLabel = getDurationLabel(act);
+
+                    return (
+                      <View key={act.id || idx}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                          {/* Time Column (aligned right) */}
+                          <View style={styles.timeCol}>
+                            <Text style={[styles.timeValText, { color: colors.text }]}>{timeVal}</Text>
+                            <Text style={[styles.ampmText, { color: colors.textSecondary }]}>{ampm || ''}</Text>
                           </View>
-                          {!isLast && <View style={[styles.itinStopLine, { backgroundColor: colors.cardBorder }]} />}
-                        </View>
 
-                        {/* Stop content card */}
-                        <View style={{ flex: 1, paddingBottom: isLast ? 0 : 12 }}>
-                          <TouchableOpacity
-                            style={{
-                              backgroundColor: colors.card,
-                              borderColor: colors.cardBorder,
-                              borderWidth: 1,
-                              borderRadius: 14,
-                              padding: 12,
-                              shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 1 },
-                              shadowOpacity: 0.02,
-                              shadowRadius: 3,
-                              elevation: 1,
-                            }}
-                            activeOpacity={0.8}
-                            onPress={() => Alert.alert("Activity stop", `${act.title}\nTime: ${act.time}\nLocation: ${act.location || 'Not specified'}\nDescription: ${act.description || 'No details'}`)}
-                          >
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                              <Text style={{ fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 }}>{act.title}</Text>
-                              <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', fontWeight: '700', color: ti.color }}>{act.time}</Text>
+                          {/* Timeline dot track */}
+                          <View style={{ alignItems: 'center', width: 20, marginRight: 12, height: '100%', position: 'relative' }}>
+                            <View style={[styles.dotCircleRing, { borderColor: colors.brand }]}>
+                              <View style={[styles.dotCircleInner, { backgroundColor: colors.brand }]} />
                             </View>
-                            
-                            {act.location ? (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                                <Ionicons name="location-outline" size={10} color={colors.textMuted} />
-                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{act.location}</Text>
-                              </View>
-                            ) : (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                                <Ionicons name="location-outline" size={10} color={colors.textMuted} />
-                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{trip.destination}</Text>
-                              </View>
-                            )}
+                            {!isLast && <View style={[styles.verticalTrackLine, { borderColor: colors.cardBorder }]} />}
+                          </View>
 
-                            {act.description ? (
-                              <Text style={{ fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', marginTop: 4 }}>
-                                "{act.description}"
-                              </Text>
-                            ) : null}
+                          {/* Activity info horizontal stop card */}
+                          <TouchableOpacity
+                            style={[
+                              styles.horizontalActivityCard,
+                              {
+                                backgroundColor: colors.card,
+                                borderColor: isOverlapped ? '#EF4444' : colors.cardBorder
+                              }
+                            ]}
+                            onPress={() => handleOpenEdit(act)}
+                            activeOpacity={0.8}
+                          >
+                            {/* Left side: rounded thumbnail image */}
+                            <Image source={{ uri: imgUrl }} style={styles.horizontalCardImage} resizeMode="cover" />
+
+                            {/* Right side: text details */}
+                            <View style={{ flex: 1, justifyContent: 'center' }}>
+                              <Text style={[styles.horizontalCardTitle, { color: colors.text }]} numberOfLines={1}>{act.title}</Text>
+                              
+                              {/* Category tag pill */}
+                              <View style={[styles.iosTagPill, { backgroundColor: catColors.bg }]}>
+                                <Text style={[styles.iosTagPillText, { color: catColors.text }]}>{categoryLabel}</Text>
+                              </View>
+
+                              {cleanDesc ? (
+                                <Text style={[styles.horizontalCardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                                  {cleanDesc}
+                                </Text>
+                              ) : null}
+
+                              {/* Duration row */}
+                              <View style={styles.iosDurationRow}>
+                                <Ionicons name="time-outline" size={10} color={colors.textMuted} style={{ marginRight: 2 }} />
+                                <Text style={[styles.iosDurationText, { color: colors.textMuted }]}>{durationLabel}</Text>
+                              </View>
+                            </View>
                           </TouchableOpacity>
                         </View>
-                      </View>
 
-                      {/* Time Gap Connector */}
-                      {timeGap && (
-                        <View style={styles.itinGapRow}>
-                          <View style={styles.itinGapLineCol}>
-                            <View style={[styles.itinGapDashedLine, { borderColor: colors.cardBorder }]} />
-                          </View>
-                          <View style={[styles.itinGapBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                            <Ionicons name="time-outline" size={9} color={colors.textMuted} />
-                            <Text style={[styles.itinGapText, { color: colors.textSecondary }]}>{timeGap} buffer</Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          );
-        })
-      )}
+                        {/* Travel time gap indicator */}
+                        {gapTime && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 3 }}>
+                            {/* Offset for Time Col */}
+                            <View style={{ width: 48, marginRight: 6 }} />
 
-      {/* ADD ITINERARY MODAL (AI Interview Flow) */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, height: '80%' }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {interviewStep === 2 ? "AI Stop Suggestions" : "Add Stop Interview"}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+                            {/* Track Col */}
+                            <View style={{ alignItems: 'center', width: 20, marginRight: 12, position: 'relative' }}>
+                              <View style={[styles.gapDashLine, { borderColor: colors.cardBorder }]} />
+                            </View>
 
-            <ScrollView 
-              contentContainerStyle={{ paddingBottom: 48 }} 
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={interviewStep !== 2}
-            >
-              {/* STEP 0: Choose Day & Timing */}
-              {interviewStep === 0 && (
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.textSecondary, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Step 1: When should this happen?
-                  </Text>
-                  
-                  {/* Day Selector */}
-                  <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.textMuted, marginBottom: 8, letterSpacing: 0.5 }}>SELECT DAY</Text>
-                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
-                    {dayIndices.map(d => (
-                      <TouchableOpacity
-                        key={d}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                          backgroundColor: interviewDayIndex === d ? '#0284C7' : colors.surface,
-                          borderWidth: 1,
-                          borderColor: interviewDayIndex === d ? '#0284C7' : colors.cardBorder,
-                        }}
-                        onPress={() => setInterviewDayIndex(d)}
-                      >
-                        <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: interviewDayIndex === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Time Range Selector */}
-                  <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.textMuted, marginBottom: 8, letterSpacing: 0.5 }}>SELECT TIMING</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
-                    {[
-                      { label: 'Morning', desc: '08:00 AM - 12:00 PM', icon: 'sunny-outline' },
-                      { label: 'Afternoon', desc: '12:00 PM - 05:00 PM', icon: 'partly-sunny-outline' },
-                      { label: 'Evening', desc: '05:00 PM - 09:00 PM', icon: 'sunset-outline' },
-                      { label: 'Night', desc: '09:00 PM onwards', icon: 'moon-outline' },
-                    ].map((timeItem) => (
-                      <TouchableOpacity
-                        key={timeItem.label}
-                        style={{
-                          width: '48%',
-                          padding: 12,
-                          borderRadius: 12,
-                          backgroundColor: colors.surface,
-                          borderWidth: 1.5,
-                          borderColor: interviewTimeRange === timeItem.label ? '#0284C7' : colors.cardBorder,
-                          gap: 4,
-                        }}
-                        onPress={() => setInterviewTimeRange(timeItem.label)}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Ionicons name={timeItem.icon as any} size={14} color={interviewTimeRange === timeItem.label ? '#0284C7' : colors.textSecondary} />
-                          <Text style={{ fontSize: 12, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>{timeItem.label}</Text>
-                        </View>
-                        <Text style={{ fontSize: 10, color: colors.textSecondary }}>{timeItem.desc}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Next Control */}
-                  <TouchableOpacity
-                    style={{ height: 44, backgroundColor: '#0284C7', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}
-                    onPress={() => setInterviewStep(1)}
-                  >
-                    <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: '#FFFFFF' }}>Next</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* STEP 1: Vibe Details */}
-              {interviewStep === 1 && (
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.textSecondary, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Step 2: What details or vibes?
-                  </Text>
-
-                  {/* Specific details */}
-                  <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.textMuted, marginBottom: 8, letterSpacing: 0.5 }}>SPECIFIC DETAILS / NOTES</Text>
-                  <TextInput
-                    value={interviewNotes}
-                    onChangeText={setInterviewNotes}
-                    placeholder="E.g., rooftop view restaurant, easy hiking trail, family-friendly, budget seafood spot..."
-                    placeholderTextColor="#9E9E9E"
-                    multiline
-                    numberOfLines={3}
-                    style={[styles.input, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface, height: 80, textAlignVertical: 'top', marginBottom: 20 }]}
-                  />
-
-                  {/* Back and Next Controls */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-                    <TouchableOpacity
-                      style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, justifyContent: 'center', alignItems: 'center' }}
-                      onPress={() => setInterviewStep(0)}
-                    >
-                      <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text }}>Back</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{ flex: 2, height: 44, backgroundColor: '#0284C7', borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 }}
-                      onPress={handleGenerateSuggestions}
-                    >
-                      <Ionicons name="sparkles" size={14} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: '#FFFFFF' }}>Ask Agilito</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* STEP 2: Suggestions List */}
-              {interviewStep === 2 && (
-                <View style={{ flex: 1 }}>
-                  {isLoadingSuggestions ? (
-                    <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
-                      <ActivityIndicator size="large" color="#0284C7" />
-                      <Text style={{ fontSize: 14, fontFamily: 'PlusJakartaSans-Bold', color: colors.text, marginTop: 16 }}>Agilito Co-pilot is planning...</Text>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 6, textAlign: 'center', lineHeight: 16 }}>
-                        Analyzing vibes, category, and local maps to suggest the perfect stop in {trip.destination}.
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                          Agilito's Custom suggestions ({3 - rejectedSuggestionIds.length} left)
-                        </Text>
-                        <TouchableOpacity onPress={() => {
-                          setInterviewStep(0);
-                          setRejectedSuggestionIds([]);
-                          setAiSuggestions([]);
-                        }}>
-                          <Text style={{ fontSize: 11, fontFamily: 'PlusJakartaSans-Bold', color: '#0284C7', textDecorationLine: 'underline' }}>Start Over</Text>
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <View style={{ gap: 12, marginBottom: 20 }}>
-                        {aiSuggestions.map((item, idx) => {
-                          if (rejectedSuggestionIds.includes(idx)) return null;
-                          return (
-                            <DraggableSuggestionCard
-                              key={idx}
-                              item={item}
-                              index={idx}
-                              colors={colors}
-                              onReject={() => handleRejectSuggestion(idx)}
-                              onAdd={() => {
-                                if (isOrganizer) {
-                                  handleAcceptSuggestion(item, idx);
-                                } else {
-                                  Alert.alert("Organizer Only", "Only organizers can directly add stops to the itinerary. Try dragging this to the Poll zone to ask your tripmates!");
-                                }
-                              }}
-                              isHoveringDropZone={isHoveringDropZone}
-                              setIsHoveringDropZone={setIsHoveringDropZone}
-                              onDropToPoll={() => handleDropToPoll(item, idx)}
-                            />
-                          );
-                        })}
-
-                        {rejectedSuggestionIds.length === 3 && (
-                          <View style={{ paddingVertical: 36, justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="sparkles" size={32} color={colors.textMuted} style={{ opacity: 0.7 }} />
-                            <Text style={{ fontSize: 13, fontFamily: 'PlusJakartaSans-Bold', color: colors.text, marginTop: 8 }}>All suggestions handled!</Text>
-                            <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', marginTop: 4 }}>You can click Start Over above to check other vibes.</Text>
+                            {/* Badge Col */}
+                            <View style={[styles.gapBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+                              <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+                              <Text style={{ fontSize: 9, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>{gapTime} buffer</Text>
+                            </View>
                           </View>
                         )}
                       </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
 
-                      {/* DROP ZONE */}
-                      <View style={[
-                        styles.dropZone,
-                        {
-                          borderColor: isHoveringDropZone ? '#10B981' : '#0284C7',
-                          backgroundColor: isHoveringDropZone ? '#10B98115' : colors.surface,
-                          borderStyle: 'dashed',
-                        }
-                      ]}>
-                        <Ionicons
-                          name={isHoveringDropZone ? "checkmark-circle" : "bar-chart-outline"}
-                          size={20}
-                          color={isHoveringDropZone ? '#10B981' : '#0284C7'}
-                        />
-                        <Text style={[styles.dropZoneText, { color: isHoveringDropZone ? '#10B981' : colors.text }]}>
-                          {isHoveringDropZone ? "Drop here to create Poll!" : "Drag suggestion card here to ask tripmates (create poll)"}
-                        </Text>
+      {/* ── AGILITO AI BUILDER SHEET MODAL (iOS Segmented Weather UI Style) ────────── */}
+      <Modal visible={copilotModalVisible} transparent animationType="none" onRequestClose={handleCloseCopilot}>
+        {/* Dim backdrop overlay */}
+        <Pressable style={styles.sheetBackdrop} onPress={handleCloseCopilot} />
+        
+        {/* Sliding Bottom Sheet */}
+        <Animated.View
+          style={[
+            styles.copilotOverlay,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.cardBorder,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          {/* iOS sheet drag handle */}
+          <View style={[styles.sheetHandleBar, { backgroundColor: colors.divider || '#E8E8E6' }]} />
+
+          {/* iOS sheet header */}
+          <View style={styles.copilotSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[styles.sheetMascotRing, { backgroundColor: colors.brand }]}>
+                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.sheetMascotTitle, { color: colors.text }]}>Agilito Co-pilot</Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.sheetCloseBtn, { backgroundColor: colors.surface }]}
+              onPress={handleCloseCopilot}
+            >
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Segmented control tabs switcher (Replicating Weather Expanded tabs) */}
+          <View style={[styles.weatherTabContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+            <TouchableOpacity
+              onPress={() => setCopilotTab('day')}
+              style={[
+                styles.weatherTabBtn,
+                copilotTab === 'day' && { backgroundColor: colors.card }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.weatherTabBtnText,
+                  { color: copilotTab === 'day' ? colors.brand : colors.textMuted }
+                ]}
+              >
+                Day Context
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCopilotTab('ai')}
+              style={[
+                styles.weatherTabBtn,
+                copilotTab === 'ai' && { backgroundColor: colors.card }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.weatherTabBtnText,
+                  { color: copilotTab === 'ai' ? colors.brand : colors.textMuted }
+                ]}
+              >
+                Ask AI
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCopilotTab('warnings')}
+              style={[
+                styles.weatherTabBtn,
+                copilotTab === 'warnings' && { backgroundColor: colors.card }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.weatherTabBtnText,
+                  { color: copilotTab === 'warnings' ? colors.brand : colors.textMuted }
+                ]}
+              >
+                Review ({warnings.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            {/* Mascot message speech bubble */}
+            <View style={[styles.sheetBubble, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: 'Poppins-Medium', lineHeight: 18 }}>
+                {getContextMessage()}
+              </Text>
+            </View>
+
+            {/* Dynamic tabs layout */}
+            <View style={{ marginTop: 16 }}>
+              {copilotTab === 'day' && (
+                <View>
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Select Day to Plan</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                    {dayIndices.map(d => (
+                      <TouchableOpacity
+                        key={d}
+                        style={[
+                          styles.sheetDayPill,
+                          {
+                            backgroundColor: activeDay === d ? colors.brand : colors.surface,
+                            borderColor: activeDay === d ? colors.brand : colors.cardBorder,
+                          }
+                        ]}
+                        onPress={() => {
+                          setActiveDay(d);
+                          setLastAddedPlace('');
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: activeDay === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Confirm Destination Context</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <TextInput
+                      value={dayDestinations[activeDay] || ''}
+                      onChangeText={(val) => {
+                        const updated = [...dayDestinations];
+                        updated[activeDay] = val;
+                        setDayDestinations(updated);
+                      }}
+                      placeholder="e.g. Cebu City"
+                      placeholderTextColor={colors.textMuted}
+                      style={[styles.sheetInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+                    />
+                    <TouchableOpacity 
+                      style={[styles.sheetActionBtn, { backgroundColor: colors.brand }]}
+                      onPress={() => handleConfirmDestination(dayDestinations[activeDay] || '')}
+                    >
+                      <Text style={styles.sheetActionText}>Confirm</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Summary Metric Card (Like weather metric layout) */}
+                  <View style={[styles.weatherMainCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder, marginTop: 20 }]}>
+                    <View style={styles.weatherMainInfo}>
+                      <Text style={[styles.weatherCityName, { color: colors.text }]}>
+                        Day {activeDay + 1} Target
+                      </Text>
+                      <Text style={[styles.weatherMainCondText, { color: colors.textSecondary, marginTop: 4 }]}>
+                        Destination: {dayDestinations[activeDay] || trip.destination}
+                      </Text>
+                    </View>
+                    <Ionicons name="map-outline" size={32} color={colors.brand} />
+                  </View>
+                </View>
+              )}
+
+              {copilotTab === 'ai' && (
+                <View>
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Choose Vibes</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                    {VIBE_OPTIONS.map(opt => {
+                      const isSelected = selectedVibes.includes(opt.value);
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.sheetVibeChip,
+                            {
+                              backgroundColor: isSelected ? colors.brand + '15' : colors.surface,
+                              borderColor: isSelected ? colors.brand : colors.cardBorder,
+                            }
+                          ]}
+                          onPress={() => {
+                            if (isSelected) {
+                              setSelectedVibes(prev => prev.filter(v => v !== opt.value));
+                            } else {
+                              setSelectedVibes(prev => [...prev, opt.value]);
+                            }
+                          }}
+                        >
+                          <Ionicons name={opt.icon as any} size={12} color={isSelected ? colors.brand : colors.textSecondary} />
+                          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: isSelected ? colors.brand : colors.text }}>{opt.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Special requirements</Text>
+                  <TextInput
+                    value={naturalQuery}
+                    onChangeText={setNaturalQuery}
+                    placeholder="e.g. scenic views, upland cafes, beachside"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.sheetInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface, marginBottom: 18 }]}
+                  />
+
+                  <TouchableOpacity 
+                    style={[styles.sheetLargeBtn, { backgroundColor: colors.brand, width: '100%', marginBottom: 16 }]}
+                    onPress={handleFetchSuggestions}
+                  >
+                    <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+                    <Text style={[styles.sheetLargeBtnText, { color: '#FFFFFF' }]}>Ask Agilito</Text>
+                  </TouchableOpacity>
+
+                  {isAiLoading ? (
+                    <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                      <ActivityIndicator size="small" color={colors.brand} />
+                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 14, fontFamily: 'Poppins-Medium' }}>
+                        Agilito co-pilot is matching spots and transit routing...
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 14 }}>
+                      <View style={styles.suggestionsGrid}>
+                        {aiSuggestions.map((place, idx) => {
+                          const isSelected = selectedSuggestions.includes(place.title);
+                          const warnMsg = getPlaceWarning(place.title);
+
+                          return (
+                            <TouchableOpacity
+                              key={idx}
+                              activeOpacity={0.9}
+                              onPress={() => toggleSelectSuggestion(place.title)}
+                              style={[
+                                styles.iosPlaceCard,
+                                {
+                                  backgroundColor: colors.surface,
+                                  borderColor: isSelected ? colors.brand : colors.cardBorder,
+                                  borderWidth: isSelected ? 2 : 1
+                                }
+                              ]}
+                            >
+                              {/* Image backdrop */}
+                              <Image source={{ uri: place.imageUrl }} style={styles.iosCardImage} resizeMode="cover" />
+
+                              {/* Gradient overlay */}
+                              <LinearGradient
+                                colors={['transparent', 'rgba(0,0,0,0.92)']}
+                                style={styles.iosCardGradient}
+                              >
+                                {/* Timing badge top left */}
+                                <View style={styles.iosTimeBadge}>
+                                  <Ionicons name="time-outline" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+                                  <Text style={styles.iosTimeText}>{place.time}</Text>
+                                </View>
+
+                                {/* Checkbox overlay top right */}
+                                <View style={[styles.iosSelectionCircle, { backgroundColor: isSelected ? colors.brand : 'rgba(0,0,0,0.5)', borderColor: isSelected ? colors.brand : '#FFFFFF' }]}>
+                                  {isSelected && <Ionicons name="checkmark" size={8} color="#FFFFFF" />}
+                                </View>
+
+                                {/* Duplicate Warning Badge top right (under checkbox) */}
+                                {warnMsg && (
+                                  <View style={styles.cardWarningBadge}>
+                                    <Ionicons name="warning" size={8} color="#FFFFFF" style={{ marginRight: 2 }} />
+                                    <Text style={styles.cardWarningText}>{warnMsg}</Text>
+                                  </View>
+                                )}
+
+                                <View style={styles.iosCategoryPill}>
+                                  <Text style={styles.iosCategoryText}>{place.category.toUpperCase()}</Text>
+                                </View>
+
+                                <Text style={styles.iosCardTitle} numberOfLines={2}>
+                                  {place.title}
+                                </Text>
+
+                                <Text style={styles.iosCardMeta} numberOfLines={1}>
+                                  Est: {place.costEstimated} • {place.duration}
+                                </Text>
+
+                                {/* Card Footer Actions */}
+                                <View style={styles.iosCardActionRow}>
+                                  <TouchableOpacity 
+                                    style={[styles.iosRoundActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.85)' }]}
+                                    onPress={() => handleRejectStop(place.title)}
+                                  >
+                                    <Ionicons name="close" size={12} color="#FFFFFF" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity 
+                                    style={[styles.iosRoundActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}
+                                    onPress={() => handleCreatePollForStop(place)}
+                                  >
+                                    <Ionicons name="checkbox-outline" size={12} color="#FFFFFF" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity 
+                                    style={[styles.iosAddActionBtn, { backgroundColor: colors.brand }]}
+                                    onPress={() => handleAddStopFromAi(place)}
+                                  >
+                                    <Text style={styles.iosAddBtnText}>Add</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </LinearGradient>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
+
+                      {/* Batch Action Add Button */}
+                      {selectedSuggestions.length > 0 && (
+                        <TouchableOpacity
+                          style={[styles.sheetLargeBtn, { backgroundColor: colors.brand }]}
+                          onPress={handleAddSelectedStops}
+                        >
+                          <Ionicons name="add-circle-outline" size={14} color="#FFFFFF" />
+                          <Text style={[styles.sheetLargeBtnText, { color: '#FFFFFF' }]}>
+                            Add Selected ({selectedSuggestions.length}) Stops
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </View>
               )}
+
+              {copilotTab === 'warnings' && (
+                <View>
+                  {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+                      <Ionicons name="checkmark-circle" size={42} color="#10B981" />
+                      <Text style={{ fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text, marginTop: 8 }}>Schedule Flowing Nicely</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
+                        Agilito confirms that daily pacing and transit guidelines are fully optimized.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 10 }}>
+                      {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).map((warn) => (
+                        <View key={warn.id} style={[styles.sheetWarnCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                            <Ionicons name="warning-outline" size={16} color="#F59E0B" style={{ marginTop: 1 }} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: colors.text }}>{warn.title}</Text>
+                              <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2, lineHeight: 15 }}>{warn.message}</Text>
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
+                            <TouchableOpacity 
+                              style={[styles.sheetWarnMiniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
+                              onPress={() => handleResolveWarning(warn, 'ignore')}
+                            >
+                              <Text style={{ fontSize: 10, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>Keep</Text>
+                            </TouchableOpacity>
+                            {warn.type === 'duplicate' ? (
+                              <TouchableOpacity 
+                                style={[styles.sheetWarnMiniBtn, { backgroundColor: '#EF4444' }]}
+                                onPress={() => handleResolveWarning(warn, 'delete')}
+                              >
+                                <Text style={{ fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Delete One</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity 
+                                style={[styles.sheetWarnMiniBtn, { backgroundColor: colors.brand }]}
+                                onPress={() => handleResolveWarning(warn, 'fix')}
+                              >
+                                <Text style={{ fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Resolve</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </Animated.View>
+      </Modal>
+
+      {/* ── EDIT ACTIVITY MODAL ─────────────────────────────────────── */}
+      <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Stop</Text>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+              <Text style={styles.modalLabel}>TITLE</Text>
+              <TextInput
+                value={editTitle}
+                onChangeText={setEditTitle}
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>START TIME</Text>
+                  <TextInput
+                    value={editTime}
+                    onChangeText={setEditTime}
+                    placeholder="e.g. 10:00 AM"
+                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>DURATION</Text>
+                  <TextInput
+                    value={editDuration}
+                    onChangeText={setEditDuration}
+                    placeholder="e.g. 2 hours"
+                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+                  />
+                </View>
+              </View>
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>LOCATION</Text>
+              <TextInput
+                value={editLocation}
+                onChangeText={setEditLocation}
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DAY</Text>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                {dayIndices.map(d => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[
+                      styles.daySelectorItem,
+                      {
+                        backgroundColor: editDayIndex === d ? colors.brand : colors.surface,
+                        borderColor: editDayIndex === d ? colors.brand : colors.cardBorder
+                      }
+                    ]}
+                    onPress={() => setEditDayIndex(d)}
+                  >
+                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: editDayIndex === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DESCRIPTION / NOTES</Text>
+              <TextInput
+                value={editDescription}
+                onChangeText={setEditDescription}
+                multiline
+                numberOfLines={3}
+                style={[styles.modalArea, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { flex: 1, borderColor: '#EF4444', borderWidth: 1.5 }]} 
+                  onPress={() => handleRemoveActivity(editingItem.id)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#EF4444' }}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { flex: 2, backgroundColor: colors.brand }]} 
+                  onPress={handleSaveEdit}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* ════ AI GENERATION LOADING OVERLAY ════ */}
-      <Modal visible={isAiGeneratingItinerary} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: colors.card, padding: 30, borderRadius: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, width: '85%' }}>
-            <ActivityIndicator size="large" color="#0284C7" />
-            <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text, marginTop: 20, textAlign: 'center' }}>Agilito Co-pilot</Text>
-            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.textSecondary, marginTop: 10, textAlign: 'center' }}>{aiGeneratingStatus}</Text>
+      {/* ── ADD CUSTOM MODAL ────────────────────────────────────────── */}
+      <Modal visible={customModalVisible} animationType="slide" transparent onRequestClose={() => setCustomModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Add Custom Stop</Text>
+              <TouchableOpacity onPress={() => setCustomModalVisible(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+              <Text style={styles.modalLabel}>TITLE</Text>
+              <TextInput
+                value={customTitle}
+                onChangeText={setCustomTitle}
+                placeholder="e.g. Quick Coffee run"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>START TIME</Text>
+                  <TextInput
+                    value={customTime}
+                    onChangeText={setCustomTime}
+                    placeholder="e.g. 09:00 AM"
+                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>DURATION</Text>
+                  <TextInput
+                    value={customDuration}
+                    onChangeText={setCustomDuration}
+                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+                  />
+                </View>
+              </View>
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>LOCATION</Text>
+              <TextInput
+                value={customLocation}
+                onChangeText={setCustomLocation}
+                placeholder="e.g. Starbucks Cebu"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DAY</Text>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                {dayIndices.map(d => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[
+                      styles.daySelectorItem,
+                      {
+                        backgroundColor: customDayIndex === d ? colors.brand : colors.surface,
+                        borderColor: customDayIndex === d ? colors.brand : colors.cardBorder
+                      }
+                    ]}
+                    onPress={() => setCustomDayIndex(d)}
+                  >
+                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: customDayIndex === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DESCRIPTION / NOTES</Text>
+              <TextInput
+                value={customDescription}
+                onChangeText={setCustomDescription}
+                multiline
+                numberOfLines={3}
+                style={[styles.modalArea, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { flex: 1, borderColor: colors.cardBorder, borderWidth: 1.5 }]} 
+                  onPress={() => setCustomModalVisible(false)}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { flex: 2, backgroundColor: colors.brand }]} 
+                  onPress={handleSaveCustom}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Add Activity</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -682,87 +1465,373 @@ export default function TripItinerary({
 }
 
 const styles = StyleSheet.create({
-  tabHeaderRow: {
+  container: {
+    flex: 1,
+  },
+  timelineHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    marginBottom: 8,
   },
-  subHeaderTitle: {
+  timelineHeaderTitle: {
     fontSize: 16,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
+    fontFamily: 'Poppins-Bold',
   },
-  tabAddBtn: {
+  headerActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 10,
     gap: 4,
   },
-  tabAddBtnText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-  },
-  emptyTitle: {
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  emptyDesc: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontWeight: '500',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  emptyActionBtn: {
-    marginTop: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  emptyActionBtnText: {
+  headerActionText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
   },
-  timelineLeftCol: {
-    width: 24,
+  dayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomWidth: 1.5,
+    paddingBottom: 6,
+    marginBottom: 8,
+    marginTop: 8,
   },
-  timelineDot: {
+  transitionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  dotCircle: {
     width: 10,
     height: 10,
     borderRadius: 5,
     borderWidth: 2,
-    backgroundColor: '#FFFFFF',
-    marginTop: 16,
+    marginTop: 10,
     zIndex: 2,
   },
-  timelineLine: {
-    position: 'absolute',
-    top: 22,
-    bottom: 0,
+  trackLine: {
     width: 2,
-    backgroundColor: '#E0E0E0',
+    flex: 1,
+    marginVertical: 4,
     zIndex: 1,
   },
+  dashLine: {
+    width: 0,
+    height: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  activityCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+  },
+  activityTitle: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+    flex: 1,
+  },
+  activityTime: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Bold',
+  },
+  activityLoc: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  activityDesc: {
+    fontSize: 10,
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  gapBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  // iOS Premium dim backdrop
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  // Sliding bottom sheet modal styles
+  copilotOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '90%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  sheetHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  copilotSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  sheetMascotRing: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetMascotTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: -0.4,
+  },
+  sheetCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetBubble: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+    marginBottom: 16,
+  },
+  sheetSectionLabel: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 14,
+  },
+  sheetDayPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  sheetInput: {
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    flex: 1,
+  },
+  sheetActionBtn: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Poppins-Bold',
+  },
+  sheetVibeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sheetLargeBtn: {
+    height: 40,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  sheetLargeBtnText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Bold',
+  },
+  suggestionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingTop: 8,
+  },
+  // iOS Premium places card styles
+  iosPlaceCard: {
+    width: (SCREEN_W - 52) / 2,
+    height: 190,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 4,
+    marginBottom: 8,
+  },
+  iosCardImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  iosCardGradient: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 12,
+    justifyContent: 'flex-end',
+  },
+  iosTimeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iosTimeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+  },
+  iosSelectionCircle: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  cardWarningBadge: {
+    position: 'absolute',
+    top: 30,
+    right: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.95)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  cardWarningText: {
+    color: '#FFFFFF',
+    fontSize: 7.5,
+    fontFamily: 'Poppins-Bold',
+  },
+  iosCategoryPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(34, 197, 94, 0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    marginBottom: 4,
+  },
+  iosCategoryText: {
+    fontSize: 8,
+    fontFamily: 'Poppins-Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  iosCardTitle: {
+    fontSize: 12,
+    fontFamily: 'Poppins-ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    lineHeight: 15,
+  },
+  iosCardMeta: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Medium',
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  iosCardActionRow: {
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  iosRoundActionBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iosAddActionBtn: {
+    paddingHorizontal: 12,
+    height: 24,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iosAddBtnText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    color: '#FFFFFF',
+  },
+  sheetWarnCard: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  sheetWarnMiniBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Modal standard structures
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -786,151 +1855,265 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 18,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
   },
-  modalCloseBtn: {
-    padding: 4,
+  modalLabel: {
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    color: '#8E8E93',
+    letterSpacing: 0.5,
+    marginTop: 10,
   },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  input: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
+  modalInput: {
+    height: 40,
+    borderWidth: 1.5,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    fontFamily: 'PlusJakartaSans-Medium',
-    fontSize: 14,
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    marginTop: 4,
   },
-  submitBtn: {
-    height: 48,
-    backgroundColor: '#0284C7',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
+  modalArea: {
+    height: 70,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    textAlignVertical: 'top',
+    marginTop: 4,
   },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'PlusJakartaSans-Bold',
-    fontWeight: '700',
-  },
-  suggestionCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 4,
-  },
-  suggestionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  suggestionControls: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  suggestionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  suggestionFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: '#E2E8F0',
-    paddingTop: 6,
-  },
-  dragIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  dropZone: {
-    borderRadius: 16,
-    borderWidth: 2,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-    height: 60,
-  },
-  dropZoneText: {
-    fontSize: 12,
-    fontFamily: 'PlusJakartaSans-Bold',
-    marginTop: 2,
-  },
-  itinStopTrack: {
-    alignItems: 'center',
-    width: 22,
-    marginRight: 12,
-  },
-  itinStopIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  itinStopLine: {
-    flex: 1,
-    width: 1.5,
-    minHeight: 32,
-    marginVertical: 4,
-    borderRadius: 1,
-  },
-  itinGapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 2,
-    marginVertical: 2,
-  },
-  itinGapLineCol: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  itinGapDashedLine: {
-    width: 0,
-    height: 18,
-    borderWidth: 1.2,
-    borderStyle: 'dashed',
-  },
-  itinGapBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+  daySelectorItem: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
   },
-  itinGapText: {
-    fontSize: 9,
-    fontFamily: 'PlusJakartaSans-Bold',
+  modalBtn: {
+    height: 42,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  // Replicating Weather Tab segmented control stylesheet
+  weatherTabContainer: {
+    flexDirection: 'row',
+    padding: 3,
+    marginBottom: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  weatherTabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  weatherTabBtnText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  weatherMainCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+  },
+  weatherMainInfo: {
+    flex: 1,
+  },
+  weatherCityName: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  weatherMainCondText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+  },
+  timeCol: {
+    width: 48,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  timeValText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
+  },
+  ampmText: {
+    fontSize: 9,
+    fontFamily: 'Poppins-SemiBold',
+    textTransform: 'uppercase',
+    marginTop: -2,
+  },
+  dotCircleRing: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  dotCircleInner: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  verticalTrackLine: {
+    position: 'absolute',
+    top: 14,
+    bottom: -18,
+    width: 0,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    zIndex: 1,
+  },
+  horizontalActivityCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    gap: 14,
+  },
+  horizontalCardImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 14,
+  },
+  horizontalCardTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    lineHeight: 18,
+  },
+  iosTagPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 2.5,
+    marginBottom: 4.5,
+  },
+  iosTagPillText: {
+    fontSize: 8.5,
+    fontFamily: 'Poppins-Bold',
+  },
+  horizontalCardDesc: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    lineHeight: 15,
+  },
+  iosDurationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  iosDurationText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+  },
+  gapDashLine: {
+    width: 0,
+    height: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignSelf: 'center',
   },
 });
 
+const getImgUrl = (item: any) => {
+  if (item.description) {
+    const match = item.description.match(/Image:\s*(https[^\n]+)/i);
+    if (match) return match[1];
+  }
+  const title = (item.title || '').toLowerCase();
+  if (title.includes('coffee') || title.includes('cafe') || title.includes('starbucks')) {
+    return 'https://images.unsplash.com/photo-1507133750040-4a8f57021571?auto=format&fit=crop&w=300&q=80';
+  }
+  if (title.includes('food') || title.includes('lunch') || title.includes('dinner') || title.includes('eat') || title.includes('restaurant') || title.includes('lechon')) {
+    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=300&q=80';
+  }
+  if (title.includes('beach') || title.includes('island') || title.includes('sea') || title.includes('sardine') || title.includes('whale') || title.includes('snorkel') || title.includes('sumilon')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80';
+  }
+  if (title.includes('falls') || title.includes('waterfall') || title.includes('kawasan') || title.includes('nature') || title.includes('hiking')) {
+    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=300&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=300&q=80';
+};
+
+const inferCategory = (title: string) => {
+  const t = title.toLowerCase();
+  if (t.includes('coffee') || t.includes('cafe')) return 'Café';
+  if (t.includes('lunch') || t.includes('dinner') || t.includes('restaurant') || t.includes('food') || t.includes('lechon') || t.includes('brunch')) return 'Food';
+  if (t.includes('beach') || t.includes('island') || t.includes('resort') || t.includes('swim') || t.includes('snorkel') || t.includes('sardine')) return 'Beach';
+  if (t.includes('falls') || t.includes('waterfall') || t.includes('kawasan') || t.includes('nature') || t.includes('peak')) return 'Nature';
+  if (t.includes('temple') || t.includes('church') || t.includes('fort') || t.includes('museum') || t.includes('heritage')) return 'Culture';
+  return 'Sightseeing';
+};
+
+const getCategoryColor = (cat: string) => {
+  const c = cat.toLowerCase();
+  if (c === 'café' || c === 'food') {
+    return { bg: '#FFF7ED', text: '#EA580C' }; // orange
+  }
+  if (c === 'beach') {
+    return { bg: '#ECFDF5', text: '#059669' }; // teal/green
+  }
+  if (c === 'nature') {
+    return { bg: '#F0F9FF', text: '#0284C7' }; // blue
+  }
+  if (c === 'culture') {
+    return { bg: '#F5F3FF', text: '#7C3AED' }; // purple
+  }
+  return { bg: '#F3F4F6', text: '#4B5563' }; // grey
+};
+
+const getCleanDesc = (desc: string) => {
+  if (!desc) return '';
+  return desc.split('\n\n')[0].trim();
+};
+
+const getDurationLabel = (item: any) => {
+  if (item.description) {
+    const match = item.description.match(/Duration:\s*([^\n]+)/i);
+    if (match) return match[1];
+  }
+  return '1.5 hours';
+};
+
+const getTimeDifference = (t1: string, t2: string) => {
+  const parseTimeToMin = (t: string) => {
+    if (!t) return 0;
+    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return 0;
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const ap = m[3];
+    if (ap) {
+      if (ap.toUpperCase() === "PM" && h < 12) h += 12;
+      if (ap.toUpperCase() === "AM" && h === 12) h = 0;
+    }
+    return h * 60 + min;
+  };
+  const m1 = parseTimeToMin(t1);
+  const m2 = parseTimeToMin(t2);
+  if (!m1 || !m2) return null;
+  const diff = m2 - m1;
+  if (diff <= 0) return null;
+  const hrs = Math.floor(diff / 60);
+  const mins = diff % 60;
+  return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
+};

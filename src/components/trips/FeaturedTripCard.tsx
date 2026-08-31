@@ -27,10 +27,10 @@ export default function FeaturedTripCard({
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.96,
+      toValue: 0.95,
       useNativeDriver: true,
-      tension: 140,
-      friction: 9,
+      tension: 180,
+      friction: 12,
     }).start();
   };
 
@@ -38,8 +38,8 @@ export default function FeaturedTripCard({
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 140,
-      friction: 9,
+      tension: 180,
+      friction: 12,
     }).start();
   };
 
@@ -60,27 +60,53 @@ export default function FeaturedTripCard({
             }
           ]}
         >
-          <ImageBackground source={{ uri: imageUrl }} style={styles.featuredTripPhoto} imageStyle={{ borderRadius: 20 }}>
+          <ImageBackground source={{ uri: imageUrl }} style={styles.featuredTripPhoto} imageStyle={{ borderRadius: 24 }}>
             <LinearGradient
-              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.82)']}
+              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.45)']}
               style={styles.gradientOverlay}
             >
               {/* Top Row: Countdown Badge & Relationship Badge */}
               <View style={styles.topRow}>
                 {countdown ? (
-                  <View style={[styles.countdownBadge, { backgroundColor: colors.brand }]}>
+                  <View
+                    style={[
+                      styles.countdownBadge,
+                      {
+                        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        borderColor: 'rgba(255, 255, 255, 0.25)',
+                        borderWidth: StyleSheet.hairlineWidth,
+                      }
+                    ]}
+                  >
                     <Text style={styles.countdownBadgeText}>{countdown}</Text>
                   </View>
                 ) : (
                   <View />
                 )}
-                <View style={[styles.roleBadge, { backgroundColor: isOrganizer ? 'rgba(56, 189, 248, 0.3)' : 'rgba(255, 255, 255, 0.25)' }]}>
+                <View
+                  style={[
+                    styles.roleBadge,
+                    {
+                      backgroundColor: isOrganizer ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255, 255, 255, 0.25)',
+                      borderColor: 'rgba(255, 255, 255, 0.25)',
+                      borderWidth: StyleSheet.hairlineWidth,
+                    }
+                  ]}
+                >
                   <Text style={styles.roleBadgeText}>{isOrganizer ? 'Organizer' : 'Member'}</Text>
                 </View>
               </View>
 
-              {/* Bottom Content Row */}
-              <View style={styles.bottomContent}>
+              {/* Floating Glass-style Bottom Content Panel */}
+              <View 
+                style={[
+                  styles.bottomGlassOverlay, 
+                  { 
+                    backgroundColor: isDark ? 'rgba(20, 20, 25, 0.82)' : 'rgba(15, 23, 42, 0.76)',
+                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                  }
+                ]}
+              >
                 <Text style={styles.tripDestinationText}>{trip.destination.toUpperCase()}</Text>
                 <Text style={styles.tripTitleText} numberOfLines={2}>{trip.title}</Text>
 
@@ -146,6 +172,9 @@ export default function FeaturedTripCard({
                   </View>
                 </View>
                 
+                {/* Divider Line inside the card */}
+                <View style={styles.cardDivider} />
+
                 {/* Visual "Explore Workspace Room" indicator link */}
                 <View style={styles.enterWorkspaceIndicatorRow}>
                   <Text style={styles.enterWorkspaceText}>Explore Workspace Room</Text>
@@ -165,30 +194,32 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   featuredTripCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
+    shadowRadius: 18,
+    elevation: 4,
   },
   featuredTripPhoto: {
-    height: 240,
+    height: 250,
     width: '100%',
     justifyContent: 'flex-end',
   },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
-    padding: 16,
+    padding: 12,
     justifyContent: 'space-between',
-    borderRadius: 20,
+    borderRadius: 24,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+    paddingHorizontal: 4,
+    paddingTop: 4,
   },
   countdownBadge: {
     paddingHorizontal: 10,
@@ -212,25 +243,32 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
     letterSpacing: 0.5,
   },
-  bottomContent: {
+  bottomGlassOverlay: {
     width: '100%',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   tripDestinationText: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Poppins-Bold',
     color: '#38BDF8', // Accent sky blue color
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   tripTitleText: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
-    lineHeight: 26,
-    marginBottom: 12,
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    lineHeight: 24,
+    marginBottom: 10,
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 2,
   },
   metaRow: {
     flexDirection: 'row',
@@ -294,10 +332,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
     color: '#FFFFFF',
   },
+  cardDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginVertical: 10,
+  },
   enterWorkspaceIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    gap: 3,
   },
   enterWorkspaceText: {
     color: 'rgba(255, 255, 255, 0.95)',

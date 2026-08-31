@@ -635,7 +635,7 @@ export default function CreateTripScreen() {
         features,
         undefined,
         tripType,
-        enrichedStops,
+        [],
         tripSubtype,
         preloadedPolls,
         checklistItems

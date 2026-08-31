@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, Animated } from 'react-native';
 import { setOnMascotLand, setOnMascotLeave } from '../../services/mascotBridge';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 interface MascotGreetingProps {
   colors: any;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, Modal, ImageBackground, ScrollView, useWindowDimensions, FlatList, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View, Modal, ImageBackground, ScrollView, useWindowDimensions, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -104,6 +104,16 @@ export default function ExploreScreen() {
 
   const [viewType, setViewType] = useState<'map' | 'list' | 'province-detail'>('list');
   const [exploreTab, setExploreTab] = useState<'wishlist' | 'albums'>('wishlist');
+  const tabAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(tabAnim, {
+      toValue: exploreTab === 'wishlist' ? 0 : 1,
+      tension: 45,
+      friction: 8.5,
+      useNativeDriver: true,
+    }).start();
+  }, [exploreTab]);
   const [albumsSubView, setAlbumsSubView] = useState<'gallery' | 'map'>('gallery');
   const [statusFilter, setStatusFilter] = useState<'all' | 'explored' | 'unexplored'>('all');
   const [regionFilter, setRegionFilter] = useState<string>('All');
@@ -120,6 +130,7 @@ export default function ExploreScreen() {
   });
   const [loaded, setLoaded] = useState(false);
   const [selectedProvinceId, setSelectedProvinceId] = useState<string | null>(null);
+  const [selectedAlbumProvinceId, setSelectedAlbumProvinceId] = useState<string | null>(null);
   const [selectedDestId, setSelectedDestId] = useState<string | null>(null);
   const [selectedMuniId, setSelectedMuniId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocus | null>(null);
@@ -552,7 +563,32 @@ export default function ExploreScreen() {
 
         {/* Sub Header Tab Segmented Control */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 8, backgroundColor: colors.background }}>
-          <View style={{ flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 16, padding: 3 }}>
+          <View style={{ flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 16, padding: 3, position: 'relative' }}>
+            
+            {/* Sliding animated background pill */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 3,
+                bottom: 3,
+                left: 3,
+                width: (windowWidth - 46) / 2,
+                borderRadius: 14,
+                backgroundColor: colors.card,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 2,
+                transform: [{
+                  translateX: tabAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, (windowWidth - 46) / 2],
+                  }),
+                }],
+              }}
+            />
+
             <TouchableOpacity
               onPress={() => setExploreTab('wishlist')}
               style={{
@@ -562,13 +598,7 @@ export default function ExploreScreen() {
                 justifyContent: 'center',
                 paddingVertical: 8,
                 borderRadius: 14,
-                backgroundColor: exploreTab === 'wishlist' ? colors.card : 'transparent',
                 gap: 6,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: exploreTab === 'wishlist' ? 0.05 : 0,
-                shadowRadius: 2,
-                elevation: exploreTab === 'wishlist' ? 1 : 0,
               }}
             >
               <Ionicons name="heart" size={14} color={exploreTab === 'wishlist' ? colors.brand : colors.textMuted} />
@@ -586,13 +616,7 @@ export default function ExploreScreen() {
                 justifyContent: 'center',
                 paddingVertical: 8,
                 borderRadius: 14,
-                backgroundColor: exploreTab === 'albums' ? colors.card : 'transparent',
                 gap: 6,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: exploreTab === 'albums' ? 0.05 : 0,
-                shadowRadius: 2,
-                elevation: exploreTab === 'albums' ? 1 : 0,
               }}
             >
               <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.brand : colors.textMuted} />
@@ -748,41 +772,62 @@ export default function ExploreScreen() {
                   visibleDests.map((dest, idx) => {
                     const isVisited = log.visitedDestinations.includes(dest.id);
                     const isSaved = log.savedDestinations.includes(dest.id);
-                    const rotateAngle = idx % 2 === 0 ? '-1deg' : '1.5deg';
                     return (
                       <View
                         key={dest.id}
                         style={[
                           styles.destCardItem,
                           {
-                            backgroundColor: isDark ? '#1A1A2E' : '#FAF9F6',
-                            borderColor: isDark ? 'rgba(255,255,255,0.12)' : colors.cardBorder,
-                            borderWidth: 1.2,
-                            padding: 10,
-                            paddingBottom: 16,
-                            transform: [{ rotate: rotateAngle }],
+                            backgroundColor: colors.card,
+                            borderColor: colors.cardBorder,
+                            borderWidth: 1,
+                            borderRadius: 20,
+                            padding: 12,
+                            marginBottom: 16,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.03,
+                            shadowRadius: 10,
+                            elevation: 2,
                             position: 'relative',
                           }
                         ]}
                       >
-                        <View style={styles.cardTapeTopLeft} />
-                        <View style={styles.cardTapeTopRight} />
                         {dest.image && (
-                          <View style={{ overflow: 'hidden', borderRadius: 10, borderBottomWidth: 1, borderColor: colors.cardBorder, marginBottom: 12 }}>
+                          <View style={{ overflow: 'hidden', borderRadius: 14, marginBottom: 12, position: 'relative' }}>
                             <Image source={{ uri: dest.image }} style={{ width: '100%', height: 160, resizeMode: 'cover' }} />
+                            
+                            {/* Glassmorphic Rating Tag on top-left of image */}
+                            <View style={styles.ratingBadge}>
+                              <Ionicons name="star" size={10} color={GOLD} style={{ marginRight: 2 }} />
+                              <Text style={styles.ratingBadgeText}>{parseFloat(String(dest.rating)).toFixed(1)}</Text>
+                            </View>
+
+                            {/* Floating Heart Icon at top right */}
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              hitSlop={8}
+                              onPress={() => toggleDestSaved(dest.id)}
+                              style={styles.gemHeartBadge}
+                            >
+                              <Ionicons
+                                name={isSaved ? "heart" : "heart-outline"}
+                                size={14}
+                                color={isSaved ? "#EF4444" : "#FFFFFF"}
+                              />
+                            </TouchableOpacity>
                           </View>
                         )}
                         <View style={[styles.destCardBody, { padding: 4 }]}>
-                          <View style={styles.destCardHeader}>
-                            <Text style={[styles.destCardName, { color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 15 }]} numberOfLines={1}>{dest.name}</Text>
-                            <View style={styles.destCardRating}>
-                              <Ionicons name="star" size={12} color={GOLD} />
-                              <Text style={[styles.destCardRatingText, { color: colors.textSecondary }]}>{dest.rating}</Text>
-                            </View>
+                          <Text style={[styles.destCardName, { color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 15 }]} numberOfLines={1}>{dest.name}</Text>
+                          
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                            <Ionicons name="location-outline" size={12} color={colors.brand} />
+                            <Text style={[styles.destCardAddress, { color: colors.textSecondary, marginTop: 0 }]} numberOfLines={1}>
+                              {formatAddress(dest)}
+                            </Text>
                           </View>
-                          <Text style={[styles.destCardAddress, { color: colors.textMuted }]} numberOfLines={1}>
-                            {formatAddress(dest)}
-                          </Text>
+
                           <View style={styles.destCardTags}>
                             {dest.tags.map(tag => (
                               <View key={tag} style={[styles.destCardTag, { backgroundColor: colors.inputBg }]}>
@@ -790,13 +835,22 @@ export default function ExploreScreen() {
                               </View>
                             ))}
                           </View>
+
                           <View style={styles.destCardActions}>
                             <TouchableOpacity
                               style={[
                                 styles.destCardPill,
                                 {
-                                  backgroundColor: isVisited ? colors.brandLight : colors.inputBg,
-                                  borderColor: isVisited ? colors.brand : 'transparent',
+                                  flex: 1,
+                                  backgroundColor: isVisited ? colors.brandLight : colors.surface,
+                                  borderColor: isVisited ? colors.brand : colors.cardBorder,
+                                  borderWidth: 1,
+                                  height: 38,
+                                  borderRadius: 12,
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                  flexDirection: 'row',
+                                  gap: 6
                                 },
                               ]}
                               onPress={() => toggleDestVisited(dest.id)}
@@ -804,10 +858,10 @@ export default function ExploreScreen() {
                               <Ionicons
                                 name={isVisited ? 'checkmark-circle' : 'ellipse-outline'}
                                 size={14}
-                                color={isVisited ? colors.brand : colors.textMuted}
+                                color={isVisited ? colors.brand : colors.textSecondary}
                               />
-                              <Text style={[styles.destCardPillText, { color: isVisited ? colors.brand : colors.textSecondary }]}>
-                                {isVisited ? 'Visited' : 'Visited?'}
+                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: isVisited ? colors.brand : colors.textSecondary }}>
+                                {isVisited ? 'Visited' : 'Mark Visited'}
                               </Text>
                             </TouchableOpacity>
 
@@ -815,28 +869,20 @@ export default function ExploreScreen() {
                               style={[
                                 styles.destCardPill,
                                 {
-                                  backgroundColor: isSaved ? colors.brandLight : colors.inputBg,
-                                  borderColor: isSaved ? colors.brand : 'transparent',
-                                },
+                                  flex: 1.2,
+                                  backgroundColor: colors.brand,
+                                  height: 38,
+                                  borderRadius: 12,
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                  flexDirection: 'row',
+                                  gap: 6
+                                }
                               ]}
-                              onPress={() => toggleDestSaved(dest.id)}
-                            >
-                              <Ionicons
-                                name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                                size={14}
-                                color={isSaved ? colors.brand : colors.textMuted}
-                              />
-                              <Text style={[styles.destCardPillText, { color: isSaved ? colors.brand : colors.textSecondary }]}>
-                                {isSaved ? 'Saved' : 'Save'}
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={[styles.destCardPill, { backgroundColor: colors.brand }]}
                               onPress={() => router.push(`/trip/create?dest=${encodeURIComponent(dest.name)}&title=${encodeURIComponent(dest.name)}`)}
                             >
-                              <Ionicons name="airplane-outline" size={14} color="#FFFFFF" />
-                              <Text style={[styles.destCardPillText, { color: '#FFFFFF' }]}>Plan Trip</Text>
+                              <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
+                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Plan Trip</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -877,7 +923,7 @@ export default function ExploreScreen() {
                   activeOpacity={0.8}
                 >
                   <Ionicons name="share-social-outline" size={14} color={colors.brand} />
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share Map</Text>
                 </TouchableOpacity>
               </View>
               {visitedProvincesList.length > 0 ? (
@@ -898,17 +944,14 @@ export default function ExploreScreen() {
                             width: (windowWidth - 44) / 2,
                             shadowColor: '#000',
                             shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.04,
+                            shadowOpacity: 0.03,
                             shadowRadius: 8,
                             elevation: 2,
-                            transform: [{ scale: pressed ? 0.98 : 1 }]
+                            transform: [{ scale: pressed ? 0.97 : 1 }]
                           }
                         ]}
                         onPress={() => {
-                          setSelectedProvinceId(item.id);
-                          setSelectedDestId(null);
-                          setSelectedMuniId(null);
-                          setViewType('province-detail');
+                          setSelectedAlbumProvinceId(item.id);
                         }}
                       >
                         <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
@@ -918,28 +961,32 @@ export default function ExploreScreen() {
                               style={{
                                 position: 'absolute',
                                 top: 8,
-                                  left: 8,
-                                  backgroundColor: 'rgba(0,0,0,0.5)',
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 3,
-                                  borderRadius: 8,
-                                }}
-                              >
-                                <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
-                                  {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
-                                </Text>
-                              </View>
-                            </ImageBackground>
-                          </View>
-                          <View style={{ padding: 12 }}>
-                            <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
-                              {item.name}
-                            </Text>
-                            <Text style={{ color: colors.textMuted, fontFamily: 'Poppins-Medium', fontSize: 9, marginTop: 2 }} numberOfLines={1}>
-                              {item.region} Region
-                            </Text>
-                          </View>
-                        </Pressable>
+                                left: 8,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 8,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                            >
+                              <Ionicons name="images-outline" size={10} color="#FFFFFF" />
+                              <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
+                                {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
+                              </Text>
+                            </View>
+                          </ImageBackground>
+                        </View>
+                        <View style={{ padding: 12 }}>
+                          <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                            {item.region} Region
+                          </Text>
+                        </View>
+                      </Pressable>
                       );
                     })}
                   </View>
@@ -982,11 +1029,11 @@ export default function ExploreScreen() {
                             width: (windowWidth - 44) / 2,
                             shadowColor: '#000',
                             shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.04,
+                            shadowOpacity: 0.03,
                             shadowRadius: 8,
                             elevation: 2,
                             position: 'relative',
-                            transform: [{ scale: pressed ? 0.98 : 1 }]
+                            transform: [{ scale: pressed ? 0.97 : 1 }]
                           }
                         ]}
                         onPress={() => {
@@ -1000,10 +1047,31 @@ export default function ExploreScreen() {
                           }
                         }}
                       >
-                        <View style={{ overflow: 'hidden', height: 110 }}>
-                          <ImageBackground source={{ uri: item.image }} style={{ width: '100%', height: '100%' }}>
-                            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
-                          </ImageBackground>
+                        <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
+                          <Image source={{ uri: item.image }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
+
+                          {/* Glassmorphic Rating Tag on top-left of image */}
+                          <View
+                            style={{
+                              position: 'absolute',
+                              top: 8,
+                              left: 8,
+                              backgroundColor: 'rgba(0,0,0,0.6)',
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 10,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 2,
+                              zIndex: 10
+                            }}
+                          >
+                            <Ionicons name="star" size={10} color={GOLD} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontFamily: 'Poppins-Bold' }}>
+                              {parseFloat(String(item.rating)).toFixed(1)}
+                            </Text>
+                          </View>
                         </View>
                         
                         <TouchableOpacity
@@ -1011,17 +1079,12 @@ export default function ExploreScreen() {
                             position: 'absolute',
                             top: 8,
                             right: 8,
-                            backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.85)',
+                            backgroundColor: 'rgba(0,0,0,0.25)',
                             width: 36,
                             height: 36,
                             borderRadius: 18,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.05,
-                            shadowRadius: 2,
-                            elevation: 2,
                             zIndex: 20
                           }}
                           hitSlop={10}
@@ -1037,15 +1100,9 @@ export default function ExploreScreen() {
                           <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13, textAlign: 'left' }} numberOfLines={1}>
                             {item.name}
                           </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                            <Text style={{ fontSize: 9, color: colors.textMuted, fontFamily: 'Poppins-Medium' }}>
-                              {(item.bestTime || 'Year-round').split('–')[0]} Season
-                            </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                              <Ionicons name="star" size={9} color={GOLD} />
-                              <Text style={{ fontSize: 9, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>{item.rating}</Text>
-                            </View>
-                          </View>
+                          <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                            {(item.bestTime || 'Year-round').split('–')[0]} Season
+                          </Text>
                         </View>
                       </Pressable>
                     );
@@ -1460,6 +1517,153 @@ export default function ExploreScreen() {
           </SafeAreaProvider>
         </Modal>
 
+        {/* iOS Memory Gallery Modal */}
+        <Modal 
+          visible={selectedAlbumProvinceId !== null} 
+          animationType="slide" 
+          onRequestClose={() => setSelectedAlbumProvinceId(null)}
+        >
+          <SafeAreaProvider>
+            <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+              {/* Header */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.cardBorder,
+                backgroundColor: colors.card
+              }}>
+                <TouchableOpacity 
+                  onPress={() => setSelectedAlbumProvinceId(null)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.surface,
+                    borderColor: colors.cardBorder,
+                    borderWidth: 1
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={20} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', flex: 1, marginRight: 36 }}>
+                  {CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name || 'Province'} Memories
+                </Text>
+              </View>
+
+              {/* Gallery Memories list */}
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+              >
+                <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', color: colors.text, marginBottom: 4 }}>
+                  Footprints Logged
+                </Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginBottom: 20 }}>
+                  Your collection of stamps and captured memories in this province.
+                </Text>
+
+                {selectedAlbumProvinceId && allDestinations.filter(d => d.provinceId === selectedAlbumProvinceId && log.visitedDestinations.includes(d.id)).length > 0 ? (
+                  <View style={{ gap: 20 }}>
+                    {allDestinations.filter(d => d.provinceId === selectedAlbumProvinceId && log.visitedDestinations.includes(d.id)).map((dest) => (
+                      <View 
+                        key={dest.id}
+                        style={{
+                          backgroundColor: colors.card,
+                          borderRadius: 24,
+                          borderWidth: 1,
+                          borderColor: colors.cardBorder,
+                          overflow: 'hidden',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 6 },
+                          shadowOpacity: 0.04,
+                          shadowRadius: 12,
+                          elevation: 3
+                        }}
+                      >
+                        <View style={{ height: 220, overflow: 'hidden', position: 'relative' }}>
+                          <Image source={{ uri: dest.image }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.65)']} style={StyleSheet.absoluteFillObject} />
+                          
+                          {/* Stamp Icon */}
+                          <View style={{
+                            position: 'absolute',
+                            top: 12,
+                            left: 12,
+                            backgroundColor: '#38BDF8', // CRIMSON_WAX stamp color
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 3
+                          }}>
+                            <Ionicons name="ribbon" size={16} color={GOLD} />
+                          </View>
+
+                          {/* Title Overlay */}
+                          <View style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 18, fontFamily: 'Poppins-Bold' }}>
+                              {dest.name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                              <Ionicons name="location-sharp" size={12} color={colors.brand} />
+                              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'Poppins-Medium' }}>
+                                {dest.address || (CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name ?? 'Philippines') + ', PH'}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <View style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>
+                              PASSPORT FOOTPRINT LOGGED
+                            </Text>
+                            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>
+                              Verified stamps & memories archived
+                            </Text>
+                          </View>
+                          <View style={{
+                            backgroundColor: colors.brandLight,
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
+                            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>EXPLORED</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+                    <Ionicons name="images-outline" size={48} color={colors.textMuted} />
+                    <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.textSecondary, marginTop: 12 }}>
+                      No Spots Visited
+                    </Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
+                      Start checking in at destinations to generate album memories.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </SafeAreaView>
+          </SafeAreaProvider>
+        </Modal>
+
       </SafeAreaView>
     </View>
   );
@@ -1683,14 +1887,44 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   destCardItem: {
-    borderRadius: 4,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 18,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    zIndex: 10,
+  },
+  ratingBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: 'Poppins-Bold',
+  },
+  gemHeartBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 18,
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    zIndex: 10,
   },
   destCardImage: {
     width: '100%',

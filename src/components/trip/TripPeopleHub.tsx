@@ -72,37 +72,49 @@ export default function TripPeopleHub({
       warningMsg = `You are the only organizer. Leaving will transfer leadership to the next member: "${nextLeader}". Are you sure you want to leave?`;
     }
 
-    Alert.alert(
-      "Leave Trip",
-      warningMsg,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Leave",
-          style: "destructive",
-          onPress: async () => {
-            const { error } = await dbLeaveTrip(trip.id);
-            if (error) {
-              Alert.alert("Error", error);
-            } else {
-              Alert.alert("Success", "You have left the trip.", [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    // Navigate back or to trips list
-                    if (router.canGoBack()) {
-                      router.back();
-                    } else {
-                      router.replace('/(tabs)/trips');
-                    }
-                  }
-                }
-              ]);
-            }
-          }
+    const performLeave = async () => {
+      const { error } = await dbLeaveTrip(trip.id);
+      if (error) {
+        if (Platform.OS === 'web') {
+          window.alert("Error: " + error);
+        } else {
+          Alert.alert("Error", error);
         }
-      ]
-    );
+      } else {
+        const successCallback = () => {
+          router.replace('/(tabs)/trips');
+        };
+
+        if (Platform.OS === 'web') {
+          window.alert("You have left the trip.");
+          successCallback();
+        } else {
+          Alert.alert("Success", "You have left the trip.", [
+            { text: "OK", onPress: successCallback }
+          ]);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmLeave = window.confirm(warningMsg);
+      if (confirmLeave) {
+        performLeave();
+      }
+    } else {
+      Alert.alert(
+        "Leave Trip",
+        warningMsg,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: performLeave
+          }
+        ]
+      );
+    }
   };
 
   const handleRemoveMember = (member: any) => {

@@ -24,10 +24,10 @@ export default function OtherTripCard({
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.96,
       useNativeDriver: true,
-      tension: 140,
-      friction: 9,
+      tension: 180,
+      friction: 12,
     }).start();
   };
 
@@ -35,8 +35,8 @@ export default function OtherTripCard({
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 140,
-      friction: 9,
+      tension: 180,
+      friction: 12,
     }).start();
   };
 
@@ -53,7 +53,7 @@ export default function OtherTripCard({
           {
             backgroundColor: colors.card,
             borderColor: colors.cardBorder,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
           }
         ]}
       >
@@ -79,7 +79,7 @@ export default function OtherTripCard({
               </Text>
               <View style={[styles.statDot, { backgroundColor: colors.textMuted }]} />
               <Text style={[styles.membersCountText, { color: colors.textSecondary }]}>
-                {trip.members.length} {trip.members.length === 1 ? 'member' : 'members'}
+                {trip.members.length} {trip.members.length === 1 ? 'buddy' : 'buddies'}
               </Text>
             </View>
 
@@ -104,14 +104,14 @@ export default function OtherTripCard({
 const styles = StyleSheet.create({
   tripItemCard: {
     flexDirection: 'row',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 12,
     gap: 14,
     marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
     alignItems: 'center',
   },
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
   dateAndMembers: {
     flexDirection: 'row',
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tripDateText: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'Poppins-Medium',
   },
   statDot: {
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   membersCountText: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'Poppins-Medium',
   },
   roleBadge: {
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   roleBadgeText: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: 'Poppins-Bold',
   },
   arrowContainer: {

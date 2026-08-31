@@ -12,7 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { updateProfile, uploadAvatar } from '../../services/authService';
 import * as ImagePicker from 'expo-image-picker';
 import { storageSet } from '../../services/storage';
-import { WalkthroughModal, markWalkthroughDone, shouldShowWalkthrough } from '../../components/WalkthroughModal';
+import { WalkthroughModal, shouldShowWalkthrough } from '../../components/WalkthroughModal';
+import { PreferencesOnboarding } from '../../components/PreferencesOnboarding';
 import ProfileInfoCard from '../../components/profile/ProfileInfoCard';
 import ProfileSettingRow from '../../components/profile/ProfileSettingRow';
 
@@ -23,6 +24,7 @@ export default function ProfileScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [name, setName] = useState(authProfile?.name || '');
   const [email, setEmail] = useState(authProfile?.email || '');
   const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
@@ -198,6 +200,17 @@ export default function ProfileScreen() {
               onPress={() => {}}
             />
 
+            {/* Travel Preferences */}
+            <ProfileSettingRow
+              iconName="heart-outline"
+              iconColor="#F472B6"
+              iconBgColor={isDark ? '#2C2030' : '#FDF2F8'}
+              title="Travel Preferences"
+              subtitle="Pick what you love — powers your recommendations"
+              colors={colors}
+              onPress={() => setShowPreferences(true)}
+            />
+
             {/* Replay App Tour */}
             <ProfileSettingRow
               iconName="play-circle-outline"
@@ -247,9 +260,13 @@ export default function ProfileScreen() {
         visible={showWalkthrough}
         colors={colors}
         onComplete={() => {
-          markWalkthroughDone();
           setShowWalkthrough(false);
         }}
+      />
+      <PreferencesOnboarding
+        visible={showPreferences}
+        colors={colors}
+        onComplete={() => setShowPreferences(false)}
       />
     </SafeAreaView>
   );

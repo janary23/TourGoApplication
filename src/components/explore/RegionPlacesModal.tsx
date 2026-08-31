@@ -332,6 +332,14 @@ export const RegionPlacesModal: React.FC<Props> = ({
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Google Places Region API returned error ${response.status} for query "${query}":`, errorText);
+        setError(`Failed to fetch places: Google API returned status ${response.status}`);
+        setIsLoading(false);
+        return;
+      }
+
       const json = await response.json();
       
       if (json && Array.isArray(json.places) && json.places.length > 0) {

@@ -30,12 +30,26 @@ const EMPTY: ExploreLog = {
   savedProvinces: [],
 };
 
+// Scopes the local storage key to the currently logged in user ID to prevent account leak
+async function getStorageKey(): Promise<string> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      return `${STORAGE_KEY}:${user.id}`;
+    }
+  } catch (e) {
+    // fail gracefully
+  }
+  return STORAGE_KEY;
+}
+
 export async function loadExploreLog(): Promise<ExploreLog> {
   let localLog: ExploreLog = EMPTY;
+  const storageKey = await getStorageKey();
 
-  // 1. Load local log first
+  // 1. Load local log first (scoped to user)
   try {
-    const raw = await storageGet(STORAGE_KEY);
+    const raw = await storageGet(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
       localLog = {
@@ -48,13 +62,28 @@ export async function loadExploreLog(): Promise<ExploreLog> {
           : undefined,
       };
     } else {
-      const legacy = await storageGet(LEGACY_KEY);
-      if (legacy) {
-        const ids: string[] = JSON.parse(legacy);
+      // Fallback/migration from anonymous legacy key
+      const rawLegacy = await storageGet(STORAGE_KEY);
+      if (rawLegacy) {
+        const parsed = JSON.parse(rawLegacy);
         localLog = {
-          ...EMPTY,
-          visitedProvinces: Array.isArray(ids) ? ids : [],
+          visitedProvinces: Array.isArray(parsed?.visitedProvinces) ? parsed.visitedProvinces : [],
+          visitedDestinations: Array.isArray(parsed?.visitedDestinations) ? parsed.visitedDestinations : [],
+          savedDestinations: Array.isArray(parsed?.savedDestinations) ? parsed.savedDestinations : [],
+          savedProvinces: Array.isArray(parsed?.savedProvinces) ? parsed.savedProvinces : [],
+          savedDestinationsMeta: (parsed?.savedDestinationsMeta && typeof parsed.savedDestinationsMeta === 'object')
+            ? parsed.savedDestinationsMeta
+            : undefined,
         };
+      } else {
+        const legacy = await storageGet(LEGACY_KEY);
+        if (legacy) {
+          const ids: string[] = JSON.parse(legacy);
+          localLog = {
+            ...EMPTY,
+            visitedProvinces: Array.isArray(ids) ? ids : [],
+          };
+        }
       }
     }
   } catch (err) {
@@ -88,7 +117,7 @@ export async function loadExploreLog(): Promise<ExploreLog> {
         }
 
         localLog.savedDestinations = mergedSaved;
-        await storageSet(STORAGE_KEY, JSON.stringify(localLog));
+        await storageSet(storageKey, JSON.stringify(localLog));
       }
     }
   } catch (err) {
@@ -100,8 +129,10 @@ export async function loadExploreLog(): Promise<ExploreLog> {
 }
 
 export async function saveExploreLog(log: ExploreLog): Promise<void> {
-  // 1. Save locally first
-  await storageSet(STORAGE_KEY, JSON.stringify(log));
+  const storageKey = await getStorageKey();
+  
+  // 1. Save locally first (scoped to user)
+  await storageSet(storageKey, JSON.stringify(log));
 
   // 2. Sync with Supabase if authenticated
   try {

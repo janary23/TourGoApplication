@@ -932,4 +932,17 @@ export async function updateMemberRole(
   return { error: null };
 }
 
+export async function updateItineraryItem(
+  itemId: string,
+  updates: { time_label?: string; title?: string; description?: string; location?: string; day_index?: number }
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('itinerary_items')
+    .update(updates)
+    .eq('id', itemId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+
 
