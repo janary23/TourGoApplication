@@ -165,12 +165,12 @@ export default function TripChecklist({
         </View>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {AI_FEATURES_ENABLED && (
-            <TouchableOpacity style={[styles.headerBtn, { borderColor: colors.cardBorder }]} onPress={handleGeneratePacking}>
+            <TouchableOpacity style={[styles.headerBtn, { backgroundColor: ACCENT_LIGHT }]} onPress={handleGeneratePacking}>
               <Ionicons name="sparkles" size={13} color={colors.brand} />
               <Text style={[styles.headerBtnText, { color: colors.brand }]}>AI Pack</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: ACCENT, borderColor: ACCENT }]} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: ACCENT }]} onPress={() => setModalVisible(true)}>
             <Ionicons name="add" size={14} color="#FFFFFF" />
             <Text style={[styles.headerBtnText, { color: '#FFFFFF' }]}>Add Task</Text>
           </TouchableOpacity>
@@ -179,7 +179,7 @@ export default function TripChecklist({
 
       {/* Progress Bar */}
       {totalCount > 0 && (
-        <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
           <View style={[styles.progressTrack, { backgroundColor: colors.surface }]}>
             <View style={[styles.progressFill, { width: `${Math.max(progressPct * 100, 2)}%`, backgroundColor: ACCENT }]} />
           </View>
@@ -510,10 +510,9 @@ const styles = StyleSheet.create({
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: 20,
     gap: 4,
   },
   headerBtnText: {
@@ -524,10 +523,14 @@ const styles = StyleSheet.create({
 
   /* Progress */
   progressCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    padding: 13,
     marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   progressTrack: {
     height: 6,
@@ -557,10 +560,9 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    height: 36,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 38,
     gap: 6,
     marginBottom: 10,
   },
@@ -575,10 +577,9 @@ const styles = StyleSheet.create({
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 20,
     gap: 4,
   },
 
@@ -586,10 +587,14 @@ const styles = StyleSheet.create({
   taskCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    padding: 13,
     gap: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   checkbox: {
     width: 22,

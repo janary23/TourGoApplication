@@ -50,11 +50,8 @@ export default function TripPlan({
     return (
       <View style={{ flex: 1 }}>
         <View style={styles.headerContainer}>
-          <View style={styles.headerTitleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Itinerary</Text>
-            </View>
-          </View>
+          <Text style={[styles.headerEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination}</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{trip.title}</Text>
         </View>
         <ScrollView contentContainerStyle={styles.tabContentContainer}>
           <View style={{ marginTop: 24 }}>
@@ -75,37 +72,33 @@ export default function TripPlan({
 
   return (
     <View style={styles.container}>
-      {/* Header matching TripPeopleHub layout */}
+      {/* Header — destination context first, title second, like "San Francisco, USA" over "Your Day in..." */}
       <View style={styles.headerContainer}>
-        <View style={styles.headerTitleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Itinerary</Text>
-          </View>
-        </View>
+        <Text style={[styles.headerEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{trip.title}</Text>
       </View>
 
       {/* SEGMENTED SWITCHER (only show if both are enabled) */}
       {itineraryEnabled && checklistEnabled && (
-        <View style={[styles.switcherContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+        <View style={[styles.switcherContainer, { backgroundColor: colors.surface }]}>
           {/* Itinerary Tab */}
           <TouchableOpacity
             style={[
               styles.switcherTab,
-              activeTab === 'itinerary' && [styles.switcherTabActive, { backgroundColor: colors.card }],
+              activeTab === 'itinerary' && [styles.switcherTabActive, { backgroundColor: colors.card, shadowColor: isOrganizer ? '#000' : '#000' }],
             ]}
             onPress={() => setActiveTab('itinerary')}
             activeOpacity={0.8}
           >
             <Ionicons
               name={activeTab === 'itinerary' ? "calendar" : "calendar-outline"}
-              size={16}
-              color={activeTab === 'itinerary' ? colors.brand : colors.textSecondary}
+              size={15}
+              color={activeTab === 'itinerary' ? colors.brand : colors.textMuted}
             />
             <Text
               style={[
                 styles.switcherText,
-                { color: activeTab === 'itinerary' ? colors.text : colors.textSecondary },
-                activeTab === 'itinerary' && styles.switcherTextActive,
+                { color: activeTab === 'itinerary' ? colors.text : colors.textMuted },
               ]}
             >
               Itinerary
@@ -130,14 +123,13 @@ export default function TripPlan({
           >
             <Ionicons
               name={activeTab === 'checklist' ? "checkbox" : "checkbox-outline"}
-              size={16}
-              color={activeTab === 'checklist' ? '#10B981' : colors.textSecondary}
+              size={15}
+              color={activeTab === 'checklist' ? '#10B981' : colors.textMuted}
             />
             <Text
               style={[
                 styles.switcherText,
-                { color: activeTab === 'checklist' ? colors.text : colors.textSecondary },
-                activeTab === 'checklist' && styles.switcherTextActive,
+                { color: activeTab === 'checklist' ? colors.text : colors.textMuted },
               ]}
             >
               Checklist
@@ -183,19 +175,18 @@ const styles = StyleSheet.create({
   headerContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+  headerEyebrow: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    flex: 1,
+    letterSpacing: -0.3,
   },
   tabContentContainer: {
     paddingHorizontal: 16,
@@ -237,11 +228,10 @@ const styles = StyleSheet.create({
   switcherContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 10,
     padding: 4,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 16,
   },
   switcherTab: {
     flex: 1,
@@ -249,14 +239,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     gap: 6,
   },
   switcherTabActive: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
   switcherText: {

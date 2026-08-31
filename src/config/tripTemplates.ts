@@ -64,7 +64,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Check online food reviews for booking dinner reservations',
         ],
         presetAnnouncement: {
-          title: '☀️ Relax & Unwind Getaway',
+          title: 'Relax & Unwind Getaway',
           content: 'Time to disconnect and relax! Make sure to complete the packing list, and check the timeline for sunset lounge slots.'
         },
         suggestedPolls: [
@@ -89,7 +89,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Pack comfortable walking shoes & lightweight sling bags',
         ],
         presetAnnouncement: {
-          title: '🌆 City Exploration Board',
+          title: 'City Exploration Board',
           content: 'Welcome! We will be navigating through bustling streets. Keep tracking coordinates on the itinerary timeline.'
         },
         suggestedPolls: [
@@ -114,7 +114,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Purchase highway driving snacks & build a shared road trip playlist',
         ],
         presetAnnouncement: {
-          title: '🚗 Road Trip Logistics Board',
+          title: 'Road Trip Logistics Board',
           content: 'Keep the fuel tanks topped! Review your assigned drivers, meeting coordinates, and emergency car kit checklist items.'
         },
         suggestedPolls: [
@@ -148,7 +148,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Print student name tags & school emergency contact details',
         ],
         presetAnnouncement: {
-          title: '📋 Field Trip Safety Regulations & Consent Guidelines',
+          title: 'Field Trip Safety Regulations & Consent Guidelines',
           content: 'Welcome students and chaperones! Please check the Checklist tab to upload or sign consent forms. Real-time rosters and location trackings will remain active.'
         },
         suggestedPolls: [
@@ -173,7 +173,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Confirm field lodging electricity and lab station capacity',
         ],
         presetAnnouncement: {
-          title: '🔬 Research Trip Guidelines & Permits',
+          title: 'Research Trip Guidelines & Permits',
           content: 'Verify all project permits are saved to the Documents tab. Coordinate schedules for team field assignments.'
         },
         suggestedPolls: [
@@ -207,7 +207,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Inspect hiking boots and pack functional headlamps & trail bars',
         ],
         presetAnnouncement: {
-          title: '⛰️ Hiking Safety & Trail Guidelines',
+          title: 'Hiking Safety & Trail Guidelines',
           content: 'Prepare for trail ascension! Stay with the designated trail guides and verify emergency supplies list completion.'
         },
         suggestedPolls: [
@@ -233,7 +233,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Prepare emergency insect sprays & safety matches',
         ],
         presetAnnouncement: {
-          title: '⛺ Camp Site Setup & Coordination',
+          title: 'Camp Site Setup & Coordination',
           content: 'Get ready to pitch tents! Review the group gear checklists to make sure we do not forget cookware, tents, or lamps.'
         },
         suggestedPolls: [
@@ -266,7 +266,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Pack professional formal attire & business cards portfolio',
         ],
         presetAnnouncement: {
-          title: '💼 Convention Schedule & Slides coordination',
+          title: 'Convention Schedule & Slides coordination',
           content: 'Welcome delegates! Please upload presentation materials to the shared Documents workspace and note bus transfers.'
         },
         suggestedPolls: [
@@ -300,7 +300,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Pack a family medicine kit (prescriptions, digestive pills, patches)',
         ],
         presetAnnouncement: {
-          title: '❤️ Welcome to our Family Reunion Workspace!',
+          title: 'Welcome to our Family Reunion Workspace!',
           content: 'So excited to gather everyone! Check the checklist to make sure senior relatives and kids are accounted for.'
         },
         suggestedPolls: [
@@ -333,7 +333,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Purchase group travel snacks, beverages, and card games',
         ],
         presetAnnouncement: {
-          title: '🚗 Barkada Escape Coordination Board',
+          title: 'Barkada Escape Coordination Board',
           content: 'Hey crew! Let us vote on the activity polls, and make sure to register expenses on the Splitter tab to keep things clear!'
         },
         suggestedPolls: [
@@ -366,7 +366,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Coordinate gift registration details and bridal transport shuttles',
         ],
         presetAnnouncement: {
-          title: '💍 Celebration Wedding Board',
+          title: 'Celebration Wedding Board',
           content: 'Welcome wedding guests! Please note dress codes, shuttle transfer slots, and verify banquet venues on the timeline.'
         },
         suggestedPolls: [
@@ -398,7 +398,7 @@ export const TRIP_CATEGORIES: TripCategory[] = [
           'Check weather forecasts and luggage packing weight limit',
         ],
         presetAnnouncement: {
-          title: '🧭 Custom Travel Workspace',
+          title: 'Custom Travel Workspace',
           content: 'Your blank canvas is ready. Fill in details and invite group members to start planning!'
         },
         suggestedPolls: []

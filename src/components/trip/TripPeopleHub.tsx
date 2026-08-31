@@ -340,18 +340,15 @@ export default function TripPeopleHub({
   const renderHeader = () => {
     return (
       <View style={styles.headerContainer}>
-        <View style={styles.headerTitleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Crew</Text>
-          </View>
-        </View>
+        <Text style={[styles.headerEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>Your crew</Text>
       </View>
     );
   };
 
   const renderSegmentedControl = () => {
     return (
-      <View style={[styles.tabsOuterContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+      <View style={[styles.tabsOuterContainer, { backgroundColor: colors.surface }]}>
         {availableTabs.map((tab) => {
           const isActive = currentTab === tab.id;
           // Calculate notifications for badges
@@ -1326,19 +1323,18 @@ const styles = StyleSheet.create({
   headerContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+  headerEyebrow: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    flex: 1,
+    letterSpacing: -0.3,
   },
   headerPhaseBadge: {
     flexDirection: 'row',
@@ -1370,23 +1366,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 16,
     marginVertical: 10,
-    padding: 3,
-    borderRadius: 14,
-    borderWidth: 1,
+    padding: 4,
+    borderRadius: 16,
   },
   tabItem: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 11,
+    paddingVertical: 9,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabItemActive: {
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   tabItemInner: {
     flexDirection: 'row',
@@ -1816,24 +1811,21 @@ const styles = StyleSheet.create({
   crewStatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 20,
+    gap: 5,
   },
   crewStatBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
   },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
+    height: 40,
+    borderRadius: 13,
     marginBottom: 10,
     gap: 6,
   },
@@ -1847,21 +1839,24 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   filterPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 13,
+    borderRadius: 20,
   },
   filterPillText: {
     fontSize: 11,
   },
   membersGrid: {
-    gap: 8,
+    gap: 9,
   },
   memberGridCard: {
-    padding: 10,
-    borderWidth: 1,
-    borderRadius: 14,
+    padding: 11,
+    borderRadius: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   memberCardContent: {
     flexDirection: 'row',

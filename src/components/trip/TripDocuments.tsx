@@ -106,11 +106,11 @@ export default function TripDocuments({
 
   return (
     <View style={{ marginBottom: 20 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <Text style={[styles.subHeaderTitle, { color: colors.text, marginBottom: 0, marginTop: 0 }]}>Documents</Text>
-        <TouchableOpacity style={[styles.tabAddBtn, { borderColor: '#0284C7', borderWidth: 1.5 }]} onPress={() => setModalVisible(true)}>
-          <Ionicons name="add" size={16} color="#0284C7" />
-          <Text style={[styles.tabAddBtnText, { color: '#0284C7' }]}>Upload File</Text>
+        <TouchableOpacity style={[styles.tabAddBtn, { backgroundColor: colors.brand }]} onPress={() => setModalVisible(true)}>
+          <Ionicons name="add" size={15} color="#fff" />
+          <Text style={styles.tabAddBtnText}>Upload</Text>
         </TouchableOpacity>
       </View>
       {trip.documents.length === 0 ? (
@@ -118,7 +118,7 @@ export default function TripDocuments({
           "share trip documents",
           "keep tickets and confirmations in one place.",
           "document-attach-outline",
-          "#0284C7",
+          colors.brand,
           "upload file",
           () => setModalVisible(true)
         )
@@ -129,18 +129,10 @@ export default function TripDocuments({
             return (
               <View
                 key={doc.id}
-                style={{
-                  width: '48%',
-                  backgroundColor: colors.card,
-                  borderColor: colors.cardBorder,
-                  borderWidth: 1,
-                  borderRadius: 16,
-                  padding: 12,
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  minHeight: 120,
-                  position: 'relative',
-                }}
+                style={[
+                  styles.docCard,
+                  { width: '48%', backgroundColor: colors.card, borderColor: colors.cardBorder },
+                ]}
               >
                 {/* Delete button (top-right corner) */}
                 {isOrganizer && (
@@ -152,17 +144,17 @@ export default function TripDocuments({
                   </TouchableOpacity>
                 )}
                 {/* File type icon with color background */}
-                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: docStyle.bg, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: docStyle.bg, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                   <Ionicons name={docStyle.icon as any} size={22} color={docStyle.color} />
                 </View>
-                <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, textAlign: 'center' }} numberOfLines={2}>
+                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center' }} numberOfLines={2}>
                   {doc.title}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                  <View style={{ backgroundColor: docStyle.bg, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 }}>
+                  <View style={{ backgroundColor: docStyle.bg, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1.5 }}>
                     <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', color: docStyle.color }}>{docStyle.label}</Text>
                   </View>
-                  <Text style={{ fontSize: 9, color: colors.textSecondary }}>{doc.fileSize}</Text>
+                  <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>{doc.fileSize}</Text>
                 </View>
               </View>
             );
@@ -172,22 +164,23 @@ export default function TripDocuments({
 
       {/* AI EXTRACTION SUGGESTION */}
       {AI_FEATURES_ENABLED && trip.documents.length > 0 && (
-        <View style={{ marginTop: 12, backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BAE6FD' }}>
+        <View style={[styles.aiPanel, { backgroundColor: colors.brandLight }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#0284C7' }}>AI Auto-Extract</Text>
+              <Ionicons name="sparkles" size={12} color={colors.brand} />
+              <Text style={[styles.aiPanelTitle, { color: colors.brand }]}>AI auto-extract</Text>
             </View>
             <TouchableOpacity onPress={handleAiExtract} disabled={aiSuggesting}>
-              <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: '#0284C7' }}>{aiSuggesting ? 'Reading...' : 'Scan docs'}</Text>
+              <Text style={[styles.aiPanelAction, { color: colors.brand }]}>{aiSuggesting ? 'Reading…' : 'Scan docs'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={{ fontSize: 10, color: '#0369A1', marginTop: 4, fontFamily: 'Poppins-Medium' }}>Automatically extract flight times, hotel bookings, and events from your uploaded documents to add itinerary stops.</Text>
+          <Text style={[styles.aiPanelDesc, { color: colors.brand }]}>Pull flight times, hotel bookings, and events straight from your uploads into the itinerary.</Text>
           {aiSuggestions.length > 0 && (
-            <View style={{ marginTop: 8, gap: 4 }}>
+            <View style={{ marginTop: 8, gap: 5 }}>
               {aiSuggestions.map((s, idx) => (
                 <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="add-circle-outline" size={14} color="#0284C7" />
-                  <Text style={{ fontSize: 11, color: '#0369A1', flex: 1 }}>{s}</Text>
+                  <Ionicons name="add-circle-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.aiSuggestionTxt, { color: colors.brand, flex: 1 }]}>{s}</Text>
                 </View>
               ))}
             </View>
@@ -233,21 +226,19 @@ export default function TripDocuments({
                       style={{
                         flex: 1,
                         paddingVertical: 8,
-                        borderRadius: 8,
-                        backgroundColor: newDocType === t ? '#0284C7' : colors.surface,
-                        borderWidth: 1,
-                        borderColor: newDocType === t ? '#0284C7' : colors.cardBorder,
+                        borderRadius: 10,
+                        backgroundColor: newDocType === t ? colors.brand : colors.surface,
                         alignItems: 'center',
                       }}
                       onPress={() => setNewDocType(t)}
                     >
-                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: newDocType === t ? '#FFFFFF' : colors.text }}>{t.toUpperCase()}</Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: newDocType === t ? '#FFFFFF' : colors.textSecondary }}>{t.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleAddDocument}>
+              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.brand }]} onPress={handleAddDocument}>
                 <Text style={styles.submitBtnText}>Add Document</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -300,15 +291,53 @@ const styles = StyleSheet.create({
   tabAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: 14,
     gap: 4,
   },
   tabAddBtnText: {
     fontSize: 12,
     fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    color: '#fff',
+  },
+  docCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 122,
+    position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  aiPanel: {
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 13,
+  },
+  aiPanelTitle: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Bold',
+  },
+  aiPanelAction: {
+    fontSize: 10.5,
+    fontFamily: 'Poppins-Bold',
+  },
+  aiPanelDesc: {
+    fontSize: 10.5,
+    fontFamily: 'Poppins-Medium',
+    marginTop: 5,
+    lineHeight: 14,
+    opacity: 0.85,
+  },
+  aiSuggestionTxt: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -403,8 +432,7 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     height: 48,
-    backgroundColor: '#0284C7',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,

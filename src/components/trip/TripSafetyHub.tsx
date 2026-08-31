@@ -153,11 +153,14 @@ export default function TripSafetyHub({
         key={stop.id}
         style={{
           backgroundColor: colors.card,
-          borderColor: colors.cardBorder,
-          borderWidth: 1,
-          borderRadius: 18,
+          borderRadius: 20,
           marginBottom: 14,
           overflow: 'hidden',
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
+          elevation: 2,
         }}
       >
         {/* Stop Header */}
@@ -326,7 +329,7 @@ export default function TripSafetyHub({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 5,
-                backgroundColor: '#0284C7',
+                backgroundColor: colors.brand,
                 borderRadius: 10,
                 paddingVertical: 10,
               }}
@@ -386,15 +389,15 @@ export default function TripSafetyHub({
           gap: 8,
           marginBottom: 20,
         }}>
-          <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
+          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
             <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#10B981' }}>{totalCheckedIn}</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Arrived</Text>
           </View>
-          <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
+          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
             <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#F59E0B' }}>{trip.members.length - totalCheckedIn}</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>En Route</Text>
           </View>
-          <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
+          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
             <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#14B8A6' }}>{itinerary.length}</Text>
             <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Stops</Text>
           </View>
@@ -541,7 +544,7 @@ export default function TripSafetyHub({
             )}
 
             <TouchableOpacity
-              style={{ width: '100%', height: 44, backgroundColor: '#0284C7', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}
+              style={{ width: '100%', height: 44, backgroundColor: colors.brand, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}
               onPress={() => { setQrModalVisible(false); setActiveQrStop(null); }}
             >
               <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Close</Text>
@@ -703,6 +706,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 80,
     paddingBottom: 120,
+  },
+
+  statBox: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 14,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   capsLabel: {

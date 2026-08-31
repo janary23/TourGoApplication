@@ -249,7 +249,8 @@ export default function TripExpenses({
       {/* HEADER */}
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Money Room</Text>
+          <Text style={[styles.headerEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination}</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Money room</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
@@ -466,7 +467,8 @@ export default function TripExpenses({
                   key={exp.id}
                   style={[styles.expCard, {
                     backgroundColor: colors.card,
-                    borderColor: iSplit ? '#EF444430' : colors.cardBorder,
+                    borderWidth: iSplit ? 1 : 0,
+                    borderColor: '#EF444430',
                   }]}
                 >
                   <View style={[styles.expIconBox, { backgroundColor: cfg.bg }]}>
@@ -849,10 +851,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  headerEyebrow: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 21,
     fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   addBtn: {
     flexDirection: 'row',
@@ -1017,9 +1025,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderRadius: 16,
-    borderWidth: 1,
     gap: 5,
     minWidth: 72,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   categoryChipIcon: {
     width: 32,
@@ -1057,10 +1069,9 @@ const styles = StyleSheet.create({
   },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   filterPill: {
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 20,
   },
   filterPillText: {
     fontSize: 12,
@@ -1075,8 +1086,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 14,
     borderRadius: 18,
-    borderWidth: 1,
     gap: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   expIconBox: {
     width: 40,

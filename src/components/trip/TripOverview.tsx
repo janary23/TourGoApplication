@@ -1,13 +1,18 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   StyleSheet, View, Text, ScrollView, Image, TouchableOpacity,
-  ImageBackground, ActivityIndicator, Alert, Animated, Easing, Dimensions,
+  ActivityIndicator, Alert, Animated, Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { toggleCheckIn as dbToggleCheckIn } from "../../services/tripService";
+import {
+  toggleCheckIn as dbToggleCheckIn,
+  voteInPoll as dbVoteInPoll,
+} from "../../services/tripService";
+import { useTheme } from "../../context/ThemeContext";
 
-const { width: SCREEN_W } = Dimensions.get("window");
+const HERO_HEIGHT = 336;
+const STACK_MAX = 3;
 
 interface TripOverviewProps {
   trip: any;
@@ -25,25 +30,99 @@ interface TripOverviewProps {
   loadTrip: () => void;
 }
 
+// Avatar fallback palette — matches TripMembers.tsx so a person keeps the
+// same colour everywhere in the app.
+const AVATAR_PALETTE = [
+  { bg: '#DBEAFE', fg: '#1D4ED8' },
+  { bg: '#D1FAE5', fg: '#065F46' },
+  { bg: '#EDE9FE', fg: '#5B21B6' },
+  { bg: '#FCE7F3', fg: '#9D174D' },
+  { bg: '#FEF3C7', fg: '#92400E' },
+  { bg: '#CFFAFE', fg: '#164E63' },
+];
+const getAvatarColor = (name: string) => AVATAR_PALETTE[(name ? name.charCodeAt(0) : 0) % AVATAR_PALETTE.length];
 
+// Same stop taxonomy + thumbnail resolver as the Itinerary tab
+// (TripItinerary.tsx), so a stop looks like the same object in both places.
+const inferStopCategory = (title: string) => {
+  const t = (title || '').toLowerCase();
+  if (t.includes('coffee') || t.includes('cafe')) return 'Café';
+  if (t.includes('lunch') || t.includes('dinner') || t.includes('restaurant') || t.includes('food') || t.includes('lechon') || t.includes('brunch')) return 'Food';
+  if (t.includes('beach') || t.includes('island') || t.includes('resort') || t.includes('swim') || t.includes('snorkel') || t.includes('sardine')) return 'Beach';
+  if (t.includes('falls') || t.includes('waterfall') || t.includes('kawasan') || t.includes('nature') || t.includes('peak')) return 'Nature';
+  if (t.includes('temple') || t.includes('church') || t.includes('fort') || t.includes('museum') || t.includes('heritage')) return 'Culture';
+  return 'Sightseeing';
+};
+
+const getStopCategoryColor = (cat: string) => {
+  const c = cat.toLowerCase();
+  if (c === 'café' || c === 'food') return { bg: '#FFF7ED', text: '#EA580C' };
+  if (c === 'beach') return { bg: '#ECFDF5', text: '#059669' };
+  if (c === 'nature') return { bg: '#F0F9FF', text: '#0284C7' };
+  if (c === 'culture') return { bg: '#F5F3FF', text: '#7C3AED' };
+  return { bg: '#F3F4F6', text: '#4B5563' };
+};
+
+const getStopImage = (item: any) => {
+  if (item?.description) {
+    const match = item.description.match(/Image:\s*(https[^\n]+)/i);
+    if (match) return match[1];
+  }
+  const title = (item?.title || '').toLowerCase();
+  if (title.includes('coffee') || title.includes('cafe') || title.includes('starbucks')) {
+    return 'https://images.unsplash.com/photo-1507133750040-4a8f57021571?auto=format&fit=crop&w=200&q=80';
+  }
+  if (title.includes('food') || title.includes('lunch') || title.includes('dinner') || title.includes('eat') || title.includes('restaurant') || title.includes('lechon')) {
+    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=200&q=80';
+  }
+  if (title.includes('beach') || title.includes('island') || title.includes('sea') || title.includes('sardine') || title.includes('whale') || title.includes('snorkel') || title.includes('sumilon')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=200&q=80';
+  }
+  if (title.includes('falls') || title.includes('waterfall') || title.includes('kawasan') || title.includes('nature') || title.includes('hiking')) {
+    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=200&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=200&q=80';
+};
+
+// ── Spring-press feedback on every touch target ──
+function Press({ onPress, style, children, scaleTo = 0.97, disabled = false }: any) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn = () => Animated.spring(scale, { toValue: scaleTo, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 9 }).start();
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      <TouchableOpacity activeOpacity={0.9} disabled={disabled} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} style={{ flex: 1 }}>
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function TripOverview({
-  trip, currentUserName, tripPhase, colors, isDark = false, isOrganizer,
-  handleShareCode, goToPlan, goToPeople, goToMoney, goToMore, openEditModal, loadTrip,
+  trip, currentUserName, tripPhase, colors, isDark: isDarkProp,
+  handleShareCode, goToPlan, goToPeople, goToMoney, goToMore, loadTrip,
 }: TripOverviewProps) {
+  const { isDark: themeIsDark } = useTheme();
+  const isDark = isDarkProp ?? themeIsDark;
+
   const PHASE_CONFIG = {
-    before: { accent: colors.brand, gradient: ["#0A1A2F", "#0B2545"] as [string, string], label: "UPCOMING" },
-    during: { accent: "#22C55E", gradient: ["#071A10", "#042B18"] as [string, string], label: "LIVE NOW" },
-    after: { accent: "#8B5CF6", gradient: ["#0D0A1A", "#1A1240"] as [string, string], label: "COMPLETED" },
+    before: { accent: colors.brand, label: "Upcoming" },
+    during: { accent: "#22C55E", label: "Live now" },
+    after: { accent: "#8B5CF6", label: "Completed" },
   };
+
   const [fabOpen, setFabOpen] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [votingOptionId, setVotingOptionId] = useState<string | null>(null);
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fabAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
+  const enterAnim = useRef(new Animated.Value(0)).current;
+
   const phase = PHASE_CONFIG[tripPhase.phase];
   const totalExpenses = trip.expenses.reduce((s: number, e: any) => s + e.amount, 0);
   const completedTasks = trip.checklist.filter((c: any) => c.completed).length;
@@ -51,15 +130,19 @@ export default function TripOverview({
   const prepRatio = totalTasks > 0 ? completedTasks / totalTasks : 0;
 
   useEffect(() => {
+    Animated.timing(enterAnim, { toValue: 1, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, []);
+
+  useEffect(() => {
     if (tripPhase.phase !== "during") return;
     Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.45, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(pulseAnim, { toValue: 1.4, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       Animated.timing(pulseAnim, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
     ])).start();
   }, [tripPhase.phase]);
 
   useEffect(() => {
-    Animated.timing(progressAnim, { toValue: prepRatio, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(progressAnim, { toValue: prepRatio, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [completedTasks, totalTasks]);
 
   const toggleFab = () => {
@@ -67,7 +150,7 @@ export default function TripOverview({
     Animated.parallel([
       Animated.spring(fabAnim, { toValue, useNativeDriver: true, tension: 120, friction: 8 }),
       Animated.sequence([
-        Animated.timing(scaleAnim, { toValue: 0.84, duration: 80, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+        Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
         Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
       ]),
     ]).start();
@@ -76,15 +159,13 @@ export default function TripOverview({
 
   const isEnabled = (f: string) => trip.features[f];
 
-  const fmtDate = (d: string) => !d ? "TBD" : new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
   const fmtRange = (s: string, e: string) => {
     if (!s || !e) return "Dates TBD";
     const st = new Date(s), en = new Date(e);
     const sm = st.toLocaleDateString("en-US", { month: "short" });
     const em = en.toLocaleDateString("en-US", { month: "short" });
     return sm === em
-      ? `${sm} ${st.getDate()}--${en.getDate()}, ${st.getFullYear()}`
+      ? `${sm} ${st.getDate()}–${en.getDate()}, ${st.getFullYear()}`
       : `${sm} ${st.getDate()} - ${em} ${en.getDate()}, ${st.getFullYear()}`;
   };
 
@@ -93,6 +174,10 @@ export default function TripOverview({
     const p = n.trim().split(/\s+/);
     return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase();
   };
+
+  // Member whose name matches the given announcer — used to surface the
+  // announcer's own avatar image on the Updates board instead of a generic icon.
+  const memberNamed = (name: string) => (trip.members || []).find((m: any) => m.name === name);
 
   const parseTime = (t: string) => {
     if (!t) return 0;
@@ -154,59 +239,269 @@ export default function TripOverview({
     setIsCheckingIn(false);
   };
 
+  const openAgilito = () => {
+    if (typeof (globalThis as any).openAiChat === 'function') (globalThis as any).openAiChat();
+    else Alert.alert('Agilito Says', mascotMsg());
+  };
+
   const mascotMsg = () => {
     if (tripPhase.phase === "before" && completedTasks < totalTasks)
-      return `Ready? ${totalTasks - completedTasks} task${totalTasks - completedTasks !== 1 ? "s" : ""} left on your checklist!`;
+      return `${totalTasks - completedTasks} thing${totalTasks - completedTasks !== 1 ? "s" : ""} left to prepare for your trip.`;
     if (tripPhase.phase === "during" && nowAct) return `Right now: "${nowAct.title}"`;
     if (tripPhase.phase === "during" && nextAct) return `Up next: "${nextAct.title}" at ${nextAct.time}`;
-    if (tripPhase.phase === "after") return "What a ride! Settle balances and relive the memories!";
-    return "You are all set for an amazing adventure!";
+    if (tripPhase.phase === "after") return "What a trip! Settle up and relive the memories anytime.";
+    return "You're all set — have an amazing trip!";
   };
 
-  const getActivityTypeInfo = (title: string) => {
-    const t = title.toLowerCase();
-    if (t.includes('flight') || t.includes('airport') || t.includes('plane') || t.includes('terminal')) {
-      return { icon: 'airplane', color: '#0EA5E9', bg: '#F0F9FF', bgDark: '#082F49', label: 'Flight' };
+  const sortedItinerary = trip.itinerary?.length
+    ? [...trip.itinerary].sort((a: any, b: any) => a.dayIndex !== b.dayIndex ? a.dayIndex - b.dayIndex : parseTime(a.time) - parseTime(b.time))
+    : [];
+
+  const countdownText = (() => {
+    if (tripPhase.phase === 'before') return daysToGo > 0 ? `${daysToGo} day${daysToGo !== 1 ? 's' : ''} to go` : "Today's the day";
+    if (tripPhase.phase === 'during') return activeDay ? `Day ${activeDay.currentDay} of ${activeDay.totalDays}` : 'In progress';
+    const n = trip.itinerary?.length ?? 0;
+    return n > 0 ? `${n} stop${n !== 1 ? 's' : ''} explored` : 'Trip complete';
+  })();
+
+  // ── Trip statistics ──
+  // ── Preparation / next action ──
+  const prep = useMemo(() => {
+    if (tripPhase.phase === 'before') {
+      const left = totalTasks - completedTasks;
+      return {
+        eyebrow: 'GET READY',
+        icon: 'sparkles' as const,
+        title: totalTasks === 0
+          ? 'Start your packing list'
+          : left > 0 ? `${left} task${left !== 1 ? 's' : ''} to go` : "You're all packed",
+        desc: totalTasks === 0
+          ? 'Add a checklist so nothing gets forgotten.'
+          : left > 0 ? 'Finish your checklist before departure.' : 'Everything on your checklist is done.',
+        action: totalTasks === 0 ? 'Add tasks' : 'Open checklist',
+        onPress: goToPlan,
+        showProgress: totalTasks > 0,
+      };
     }
-    if (t.includes('hotel') || t.includes('check-in') || t.includes('check in') || t.includes('stay') || t.includes('room') || t.includes('resort') || t.includes('hostel') || t.includes('lodging')) {
-      return { icon: 'bed', color: '#6366F1', bg: '#EEF2FF', bgDark: '#1E1B4B', label: 'Hotel' };
+    if (tripPhase.phase === 'during') {
+      const act = nowAct || nextAct;
+      return {
+        eyebrow: nowAct ? 'HAPPENING NOW' : 'UP NEXT',
+        icon: 'navigate' as const,
+        title: act ? act.title : 'Free time',
+        desc: act
+          ? `${act.time || 'TBD'}${act.location ? ` · ${act.location}` : ''}`
+          : 'No stops scheduled right now — go explore.',
+        action: 'View itinerary',
+        onPress: goToPlan,
+        showProgress: false,
+      };
     }
-    if (t.includes('restaurant') || t.includes('dinner') || t.includes('lunch') || t.includes('breakfast') || t.includes('eat') || t.includes('snack') || t.includes('brunch') || t.includes('buffet') || t.includes('dining')) {
-      return { icon: 'restaurant', color: '#10B981', bg: '#ECFDF5', bgDark: '#064E3B', label: 'Dining' };
-    }
-    if (t.includes('cafe') || t.includes('coffee') || t.includes('starbucks') || t.includes('tea') || t.includes('boba') || t.includes('drinks') || t.includes('bar') || t.includes('pub') || t.includes('club')) {
-      return { icon: 'cafe', color: '#B45309', bg: '#FEF3C7', bgDark: '#78350F', label: 'Drinks' };
-    }
-    if (t.includes('beach') || t.includes('island') || t.includes('lake') || t.includes('river') || t.includes('waterfall') || t.includes('hike') || t.includes('hiking') || t.includes('mountain') || t.includes('park') || t.includes('nature') || t.includes('forest') || t.includes('outdoor')) {
-      return { icon: 'sunny', color: '#F59E0B', bg: '#FFFBEB', bgDark: '#451A03', label: 'Outdoors' };
-    }
-    if (t.includes('sight') || t.includes('tour') || t.includes('visit') || t.includes('explore') || t.includes('museum') || t.includes('gallery') || t.includes('temple') || t.includes('church') || t.includes('landmark')) {
-      return { icon: 'eye', color: '#8B5CF6', bg: '#F5F3FF', bgDark: '#2E1065', label: 'Sightseeing' };
-    }
-    if (t.includes('bus') || t.includes('train') || t.includes('taxi') || t.includes('drive') || t.includes('ride') || t.includes('transfer') || t.includes('ferry') || t.includes('boat') || t.includes('car') || t.includes('subway') || t.includes('transit')) {
-      return { icon: 'bus', color: '#6B7280', bg: '#F3F4F6', bgDark: '#1F2937', label: 'Transport' };
-    }
-    if (t.includes('shop') || t.includes('store') || t.includes('mall') || t.includes('market') || t.includes('souvenir') || t.includes('boutique') || t.includes('grocery')) {
-      return { icon: 'cart', color: '#EC4899', bg: '#FDF2F8', bgDark: '#500724', label: 'Shopping' };
-    }
-    if (t.includes('movie') || t.includes('theater') || t.includes('show') || t.includes('concert') || t.includes('festival') || t.includes('massage') || t.includes('spa') || t.includes('gym') || t.includes('sport') || t.includes('swim') || t.includes('snorkel') || t.includes('dive') || t.includes('adventure') || t.includes('game') || t.includes('play')) {
-      return { icon: 'sparkles', color: '#F43F5E', bg: '#FFF1F2', bgDark: '#4C0519', label: 'Activity' };
-    }
-    return { icon: 'location', color: '#14B8A6', bg: '#F0FDFA', bgDark: '#042F2E', label: 'Stop' };
+    const settleUp = isEnabled('split_expenses') && totalExpenses > 0;
+    return {
+      eyebrow: 'TRIP WRAPPED',
+      icon: 'ribbon' as const,
+      title: settleUp ? 'Settle shared costs' : 'Relive the trip',
+      desc: settleUp ? `₱${totalExpenses.toLocaleString()} logged across the group.` : 'Revisit your photos, docs, and highlights.',
+      action: settleUp ? 'Settle up' : 'View memories',
+      onPress: settleUp ? goToMoney : () => goToMore('documents'),
+      showProgress: false,
+    };
+  }, [tripPhase.phase, totalTasks, completedTasks, nowAct, nextAct, totalExpenses]);
+
+  // ── Itinerary preview ──
+  const itineraryPreview = useMemo(() => {
+    if (tripPhase.phase === 'during') return [nowAct, nextAct].filter(Boolean).map((it: any) => ({ ...it, isNow: it === nowAct }));
+    if (tripPhase.phase === 'after') return sortedItinerary.slice(-3).map((it: any) => ({ ...it, isNow: false }));
+    return sortedItinerary.slice(0, 3).map((it: any) => ({ ...it, isNow: false }));
+  }, [tripPhase.phase, sortedItinerary, nowAct, nextAct]);
+
+  const remainingStops = Math.max(0, sortedItinerary.length - itineraryPreview.length);
+
+  // ── Updates — pinned notes for the bulletin board ──
+  // Titles seeded from older trip templates may still carry a leading emoji;
+  // strip it at render so the board stays typographic.
+  const stripLeadingEmoji = (s: string) =>
+    (s || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}][\u{FE0F}\u{FE0E}]?\s*/u, '').trim();
+
+  const boardNotes = useMemo(() => {
+    if (!isEnabled('announcements')) return [];
+    const list = trip.announcements || [];
+    // Important notices get pinned to the front of the board.
+    return [...list]
+      .sort((a: any, b: any) => (b.important ? 1 : 0) - (a.important ? 1 : 0))
+      .slice(0, 4);
+  }, [trip.announcements]);
+
+  // ── Spending split by payer ──
+  const topSpenders = useMemo(() => {
+    const map: Record<string, number> = {};
+    (trip.expenses || []).forEach((e: any) => { map[e.paidBy] = (map[e.paidBy] || 0) + e.amount; });
+    return Object.entries(map)
+      .map(([name, amount]) => ({ name, amount: amount as number }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
+  }, [trip.expenses]);
+
+  const SPEND_COLORS = ['#10B981', '#0EA5E9', '#F59E0B'];
+
+  // ── Poll ──
+  const activePoll = useMemo(() => {
+    if (!trip.polls?.length || !isEnabled('polls')) return null;
+    return trip.polls.find((p: any) => !p.closed) || trip.polls[trip.polls.length - 1];
+  }, [trip.polls]);
+
+  const pollStats = useMemo(() => {
+    if (!activePoll) return null;
+    const options = activePoll.options || [];
+    const totalVotes = options.reduce((s: number, o: any) => s + (o.votes?.length || 0), 0);
+    const myOptionIds = options.filter((o: any) => (o.votes || []).includes(currentUserName)).map((o: any) => o.id);
+    return { totalVotes, options: options.slice(0, 3), extra: Math.max(0, options.length - 3), myOptionIds, hasVoted: myOptionIds.length > 0 };
+  }, [activePoll, currentUserName]);
+
+  const handleVote = async (optionId: string) => {
+    if (!activePoll || activePoll.closed) return;
+    setVotingOptionId(optionId);
+    const { error } = await dbVoteInPoll(optionId);
+    if (error) Alert.alert('Vote failed', error); else loadTrip();
+    setVotingOptionId(null);
   };
 
-  const heroTranslate = scrollY.interpolate({ inputRange: [0, 120], outputRange: [0, -40], extrapolate: "clamp" });
+  const featuredOrganizer = trip.members.find((m: any) => m.role === 'organizer');
+  const memberOverflow = Math.max(0, trip.members.length - STACK_MAX);
+
+  // ── Trip info grid — crew, spending, dates, invite code as one compact
+  // 2×2 widget instead of three stacked full-width sections. Cuts a lot of
+  // scroll height without losing any of the information.
+  const infoTiles = useMemo(() => {
+    const tiles: {
+      key: string; icon: any; color: string; value: string; label: string;
+      onPress?: () => void; avatars?: boolean; spendBar?: boolean;
+    }[] = [
+      {
+        key: 'crew',
+        icon: 'people',
+        color: '#6366F1',
+        value: trip.members.length === 1 ? 'Just you' : `${trip.members.length} travelers`,
+        label: featuredOrganizer ? `Organized by ${featuredOrganizer.name.split(' ')[0]}` : 'Tap to view everyone',
+        onPress: () => goToPeople('members'),
+        avatars: true,
+      },
+    ];
+
+    if (isEnabled('split_expenses')) {
+      tiles.push({
+        key: 'spend',
+        icon: 'wallet',
+        color: '#10B981',
+        value: '₱' + totalExpenses.toLocaleString(),
+        label: trip.expenses.length > 0 ? `${trip.expenses.length} bill${trip.expenses.length !== 1 ? 's' : ''} logged` : 'No expenses yet',
+        onPress: goToMoney,
+        spendBar: trip.expenses.length > 0,
+      });
+    } else {
+      tiles.push({
+        key: 'stops',
+        icon: 'flag',
+        color: '#14B8A6',
+        value: String(trip.itinerary?.length ?? 0),
+        label: 'Stops planned',
+        onPress: goToPlan,
+      });
+    }
+
+    tiles.push({
+      key: 'dates',
+      icon: 'calendar',
+      color: '#0EA5E9',
+      value: fmtRange(trip.startDate, trip.endDate),
+      label: 'Trip dates',
+    });
+
+    tiles.push({
+      key: 'code',
+      icon: 'key',
+      color: '#F59E0B',
+      value: trip.code,
+      label: 'Tap to share',
+      onPress: handleShareCode,
+    });
+
+    return tiles;
+  }, [trip.members.length, featuredOrganizer, totalExpenses, trip.expenses.length, trip.itinerary?.length, trip.startDate, trip.endDate, trip.code]);
 
   const fabActions = [
-    { icon: 'home-outline',                    label: 'Overview',       color: '#6366F1', bg: '#EEF2FF', onPress: () => { toggleFab(); } },
-    { icon: 'calendar-outline',                label: 'Plan & Tasks',   color: '#0EA5E9', bg: '#E0F2FE', onPress: () => { toggleFab(); goToPlan(); } },
-    { icon: 'people-outline',                  label: 'Crew & Chat',    color: '#10B981', bg: '#D1FAE5', onPress: () => { toggleFab(); goToPeople('members'); } },
-    isEnabled('split_expenses') && { icon: 'wallet-outline',           label: 'Expenses',       color: '#10B981', bg: '#D1FAE5', onPress: () => { toggleFab(); goToMoney(); } },
-    (isEnabled('attendance') || isEnabled('guardian_mode')) && { icon: 'shield-checkmark-outline', label: 'Safety Hub',     color: '#EF4444', bg: '#FEE2E2', onPress: () => { toggleFab(); goToMore('safety'); } },
-    { icon: '', label: 'Agilito', color: '#38BDF8', bg: '#E0F9FF', mascot: true, onPress: () => { toggleFab(); if (typeof (globalThis as any).openAiChat === 'function') { (globalThis as any).openAiChat(); } else { Alert.alert('Agilito Says', mascotMsg()); } } },
+    { icon: 'home-outline', label: 'Overview', color: '#6366F1', bg: '#EEF2FF', onPress: () => { toggleFab(); } },
+    { icon: 'calendar-outline', label: 'Plan & Tasks', color: '#0EA5E9', bg: '#E0F2FE', onPress: () => { toggleFab(); goToPlan(); } },
+    { icon: 'people-outline', label: 'Crew & Chat', color: '#10B981', bg: '#D1FAE5', onPress: () => { toggleFab(); goToPeople('members'); } },
+    isEnabled('split_expenses') && { icon: 'wallet-outline', label: 'Expenses', color: '#10B981', bg: '#D1FAE5', onPress: () => { toggleFab(); goToMoney(); } },
+    (isEnabled('attendance') || isEnabled('guardian_mode')) && { icon: 'shield-checkmark-outline', label: 'Safety Hub', color: '#EF4444', bg: '#FEE2E2', onPress: () => { toggleFab(); goToMore('safety'); } },
+    { icon: '', label: 'Agilito', color: '#38BDF8', bg: '#E0F9FF', mascot: true, onPress: () => { toggleFab(); openAgilito(); } },
   ].filter((a): a is { icon: string; label: string; color: string; bg: string; mascot?: boolean; onPress: () => void } => !!a) as { icon: string; label: string; color: string; bg: string; mascot?: boolean; onPress: () => void }[];
 
+  // ── Scroll-driven hero motion ──
+  const heroTranslate = scrollY.interpolate({ inputRange: [0, HERO_HEIGHT], outputRange: [0, -HERO_HEIGHT * 0.28], extrapolate: 'clamp' });
+  const heroScale = scrollY.interpolate({ inputRange: [-140, 0], outputRange: [1.24, 1], extrapolate: 'clamp' });
 
+  const renderSectionHeader = (title: string, subtitle?: string, onSeeAll?: () => void) => (
+    <View style={styles.secHead}>
+      <View style={{ flex: 1, zIndex: 1 }}>
+        <Text style={[styles.secTitle, { color: colors.text }]}>{title}</Text>
+        {!!subtitle && <Text style={[styles.secSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
+      </View>
+      {!!onSeeAll && (
+        <TouchableOpacity onPress={onSeeAll} style={styles.secLink} activeOpacity={0.7}>
+          <Text style={[styles.secLinkTxt, { color: colors.brand }]}>See all</Text>
+          <Ionicons name="chevron-forward" size={12} color={colors.brand} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // ── Timeline row: time rail + compact activity surface with thumbnail ──
+  const renderTimelineItem = (item: any, isLast: boolean) => {
+    const cat = inferStopCategory(item.title);
+    const catColor = getStopCategoryColor(cat);
+    const parts = (item.time || 'TBD').split(' ');
+    return (
+      <View key={item.id} style={styles.tRow}>
+        <View style={styles.tTimeCol}>
+          <Text style={[styles.tTime, { color: colors.text }]}>{parts[0]}</Text>
+          {!!parts[1] && <Text style={[styles.tAmpm, { color: colors.textMuted }]}>{parts[1]}</Text>}
+        </View>
+
+        <View style={styles.tTrackCol}>
+          {item.isNow && <Animated.View style={[styles.tDotGlow, { backgroundColor: catColor.text, transform: [{ scale: pulseAnim }] }]} />}
+          <View style={[styles.tDot, { borderColor: catColor.text, backgroundColor: item.isNow ? catColor.text : colors.background }]} />
+          {!isLast && <View style={[styles.tLine, { backgroundColor: colors.cardBorder }]} />}
+        </View>
+
+        <Press onPress={goToPlan} style={[styles.tCardWrap, !isLast && { paddingBottom: 12 }]} scaleTo={0.98}>
+          <View style={[styles.tCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Image source={{ uri: getStopImage(item) }} style={styles.tThumb} resizeMode="cover" />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.tTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+              <View style={[styles.tChip, { backgroundColor: catColor.bg }]}>
+                <Text style={[styles.tChipTxt, { color: catColor.text }]}>{cat}</Text>
+              </View>
+              {!!item.location && (
+                <View style={styles.tLocRow}>
+                  <Ionicons name="location-outline" size={10} color={colors.textMuted} />
+                  <Text style={[styles.tLoc, { color: colors.textMuted }]} numberOfLines={1}>{item.location}</Text>
+                </View>
+              )}
+            </View>
+            {item.isNow && (
+              <View style={styles.tNowTag}>
+                <View style={styles.tNowDot} />
+                <Text style={styles.tNowTxt}>NOW</Text>
+              </View>
+            )}
+          </View>
+        </Press>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.root}>
@@ -216,547 +511,371 @@ export default function TripOverview({
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
       >
-        {/* HERO */}
-        <View style={styles.heroWrap}>
-          <Animated.View style={[styles.heroImgBox, { transform: [{ translateY: heroTranslate }] }]}>
-            <ImageBackground source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000' }} style={styles.heroImg} imageStyle={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          </Animated.View>
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFillObject} />
+        <Animated.View style={{ opacity: enterAnim, transform: [{ translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
 
+          {/* ═══ HERO ═══ */}
+          <View style={styles.heroWrap}>
+            <Animated.Image
+              source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200' }}
+              style={[styles.heroImg, { transform: [{ translateY: heroTranslate }, { scale: heroScale }] }]}
+              resizeMode="cover"
+            />
+            <LinearGradient colors={['rgba(0,0,0,0.28)', 'transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.85)']} locations={[0, 0.35, 0.72, 1]} style={StyleSheet.absoluteFillObject} />
 
-          <View style={styles.heroTop}>
-            <View style={[styles.phaseBadge, { borderColor: phase.accent + '55' }]}>
-              {tripPhase.phase === 'during' && (
-                <Animated.View style={[styles.liveDotGlow, { backgroundColor: phase.accent, transform: [{ scale: pulseAnim }] }]} />
-              )}
-              <View style={[styles.liveDotCore, { backgroundColor: tripPhase.phase === 'during' ? phase.accent : 'transparent' }]} />
-              <Text style={[styles.phaseBadgeTxt, { color: phase.accent }]}>{phase.label}</Text>
-            </View>
-            <View style={styles.heroTopRight}>
-              <TouchableOpacity style={styles.heroShareBtn} onPress={handleShareCode}>
-                <Ionicons name="share-social-outline" size={13} color="#fff" />
-                <Text style={styles.heroShareTxt}>{trip.code}</Text>
+            <View style={styles.heroTopRow}>
+              <View style={styles.statusPill}>
+                {tripPhase.phase === 'during' && (
+                  <Animated.View style={[styles.statusGlow, { backgroundColor: phase.accent, transform: [{ scale: pulseAnim }] }]} />
+                )}
+                <View style={[styles.statusDot, { backgroundColor: phase.accent }]} />
+                <Text style={styles.statusTxt}>{phase.label}</Text>
+              </View>
+              <TouchableOpacity style={styles.heroIconBtn} onPress={handleShareCode} hitSlop={8} activeOpacity={0.8}>
+                <Ionicons name="share-social-outline" size={15} color="#fff" />
               </TouchableOpacity>
-              {isOrganizer && openEditModal && (
-                <TouchableOpacity style={styles.heroIconBtn} onPress={openEditModal}>
-                  <Ionicons name="create-outline" size={15} color="#fff" />
-                </TouchableOpacity>
+            </View>
+
+            <View style={styles.heroContent}>
+              {!!trip.destination && (
+                <View style={styles.heroDestRow}>
+                  <Ionicons name="location" size={11} color="#93C5FD" />
+                  <Text style={styles.heroDest} numberOfLines={1}>{trip.destination}</Text>
+                </View>
+              )}
+              <Text style={styles.heroTitle} numberOfLines={2}>{trip.title}</Text>
+
+              <View style={styles.heroMetaRow}>
+                <View style={styles.heroMetaItem}>
+                  <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.75)" />
+                  <Text style={styles.heroMetaTxt}>{fmtRange(trip.startDate, trip.endDate)}</Text>
+                </View>
+                <View style={styles.heroMetaDot} />
+                <Text style={styles.heroMetaTxt}>{countdownText}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.body, { paddingTop: 20 }]}>
+
+            {/* ═══ SAFETY CHECK-IN (urgent, contextual) ═══ */}
+            {showCheckIn && (
+              <Press onPress={doCheckIn} style={[styles.checkInCard, { backgroundColor: isDark ? 'rgba(239,68,68,0.14)' : '#FEF2F2', borderColor: isDark ? 'rgba(239,68,68,0.3)' : '#FECACA' }]} scaleTo={0.98}>
+                <View style={styles.checkInIcon}>
+                  <Ionicons name="shield-checkmark" size={17} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.checkInTitle, { color: isDark ? '#FCA5A5' : '#B91C1C' }]}>Safety check-in pending</Text>
+                  <Text style={[styles.checkInSub, { color: isDark ? 'rgba(252,165,165,0.75)' : '#DC2626' }]}>Tap to let your group know you're safe</Text>
+                </View>
+                {isCheckingIn
+                  ? <ActivityIndicator size="small" color="#EF4444" />
+                  : <Ionicons name="chevron-forward" size={17} color="#EF4444" />}
+              </Press>
+            )}
+
+            {/* ═══ PRIMARY — two-column: Up Next (left) beside stats + Agilito (right) ═══ */}
+            <View style={styles.primaryRow}>
+              {/* Left column: Up Next / current activity */}
+              <View style={styles.primaryLeft}>
+                <Press onPress={prep.onPress} style={[styles.prepCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} scaleTo={0.985}>
+                  <View style={styles.prepTopRow}>
+                    <View style={[styles.prepIconTile, { backgroundColor: colors.brand + (isDark ? '26' : '14') }]}>
+                      <Ionicons name={prep.icon} size={17} color={colors.brand} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.prepEyebrow, { color: colors.brand }]}>{prep.eyebrow}</Text>
+                      <Text style={[styles.prepTitle, { color: colors.text }]} numberOfLines={1}>{prep.title}</Text>
+                    </View>
+                    {prep.showProgress && (
+                      <Text style={[styles.prepPct, { color: colors.text }]}>{Math.round(prepRatio * 100)}%</Text>
+                    )}
+                  </View>
+
+                  <Text style={[styles.prepDesc, { color: colors.textSecondary }]} numberOfLines={2}>{prep.desc}</Text>
+
+                  {prep.showProgress && (
+                    <View style={[styles.prepTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : colors.surface }]}>
+                      <Animated.View style={[styles.prepFill, { backgroundColor: colors.brand, width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+                    </View>
+                  )}
+
+                  {prep.action !== 'View itinerary' && (
+                    <View style={[styles.prepCta, { backgroundColor: colors.brand }]}>
+                      <Text style={styles.prepCtaTxt}>{prep.action}</Text>
+                      <Ionicons name="arrow-forward" size={13} color="#fff" />
+                    </View>
+                  )}
+                </Press>
+              </View>
+
+              {/* Right column: Agilito (bigger) on top, 4 trip stats beneath */}
+              <View style={styles.primaryRight}>
+                <Press onPress={openAgilito} style={[styles.agilitoRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} scaleTo={0.98}>
+                  <View style={styles.agilitoBody}>
+                    <Image source={require('../../../assets/images/EagleMascotS5.png')} style={styles.agilitoAvatar} />
+                    <Text style={[styles.agilitoMsg, { color: colors.text }]} numberOfLines={3}>{mascotMsg()}</Text>
+                  </View>
+                </Press>
+              </View>
+            </View>
+
+            {/* ═══ UPDATES — self-contained bulletin-board widget ═══ */}
+            {boardNotes.length > 0 && (
+              <View style={styles.section}>
+                <View style={[styles.widget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  {/* widget header — megaphone marks the announcement feed; title
+                      on the left, "See all" pinned to the far right of the row. */}
+                  <View style={styles.widgetHead}>
+                    <View style={[styles.widgetIcon, { backgroundColor: colors.brand + (isDark ? '26' : '14') }]}>
+                      <Ionicons name="megaphone" size={16} color={colors.brand} />
+                    </View>
+                    <View style={{ flex: 1, zIndex: 1 }}>
+                      <Text style={[styles.widgetTitle, { color: colors.text }]}>Updates</Text>
+                      <Text style={[styles.widgetSub, { color: colors.textMuted }]}>
+                        {trip.announcements.length} notice{trip.announcements.length !== 1 ? 's' : ''} on the board
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => goToPeople('announcements')} style={styles.secLink} activeOpacity={0.7}>
+                      <Text style={[styles.secLinkTxt, { color: colors.brand }]}>See all</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Recessed board panel — each notice is a full-width row that
+                      spans the whole surface, so the announcement text fills the
+                      card instead of being squeezed into a narrow left column. */}
+                  <View style={[styles.boardSurface, { backgroundColor: isDark ? 'rgba(255,255,255,0.035)' : colors.background, borderColor: colors.cardBorder }]}>
+                    {boardNotes.map((note: any, i: number) => {
+                      // Same "Notice Board" language as the full Announcements screen
+                      // (TripPeopleHub.tsx) — icon circle, title, byline + Organizer
+                      // chip, dated timestamp, content preview — written straight
+                      // onto the full-width board rows.
+                      const isImportant = !!note.important;
+                      const accent = isImportant ? '#3B82F6' : colors.brand;
+                      const iconBg = isImportant ? 'rgba(59,130,246,0.12)' : colors.brand + '18';
+                      const announcer = memberNamed(note.author);
+                      const isOrganizerAuthor = trip.members.some((m: any) => m.name === note.author && m.role === 'organizer');
+                      const isLastNote = i === boardNotes.length - 1;
+                      return (
+                        <Press
+                          key={note.id}
+                          onPress={() => goToPeople('announcements')}
+                          style={[styles.note, !isLastNote && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.cardBorder }]}
+                          scaleTo={0.97}
+                        >
+                          <View style={styles.noteHeadRow}>
+                            <View style={[styles.noteIconCircle, { backgroundColor: iconBg }]}>
+                              {announcer?.avatar_url && !failedAvatars.has(announcer.avatar_url)
+                                ? <Image source={{ uri: announcer.avatar_url }} style={styles.noteAvatarImg} onError={() => setFailedAvatars(prev => new Set(prev).add(announcer.avatar_url))} />
+                                : <Text style={[styles.noteAvatarInit, { color: accent }]}>{initials(note.author)}</Text>}
+                            </View>
+                            <Text style={[styles.noteTitle, { color: colors.text }]} numberOfLines={2}>
+                              {stripLeadingEmoji(note.title)}
+                            </Text>
+                          </View>
+
+                          <View style={styles.noteByRow}>
+                            <Text style={[styles.noteByTxt, { color: colors.textSecondary }]} numberOfLines={1}>By {note.author}</Text>
+                            {isOrganizerAuthor && (
+                              <View style={styles.noteOrgChip}>
+                                <Text style={styles.noteOrgChipTxt}>Organizer</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <Text style={[styles.noteBody, { color: colors.textSecondary }]} numberOfLines={3}>
+                            {note.content}
+                          </Text>
+
+                          <View style={styles.noteDateRow}>
+                            <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+                            <Text style={[styles.noteDateTxt, { color: colors.textMuted }]} numberOfLines={1}>{note.date}</Text>
+                          </View>
+                        </Press>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* ═══ ITINERARY ═══ */}
+            <View style={styles.section}>
+              {renderSectionHeader(
+                'Itinerary',
+                tripPhase.phase === 'before' ? "What's planned so far" : tripPhase.phase === 'during' ? 'Now, and what’s next' : 'How your trip unfolded',
+                goToPlan
+              )}
+              {itineraryPreview.length > 0 ? (
+                <View>
+                  {itineraryPreview.map((item: any, i: number) => renderTimelineItem(item, i === itineraryPreview.length - 1))}
+                  {remainingStops > 0 && (
+                    <Press onPress={goToPlan} style={styles.moreRow} scaleTo={0.98}>
+                      <View style={styles.tTimeCol} />
+                      <View style={styles.tTrackCol}>
+                        <View style={[styles.tDotMore, { borderColor: colors.cardBorder }]} />
+                      </View>
+                      <Text style={[styles.moreTxt, { color: colors.brand }]}>
+                        +{remainingStops} more stop{remainingStops !== 1 ? 's' : ''}
+                      </Text>
+                    </Press>
+                  )}
+                </View>
+              ) : (
+                <Press onPress={goToPlan} style={[styles.emptyBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} scaleTo={0.98}>
+                  <Ionicons name="map-outline" size={20} color={colors.textMuted} />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>No stops planned yet</Text>
+                  <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>Build your day-by-day plan in the itinerary.</Text>
+                </Press>
               )}
             </View>
-          </View>
 
-          <View style={styles.heroBottom}>
-            <View style={styles.destTag}>
-              <Ionicons name="location" size={10} color={colors.brand} />
-              <Text style={[styles.destTagTxt, { color: colors.brand }]}>{trip.destination.toUpperCase()}</Text>
-            </View>
-            <Text style={styles.heroTitle} numberOfLines={2}>{trip.title}</Text>
-            <View style={styles.heroMeta}>
-              <View style={styles.heroMetaItem}><Ionicons name="calendar-outline" size={10} color="rgba(255,255,255,0.7)" /><Text style={styles.heroMetaTxt}>{fmtRange(trip.startDate, trip.endDate)}</Text></View>
-              <View style={styles.heroMetaDivider} />
-              <View style={styles.heroMetaItem}><Ionicons name="time-outline" size={10} color="rgba(255,255,255,0.7)" /><Text style={styles.heroMetaTxt}>{tripDur > 0 ? tripDur + ' days' : '-'}</Text></View>
-              <View style={styles.heroMetaDivider} />
-              <View style={styles.heroMetaItem}><Ionicons name="people-outline" size={10} color="rgba(255,255,255,0.7)" /><Text style={styles.heroMetaTxt}>{trip.members.length} travelers</Text></View>
-            </View>
-          </View>
-        </View>
+            {/* ═══ TRIP INFO — 2×2 widget grid: crew, spending, dates, invite code ═══ */}
+            <View style={styles.section}>
+              {renderSectionHeader('Trip info')}
+              <View style={styles.infoGrid}>
+                {infoTiles.map(t => (
+                  <Press
+                    key={t.key}
+                    onPress={t.onPress || (() => {})}
+                    disabled={!t.onPress}
+                    style={[styles.infoTile, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    scaleTo={0.96}
+                  >
+                    {/* icon + value/label share one row so the tile fills its own
+                        width instead of hugging the top-left corner */}
+                    <View style={styles.infoTileRow}>
+                      <View style={[styles.infoTileIcon, { backgroundColor: t.color + '18' }]}>
+                        <Ionicons name={`${t.icon}-outline` as any} size={15} color={t.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.infoTileValue, { color: colors.text }]} numberOfLines={t.key === 'dates' ? 2 : 1}>
+                          {t.value}
+                        </Text>
+                        <Text style={[styles.infoTileLabel, { color: colors.textMuted }]} numberOfLines={1}>{t.label}</Text>
+                      </View>
+                      {!!t.onPress && <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />}
+                    </View>
 
-        {/* BODY */}
-        <View style={styles.body}>
+                    {t.avatars && (
+                      <View style={styles.infoAvatars}>
+                        {trip.members.slice(0, STACK_MAX).map((m: any, i: number) => {
+                          const av = getAvatarColor(m.name);
+                          return (
+                            <View key={m.id || i} style={[styles.infoAvatar, { marginLeft: i === 0 ? 0 : -8, zIndex: STACK_MAX - i, borderColor: colors.card }]}>
+                              {m.avatar_url && !failedAvatars.has(m.avatar_url)
+                                ? <Image source={{ uri: m.avatar_url }} style={styles.infoAvatarImg} onError={() => setFailedAvatars(prev => new Set(prev).add(m.avatar_url))} />
+                                : <View style={[styles.infoAvatarImg, { backgroundColor: av.bg, alignItems: 'center', justifyContent: 'center' }]}>
+                                    <Text style={[styles.infoAvatarInit, { color: av.fg }]}>{initials(m.name)}</Text>
+                                  </View>}
+                            </View>
+                          );
+                        })}
+                        {memberOverflow > 0 && (
+                          <Text style={[styles.infoAvatarMore, { color: colors.textMuted }]}>+{memberOverflow}</Text>
+                        )}
+                      </View>
+                    )}
 
-          {/* BEFORE CARD */}
-          {tripPhase.phase === 'before' && (
-            <View style={[styles.countdownWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <View style={styles.countdownWidgetTop}>
-                {/* Left side: Big number countdown */}
-                <View style={[styles.countdownValueBox, { backgroundColor: colors.brandLight }]}>
-                  <Text style={[styles.countdownBigNumber, { color: colors.brand }]}>
-                    {daysToGo > 0 ? daysToGo : '0'}
-                  </Text>
-                  <Text style={[styles.countdownUnitText, { color: colors.brand }]}>
-                    DAYS TO GO
+                    {t.spendBar && (
+                      <View style={[styles.spendMiniBar, { backgroundColor: colors.surface }]}>
+                        {topSpenders.map((sp, i) => (
+                          <View
+                            key={sp.name}
+                            style={{ width: `${totalExpenses > 0 ? (sp.amount / totalExpenses) * 100 : 0}%`, backgroundColor: SPEND_COLORS[i % SPEND_COLORS.length] }}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </Press>
+                ))}
+              </View>
+
+              {isEnabled('attendance') && (
+                <View style={[styles.checkInStrip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <Ionicons name="checkmark-circle-outline" size={13} color="#22C55E" />
+                  <Text style={[styles.checkInStripTxt, { color: colors.textSecondary }]}>
+                    {checkedInCt} of {trip.members.length} checked in
                   </Text>
                 </View>
+              )}
+            </View>
 
-                {/* Right side: Meta info */}
-                <View style={styles.countdownMetaBox}>
-                  <Text style={[styles.countdownLabel, { color: colors.text }]}>
-                    {daysToGo > 0 ? 'Upcoming Adventure' : 'Trip Starts Today!'}
-                  </Text>
-                  <View style={styles.countdownDateRow}>
-                    <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                    <Text style={[styles.countdownDateText, { color: colors.textSecondary }]}>
-                      {fmtDate(trip.startDate)}
+            {/* ═══ GROUP POLL — interactive ═══ */}
+            {activePoll && pollStats && (
+              <View style={styles.section}>
+                {renderSectionHeader('Group poll', activePoll.closed ? 'Closed · final results' : pollStats.hasVoted ? 'You voted' : 'Vote now', () => goToPeople('polls'))}
+                <View style={[styles.pollCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <Text style={[styles.pollQ, { color: colors.text }]}>{activePoll.question}</Text>
+
+                  {pollStats.options.map((opt: any) => {
+                    const votes = opt.votes?.length || 0;
+                    const pct = pollStats.totalVotes > 0 ? Math.round((votes / pollStats.totalVotes) * 100) : 0;
+                    const isMine = pollStats.myOptionIds.includes(opt.id);
+                    const isBusy = votingOptionId === opt.id;
+                    return (
+                      <Press
+                        key={opt.id}
+                        onPress={() => handleVote(opt.id)}
+                        disabled={activePoll.closed || !!votingOptionId}
+                        style={[
+                          styles.pollOpt,
+                          {
+                            borderColor: isMine ? colors.brand : colors.cardBorder,
+                            backgroundColor: isMine ? colors.brand + (isDark ? '1A' : '0F') : 'transparent',
+                          },
+                        ]}
+                        scaleTo={0.98}
+                      >
+                        <View style={styles.pollOptTop}>
+                          <View style={[styles.pollRadio, { borderColor: isMine ? colors.brand : colors.textMuted, backgroundColor: isMine ? colors.brand : 'transparent' }]}>
+                            {isMine && <Ionicons name="checkmark" size={9} color="#fff" />}
+                          </View>
+                          <Text style={[styles.pollOptTxt, { color: colors.text }]} numberOfLines={1}>{opt.text}</Text>
+                          {isBusy
+                            ? <ActivityIndicator size="small" color={colors.brand} />
+                            : <Text style={[styles.pollOptPct, { color: isMine ? colors.brand : colors.textSecondary }]}>{pct}%</Text>}
+                        </View>
+                        <View style={[styles.pollTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surface }]}>
+                          <View style={[styles.pollFill, { width: `${pct}%`, backgroundColor: isMine ? colors.brand : colors.textMuted + '80' }]} />
+                        </View>
+                      </Press>
+                    );
+                  })}
+
+                  <View style={styles.pollFooter}>
+                    <Ionicons name="people-outline" size={11} color={colors.textMuted} />
+                    <Text style={[styles.pollFooterTxt, { color: colors.textMuted }]}>
+                      {pollStats.totalVotes} vote{pollStats.totalVotes !== 1 ? 's' : ''}
+                      {pollStats.extra > 0 ? ` · ${pollStats.extra} more option${pollStats.extra !== 1 ? 's' : ''}` : ''}
                     </Text>
                   </View>
                 </View>
               </View>
+            )}
 
-              {/* Progress bar at the bottom */}
-              {isEnabled('checklist') && totalTasks > 0 && (
-                <View style={styles.countdownPrepContainer}>
-                  <View style={styles.prepRow}>
-                    <Text style={[styles.prepLabel, { color: colors.textSecondary }]}>Readiness</Text>
-                    <Text style={[styles.prepPct, { color: colors.brand }]}>{Math.round(prepRatio * 100)}%</Text>
-                  </View>
-                  <View style={[styles.progTrack, { backgroundColor: isDark ? '#ffffff15' : colors.brand + '15' }]}>
-                    <Animated.View style={[styles.progFill, {
-                      width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-                      backgroundColor: colors.brand,
-                    }]} />
-                  </View>
-                  <Text style={[styles.prepSub, { color: colors.textMuted }]}>
-                    {completedTasks} of {totalTasks} preparation tasks completed
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* DURING CARD */}
-          {tripPhase.phase === 'during' && activeDay && (
-            <View style={styles.duringGroup}>
-              <View style={[styles.cmdCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginBottom: showCheckIn ? 10 : 0 }]}>
-                <LinearGradient colors={[colors.brand + '10', 'transparent']} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-                <View style={styles.cmdTop}>
-                  <View style={[styles.cmdIconBox, { backgroundColor: '#10B98120' }]}>
-                    <Animated.View style={{ transform: [{ scale: pulseAnim }] }}><Ionicons name="sparkles" size={20} color="#10B981" /></Animated.View>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.cmdTitle, { color: isDark ? '#6EE7B7' : '#065F46' }]}>Day {activeDay.currentDay} of {activeDay.totalDays}</Text>
-                    <Text style={[styles.cmdSub, { color: isDark ? '#34D39880' : '#047857' }]}>Trip is live</Text>
-                  </View>
-                  <View style={[styles.dayRing, { borderColor: colors.brand + '40' }]}>
-                    <Text style={[styles.dayRingTxt, { color: colors.brand }]}>{Math.round((activeDay.currentDay / activeDay.totalDays) * 100)}%</Text>
-                  </View>
-                </View>
-              </View>
-              {showCheckIn && (
-                <TouchableOpacity style={styles.checkInBanner} onPress={doCheckIn} activeOpacity={0.88}>
-                  <LinearGradient colors={[colors.brand, "#10B981"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFillObject} />
-                  <View style={styles.checkInLeft}>
-                    <View style={styles.checkInIcon}><Ionicons name="shield-checkmark" size={18} color="#fff" /></View>
-                    <View>
-                      <Text style={styles.checkInTitle}>Safety check-in pending</Text>
-                      <Text style={styles.checkInSub}>Tap to let your group know you are safe</Text>
-                    </View>
-                  </View>
-                  {isCheckingIn
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <View style={styles.checkInArrow}><Ionicons name="chevron-forward" size={18} color="#fff" /></View>}
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* AFTER CARD */}
-          {tripPhase.phase === 'after' && (
-            <View style={[styles.cmdCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <LinearGradient colors={[colors.brand + '10', 'transparent']} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-              <View style={styles.cmdTop}>
-                <View style={[styles.cmdIconBox, { backgroundColor: '#8B5CF620' }]}><Ionicons name="checkmark-done-circle" size={20} color="#8B5CF6" /></View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={[styles.cmdTitle, { color: isDark ? '#C4B5FD' : '#4C1D95' }]}>Adventure Completed!</Text>
-                  <Text style={[styles.cmdSub, { color: isDark ? '#A78BFA80' : '#7C3AED' }]}>Memories and records are safely archived</Text>
-                </View>
-              </View>
-              <View style={[styles.afterRow, { borderTopColor: isDark ? '#ffffff10' : '#8B5CF625' }]}>
-                {[
-                  { val: String(trip.itinerary?.length ?? 0), lbl: 'Stops', clr: '#8B5CF6' },
-                  { val: String(completedTasks), lbl: 'Done', clr: '#10B981' },
-                  { val: '₱' + totalExpenses.toLocaleString(), lbl: 'Spent', clr: '#10B981' },
-                  { val: String(trip.members.length), lbl: 'Travelers', clr: '#0EA5E9' },
-                ].map((s, i, arr) => (
-                  <React.Fragment key={i}>
-                    <View style={styles.afterStat}>
-                      <Text style={[styles.afterNum, { color: s.clr }]}>{s.val}</Text>
-                      <Text style={[styles.afterLbl, { color: colors.textSecondary }]}>{s.lbl}</Text>
-                    </View>
-                    {i < arr.length - 1 && <View style={[styles.afterDivider, { backgroundColor: colors.cardBorder }]} />}
-                  </React.Fragment>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* MASCOT */}
-          <View style={[styles.mascotRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <Image source={require('../../../assets/images/EagleMascotS5.png')} style={styles.mascotImg} />
-            <View style={styles.mascotBubble}>
-              <Text style={[styles.mascotTag, { color: colors.brand }]}>Agilito Says</Text>
-              <Text style={[styles.mascotMsg, { color: colors.text }]}>{mascotMsg()}</Text>
-            </View>
-            <View style={[styles.mascotBar, { backgroundColor: colors.brand }]} />
           </View>
-
-          {/* TIMELINE */}
-          <View style={styles.section}>
-              <View style={styles.secHead}>
-                <View style={styles.secHeadL}>
-                  <View style={[styles.secDot, { backgroundColor: '#0284C7' }]} />
-                  <Text style={[styles.secTitle, { color: colors.text }]}>
-                    {tripPhase.phase === 'before' ? 'Itinerary' : tripPhase.phase === 'during' ? 'Today\'s Route' : 'Trip Recap'}
-                  </Text>
-                </View>
-                <TouchableOpacity style={[styles.secLink, { borderColor: '#0284C740' }]} onPress={goToPlan}>
-                  <Text style={[styles.secLinkTxt, { color: '#0284C7' }]}>View All</Text>
-                  <Ionicons name="chevron-forward" size={11} color="#0284C7" />
-                </TouchableOpacity>
-              </View>
-
-              {/* ── BEFORE: Itinerary card ── */}
-              {tripPhase.phase === 'before' && (() => {
-                const sorted = trip.itinerary?.length
-                  ? [...trip.itinerary].sort((a: any, b: any) => a.dayIndex !== b.dayIndex ? a.dayIndex - b.dayIndex : parseTime(a.time) - parseTime(b.time))
-                  : [];
-                const preview = sorted.slice(0, 4);
-
-                const getTimeDifference = (t1: string, t2: string) => {
-                  const mins1 = parseTime(t1);
-                  const mins2 = parseTime(t2);
-                  if (!mins1 || !mins2) return null;
-                  const diff = mins2 - mins1;
-                  if (diff <= 0) return null;
-                  const hrs = Math.floor(diff / 60);
-                  const mins = diff % 60;
-                  return hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`) : `${mins}m`;
-                };
-
-                return (
-                  <View style={[styles.itinCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    {/* Card header */}
-                    <View style={[styles.itinCardHead, { borderBottomColor: colors.cardBorder, backgroundColor: colors.surface }]}>
-                      <View style={styles.itinCardHeadLeft}>
-                        <View style={[styles.itinCardIcon, { backgroundColor: '#0284C715' }]}>
-                          <Ionicons name="map" size={16} color="#0284C7" />
-                        </View>
-                        <View>
-                          <Text style={[styles.itinCardHeadTitle, { color: colors.text }]}>{trip.itinerary.length} Stop{trip.itinerary.length !== 1 ? 's' : ''}</Text>
-                          <Text style={[styles.itinCardHeadSub, { color: colors.textMuted }]}>
-                            {tripDur > 0 ? `${tripDur} day${tripDur !== 1 ? 's' : ''}` : 'Dates TBD'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {preview.length > 0 ? (
-                      <View style={styles.itinCardBody}>
-                        {preview.map((item: any, idx: number) => {
-                          const ti = getActivityTypeInfo(item.title);
-                          const isFirst = idx === 0;
-                          const isLast = idx === preview.length - 1;
-
-                          // Compute time gap to next item
-                          const nextItem = preview[idx + 1];
-                          const isSameDay = nextItem && item.dayIndex === nextItem.dayIndex;
-                          const timeGap = isSameDay ? getTimeDifference(item.time, nextItem.time) : null;
-
-                          return (
-                            <View key={item.id || idx}>
-                              <View style={styles.itinStop}>
-                                {/* Timeline track with rich icon circle */}
-                                <View style={styles.itinStopTrack}>
-                                  <View style={[
-                                    styles.itinStopIconCircle,
-                                    { backgroundColor: isDark ? ti.bgDark : ti.bg }
-                                  ]}>
-                                    <Ionicons name={ti.icon as any} size={11} color={ti.color} />
-                                  </View>
-                                  {!isLast && <View style={[styles.itinStopLine, { backgroundColor: colors.cardBorder }]} />}
-                                </View>
-
-                                {/* Stop content */}
-                                <View style={styles.itinStopBody}>
-                                  <View style={styles.itinStopTop}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                      <Text style={[styles.itinStopTime, { color: ti.color }]}>{item.time || 'TBD'}</Text>
-                                      <View style={[styles.itinDayPill, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                                        <Text style={[styles.itinDayPillTxt, { color: colors.textSecondary }]}>Day {item.dayIndex + 1}</Text>
-                                      </View>
-                                    </View>
-                                    {isFirst && (
-                                      <View style={[styles.itinStopNow, { backgroundColor: '#0284C715' }]}>
-                                        <Text style={[styles.itinStopNowTxt, { color: '#0284C7' }]}>Next Up</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                  <Text style={[styles.itinStopTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                                  
-                                  {item.location && (
-                                    <View style={styles.itinStopLoc}>
-                                      <Ionicons name="location-outline" size={10} color={colors.textMuted} />
-                                      <Text style={[styles.itinStopLocTxt, { color: colors.textMuted }]} numberOfLines={1}>{item.location}</Text>
-                                    </View>
-                                  )}
-
-                                  {item.description ? (
-                                    <Text style={[styles.itinStopDescPreview, { color: colors.textMuted }]} numberOfLines={1}>
-                                      "{item.description}"
-                                    </Text>
-                                  ) : null}
-                                </View>
-                              </View>
-
-                              {/* Time Gap Connector */}
-                              {timeGap && (
-                                <View style={styles.itinGapRow}>
-                                  <View style={styles.itinGapLineCol}>
-                                    <View style={[styles.itinGapDashedLine, { borderColor: colors.cardBorder }]} />
-                                  </View>
-                                  <View style={[styles.itinGapBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                                    <Ionicons name="time-outline" size={9} color={colors.textMuted} />
-                                    <Text style={[styles.itinGapText, { color: colors.textSecondary }]}>{timeGap} buffer</Text>
-                                  </View>
-                                </View>
-                              )}
-                            </View>
-                          );
-                        })}
-                        {sorted.length > 4 && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, paddingLeft: 6 }}>
-                            <View style={[styles.itinStopIconCircle, { backgroundColor: colors.surface, width: 20, height: 20, borderRadius: 10, marginRight: 12 }]}>
-                              <Ionicons name="ellipsis-horizontal" size={9} color={colors.textMuted} />
-                            </View>
-                            <Text style={[styles.itinStopMore, { color: '#0284C7' }]}>+{sorted.length - 4} more stop{sorted.length - 4 > 1 ? 's' : ''}</Text>
-                          </View>
-                        )}
-                      </View>
-                    ) : (
-                      <View style={styles.itinCardEmpty}>
-                        <Ionicons name="calendar-outline" size={32} color={colors.textMuted} style={{ opacity: 0.6 }} />
-                        <Text style={[styles.itinCardEmptyTxt, { color: colors.textSecondary, marginTop: 4 }]}>No stops planned yet</Text>
-                        <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: 'Poppins-Regular', textAlign: 'center', paddingHorizontal: 20 }}>Tap to start outlining your destinations and schedule.</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-
-              {/* ── DURING: Live route card ── */}
-              {tripPhase.phase === 'during' && (
-                <View style={[styles.tlCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  {nowAct || nextAct ? (
-                    <>
-                      {nowAct && nextAct && <View style={[styles.tlConnector, { backgroundColor: colors.brand + '20' }]} />}
-                      {nowAct && (() => {
-                        const ti = getActivityTypeInfo(nowAct.title);
-                        return (
-                          <View style={styles.tlRow}>
-                            <View style={styles.tlNodeCol}>
-                              <View style={[styles.tlNodeActiveCircle, { backgroundColor: isDark ? ti.bgDark : ti.bg, borderColor: ti.color }]}>
-                                <Ionicons name={ti.icon as any} size={11} color={ti.color} />
-                              </View>
-                            </View>
-                            <View style={styles.tlContent}>
-                              <View style={styles.tlTop}>
-                                <View style={[styles.tlBadge, { backgroundColor: '#EF4444' }]}><Text style={styles.tlBadgeTxt}>LIVE NOW</Text></View>
-                                <Text style={[styles.tlTime, { color: ti.color }]}>{nowAct.time}</Text>
-                              </View>
-                              <Text style={[styles.tlItemTitle, { color: colors.text }]} numberOfLines={1}>{nowAct.title}</Text>
-                              {nowAct.location && (
-                                <View style={styles.tlLoc}>
-                                  <Ionicons name="location-outline" size={10} color={colors.textSecondary} />
-                                  <Text style={[styles.tlLocTxt, { color: colors.textSecondary }]} numberOfLines={1}>{nowAct.location}</Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })()}
-                      {nextAct && (() => {
-                        const ti = getActivityTypeInfo(nextAct.title);
-                        return (
-                          <View style={[styles.tlRow, { marginTop: nowAct ? 20 : 0 }]}>
-                            <View style={styles.tlNodeCol}>
-                              <View style={[styles.tlNodeIdleCircle, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                                <Ionicons name={ti.icon as any} size={11} color={colors.textMuted} />
-                              </View>
-                            </View>
-                            <View style={styles.tlContent}>
-                              <View style={styles.tlTop}>
-                                <View style={[styles.tlBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 }]}><Text style={[styles.tlBadgeTxt, { color: colors.textSecondary }]}>UP NEXT</Text></View>
-                                <Text style={[styles.tlTime, { color: colors.textMuted }]}>{nextAct.time}</Text>
-                              </View>
-                              <Text style={[styles.tlItemTitle, { color: colors.text }]} numberOfLines={1}>{nextAct.title}</Text>
-                              {nextAct.location && (
-                                <View style={styles.tlLoc}>
-                                  <Ionicons name="location-outline" size={10} color={colors.textSecondary} />
-                                  <Text style={[styles.tlLocTxt, { color: colors.textSecondary }]} numberOfLines={1}>{nextAct.location}</Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })()}
-                    </>
-                  ) : (
-                    <View style={styles.tlEmpty}>
-                      <Ionicons name="checkmark-circle-outline" size={32} color="#10B981" />
-                      <Text style={[styles.emptyTxt, { color: colors.text, fontFamily: 'Poppins-Bold', marginTop: 4 }]}>All done for today!</Text>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center' }}>Enjoy your evening. Tomorrow's route will activate automatically in the morning.</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* ── AFTER: Recap row ── */}
-              {tripPhase.phase === 'after' && (
-                <View style={styles.reliveRow}>
-                  {[
-                    { icon: 'images-outline', label: 'Media & Docs', sub: (trip.documents?.length ?? 0) + ' files', color: '#8B5CF6', bg: '#8B5CF618', onPress: () => goToMore('documents') },
-                    { icon: 'chatbox-ellipses-outline', label: 'Chat Logs', sub: (trip.chatMessages?.length ?? 0) + ' msgs', color: '#10B981', bg: '#10B98118', onPress: () => goToPeople('chat') },
-                  ].map((r, i) => (
-                    <TouchableOpacity key={i} style={[styles.reliveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} onPress={r.onPress}>
-                      <LinearGradient colors={[r.bg, 'transparent']} style={StyleSheet.absoluteFillObject} />
-                      <Ionicons name={r.icon as any} size={24} color={r.color} />
-                      <Text style={[styles.reliveTitle, { color: colors.text }]}>{r.label}</Text>
-                      <Text style={[styles.reliveSub, { color: colors.textSecondary }]}>{r.sub}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-          {/* TRAVEL GROUP */}
-          <View style={styles.section}>
-            <View style={styles.secHead}>
-              <View style={styles.secHeadL}>
-                <View style={[styles.secDot, { backgroundColor: '#0EA5E9' }]} />
-                <Text style={[styles.secTitle, { color: colors.text }]}>Travel Group</Text>
-                {isEnabled('attendance') && (
-                  <View style={styles.attPill}><View style={styles.attPillDot} /><Text style={styles.attPillTxt}>{checkedInCt}/{trip.members.length}</Text></View>
-                )}
-              </View>
-              <TouchableOpacity style={[styles.secLink, { borderColor: '#0EA5E940' }]} onPress={() => goToPeople('members')}>
-                <Text style={[styles.secLinkTxt, { color: '#0EA5E9' }]}>View all</Text>
-                <Ionicons name="chevron-forward" size={11} color="#0EA5E9" />
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.membersCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.membersScroll}>
-                {trip.members.slice(0, 6).map((m: any, i: number) => (
-                  <View key={m.id || i} style={styles.memberItem}>
-                    <View style={[styles.memberRing, { borderColor: m.checkedIn && isEnabled('attendance') ? '#10B981' : colors.cardBorder }]}>
-                      {m.avatar_url && !failedAvatars.has(m.avatar_url)
-                        ? <Image source={{ uri: m.avatar_url }} style={styles.memberAvImg} onError={() => setFailedAvatars(prev => new Set(prev).add(m.avatar_url))} />
-                        : <LinearGradient colors={['#0EA5E9', '#6366F1']} style={styles.memberAvImg}><Text style={styles.memberInit}>{initials(m.name)}</Text></LinearGradient>}
-                    </View>
-                    {isEnabled('attendance') && <View style={[styles.memberDot, { backgroundColor: m.checkedIn ? '#10B981' : '#F87171', borderColor: colors.card }]} />}
-                    <Text style={[styles.memberLbl, { color: colors.text }]} numberOfLines={1}>{m.name.split(' ')[0]}</Text>
-                  </View>
-                ))}
-                {trip.members.length > 6 && (
-                  <View style={styles.memberItem}>
-                    <View style={[styles.memberRing, { borderColor: colors.cardBorder }]}>
-                      <View style={[styles.memberAvImg, { backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={[styles.memberInit, { color: colors.textSecondary }]}>+{trip.members.length - 6}</Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.memberLbl, { color: colors.textSecondary }]}>more</Text>
-                  </View>
-                )}
-              </ScrollView>
-              {(() => {
-                const org = trip.members.find((m: any) => m.role === 'organizer'); return org ? (
-                  <View style={[styles.orgStrip, { backgroundColor: colors.surface, borderTopColor: colors.cardBorder }]}>
-                    {org.avatar_url && !failedAvatars.has(org.avatar_url) ? (
-                      <Image source={{ uri: org.avatar_url }} style={styles.orgAvatar} onError={() => setFailedAvatars(prev => new Set(prev).add(org.avatar_url))} />
-                    ) : (
-                      <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.orgAvatar}>
-                        <Text style={styles.orgAvatarInit}>{initials(org.name)}</Text>
-                      </LinearGradient>
-                    )}
-                    <Ionicons name="star" size={11} color="#F59E0B" />
-                    <Text style={[styles.orgTxt, { color: colors.textSecondary }]}>Organized by {org.name}</Text>
-                  </View>
-                ) : null;
-              })()}
-            </View>
-          </View>
-
-          {/* ESSENTIALS */}
-          <View style={styles.section}>
-            <View style={styles.secHead}>
-              <View style={styles.secHeadL}>
-                <View style={[styles.secDot, { backgroundColor: '#22C55E' }]} />
-                <Text style={[styles.secTitle, { color: colors.text }]}>Trip Essentials</Text>
-              </View>
-            </View>
-            {/* iOS grouped list card */}
-            <View style={[styles.essListCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              {([
-                { icon: 'calendar-outline', color: '#0EA5E9', bg: '#0EA5E9', label: 'Dates', value: fmtRange(trip.startDate, trip.endDate), onPress: null },
-                { icon: 'key-outline', color: '#22C55E', bg: '#22C55E', label: 'Invite Code', value: trip.code, onPress: handleShareCode },
-                ...(isEnabled('split_expenses') ? [{ icon: 'wallet-outline', color: '#10B981', bg: '#10B981', label: 'Total Spent', value: '₱' + totalExpenses.toLocaleString(), onPress: goToMoney }] : []),
-                ...(isEnabled('checklist') && totalTasks > 0 ? [{ icon: 'checkbox-outline', color: '#8B5CF6', bg: '#8B5CF6', label: 'Checklist', value: completedTasks + '/' + totalTasks + ' tasks · ' + Math.round(prepRatio * 100) + '% ready', onPress: goToPlan }] : []),
-                ...(isEnabled('attendance') ? [{ icon: 'checkmark-circle-outline', color: '#14B8A6', bg: '#14B8A6', label: 'Safety Check-in', value: `${checkedInCt}/${trip.members.length} members checked in`, onPress: () => goToPeople('members') }] : []),
-                ...(isEnabled('guardian_mode') ? [{ icon: 'location-outline', color: '#EF4444', bg: '#EF4444', label: 'Guardian Radar', value: 'GPS coordinate tracking active', onPress: () => goToMore('guardian') }] : []),
-              ] as any[]).map((e: any, i: number, arr: any[]) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    styles.essRow,
-                    i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.cardBorder },
-                  ]}
-                  onPress={e.onPress || undefined}
-                  activeOpacity={e.onPress ? 0.75 : 1}
-                >
-                  {/* Icon badge */}
-                  <View style={[styles.essRowIcon, { backgroundColor: e.bg }]}>
-                    <Ionicons name={e.icon as any} size={16} color="#fff" />
-                  </View>
-                  {/* Text */}
-                  <View style={styles.essRowBody}>
-                    <Text style={[styles.essRowLabel, { color: colors.text }]}>{e.label}</Text>
-                    <Text style={[styles.essRowValue, { color: colors.textSecondary }]} numberOfLines={1}>{e.value}</Text>
-                  </View>
-                  {/* Chevron for tappable rows */}
-                  {e.onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-        </View>
+        </Animated.View>
       </Animated.ScrollView>
 
-      {/* ── ASSISTIVE TOUCH FAB ─────────────────────────── */}
-      {/* Backdrop */}
-      {fabOpen && (
-        <TouchableOpacity style={styles.fabBackdrop} onPress={toggleFab} activeOpacity={1} />
-      )}
+      {/* ═══ Assistive-touch FAB ═══ */}
+      {fabOpen && <TouchableOpacity style={styles.fabBackdrop} onPress={toggleFab} activeOpacity={1} />}
 
-      {/* Fan-out action bubbles */}
       {(() => {
-        const maxFanHeight = 520;
-        const spacing = Math.min(56, Math.floor(maxFanHeight / fabActions.length));
+        const maxFanHeight = 460;
+        const spacing = Math.min(52, Math.floor(maxFanHeight / fabActions.length));
         return fabActions.map((a, i) => {
-          const offset = 68 + i * spacing;
+          const offset = 62 + i * spacing;
           const translateY = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -offset] });
           const opacity = fabAnim.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0, 1] });
           const scale = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
           return (
-            <Animated.View
-              key={i}
-              pointerEvents={fabOpen ? 'auto' : 'none'}
-              style={[styles.atActionRow, { opacity, transform: [{ translateY }, { scale }] }]}
-            >
-              <Text style={[styles.atLabel, { color: isDark ? '#F1F5F9' : '#1E293B', backgroundColor: isDark ? 'rgba(15,15,30,0.92)' : 'rgba(255,255,255,0.95)' }]}>
-                {a.label}
-              </Text>
-              <TouchableOpacity
-                onPress={a.onPress}
-                activeOpacity={0.82}
-                style={[styles.atBubble, { backgroundColor: isDark ? a.color + '28' : a.bg }]}
-              >
+            <Animated.View key={i} pointerEvents={fabOpen ? 'auto' : 'none'} style={[styles.atActionRow, { opacity, transform: [{ translateY }, { scale }] }]}>
+              <Text style={[styles.atLabel, { color: isDark ? '#F1F5F9' : '#1E293B', backgroundColor: isDark ? 'rgba(15,15,30,0.92)' : 'rgba(255,255,255,0.95)' }]}>{a.label}</Text>
+              <TouchableOpacity onPress={a.onPress} activeOpacity={0.82} style={[styles.atBubble, { backgroundColor: isDark ? a.color + '28' : a.bg }]}>
                 {a.mascot ? (
-                  <Image
-                    source={require('../../../assets/images/EagleMascotS5.png')}
-                    style={{ width: 30, height: 30 }}
-                    resizeMode="contain"
-                  />
+                  <Image source={require('../../../assets/images/EagleMascotS5.png')} style={{ width: 26, height: 26 }} resizeMode="contain" />
                 ) : (
-                  <Ionicons name={a.icon as any} size={20} color={a.color} />
+                  <Ionicons name={a.icon as any} size={18} color={a.color} />
                 )}
               </TouchableOpacity>
             </Animated.View>
@@ -764,19 +883,14 @@ export default function TripOverview({
         });
       })()}
 
-      {/* Main assistive-touch ball */}
       <Animated.View style={[styles.atBallWrap, { transform: [{ scale: scaleAnim }] }]}>
         <TouchableOpacity
-          style={[styles.atBall, {
-            backgroundColor: fabOpen
-              ? colors.brand
-              : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.22)',
-          }]}
+          style={[styles.atBall, { backgroundColor: fabOpen ? colors.brand : isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.55)' }]}
           onPress={toggleFab}
           activeOpacity={0.85}
         >
           <Animated.View style={{ transform: [{ rotate: fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }}>
-            <Ionicons name="flash" size={24} color="#fff" />
+            <Ionicons name="flash" size={20} color="#fff" />
           </Animated.View>
         </TouchableOpacity>
       </Animated.View>
@@ -786,479 +900,181 @@ export default function TripOverview({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scrollContent: { paddingBottom: 120 },
-  heroWrap: { height: 280, overflow: 'hidden', position: 'relative' },
-  heroImgBox: { position: 'absolute', top: -40, left: 0, right: 0, height: 340 },
-  heroImg: { flex: 1, width: '100%' },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, paddingHorizontal: 16, position: 'absolute', top: 0, left: 0, right: 0 },
-  phaseBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20 },
-  liveDotGlow: { position: 'absolute', width: 14, height: 14, borderRadius: 7, opacity: 0.35 },
-  liveDotCore: { width: 6, height: 6, borderRadius: 3 },
-  phaseBadgeTxt: { fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: 0.8 },
-  heroTopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroShareBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.18)', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  heroShareTxt: { color: '#fff', fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  heroIconBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  heroBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
-  destTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
-  destTagTxt: { fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: 1.2 },
-  heroTitle: { color: '#FFFFFF', fontSize: 26, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', lineHeight: 32, marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  heroMeta: { flexDirection: 'row', alignItems: 'center' },
-  heroMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heroMetaTxt: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontFamily: 'Poppins-Medium' },
-  heroMetaDivider: { width: 1, height: 10, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 8 },
+  scrollContent: { paddingBottom: 110 },
+
+  /* ── Hero ── */
+  heroWrap: { height: HERO_HEIGHT, overflow: 'hidden', position: 'relative', marginHorizontal: 16, borderRadius: 26, marginTop: 4 },
+  heroImg: { position: 'absolute', top: -50, left: 0, right: 0, height: HERO_HEIGHT + 50, width: '100%' },
+  heroTopRow: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.34)', borderRadius: 20, paddingHorizontal: 11, paddingVertical: 6,
+  },
+  statusGlow: { position: 'absolute', left: 11, width: 12, height: 12, borderRadius: 6, opacity: 0.4 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusTxt: { color: '#fff', fontSize: 11.5, fontFamily: 'Poppins-SemiBold' },
+  heroIconBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.34)', alignItems: 'center', justifyContent: 'center' },
+  heroContent: { position: 'absolute', left: 18, right: 18, bottom: 18 },
+  heroDestRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 },
+  heroDest: { color: '#93C5FD', fontSize: 11.5, fontFamily: 'Poppins-Bold', letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
+  heroTitle: { color: '#FFFFFF', fontSize: 26, fontFamily: 'Poppins-Bold', lineHeight: 30, letterSpacing: -0.5 },
+  heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 9, flexWrap: 'wrap' },
+  heroMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  heroMetaTxt: { color: 'rgba(255,255,255,0.82)', fontSize: 12, fontFamily: 'Poppins-Medium' },
+  heroMetaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.45)' },
+
   body: { paddingHorizontal: 16, paddingTop: 18 },
-  countdownWidget: {
-    borderRadius: 22,
-    borderWidth: 1.2,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+
+  /* ── Safety check-in ── */
+  checkInCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, borderWidth: 1, padding: 13, marginBottom: 14 },
+  checkInIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center' },
+  checkInTitle: { fontSize: 13, fontFamily: 'Poppins-Bold' },
+  checkInSub: { fontSize: 11, fontFamily: 'Poppins-Medium', marginTop: 1 },
+
+  /* ── Primary two-column section (countdown sets height; right split 70/30 Agilito:stats) ── */
+  primaryRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 16 },
+  primaryLeft: { flex: 1.25 },
+  primaryRight: { flex: 1, gap: 12 },
+
+  /* ── Preparation / countdown card (stretches to match the right column height) ── */
+  prepCard: {
+    flex: 1, justifyContent: 'space-between',
+    borderRadius: 20, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 32,
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
   },
-  countdownWidgetTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+  prepTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  prepIconTile: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  prepEyebrow: { fontSize: 9.5, fontFamily: 'Poppins-Bold', letterSpacing: 0.9, marginBottom: 1 },
+  prepTitle: { fontSize: 15.5, fontFamily: 'Poppins-Bold', letterSpacing: -0.2 },
+  prepPct: { fontSize: 17, fontFamily: 'Poppins-Bold', letterSpacing: -0.4 },
+  prepDesc: { fontSize: 12, fontFamily: 'Poppins-Regular', lineHeight: 16.5, marginTop: 10 },
+  prepTrack: { height: 5, borderRadius: 3, overflow: 'hidden', marginTop: 12 },
+  prepFill: { height: '100%', borderRadius: 3 },
+  prepCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 13, paddingVertical: 11, marginTop: 14,
   },
-  countdownValueBox: {
-    width: 82,
-    height: 82,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 1,
+  prepCtaTxt: { color: '#fff', fontSize: 13, fontFamily: 'Poppins-Bold' },
+
+  /* ── Agilito · fills the full right column height, content centered ── */
+  agilitoRow: { flex: 1, justifyContent: 'center', borderRadius: 20, borderWidth: 1 },
+  agilitoBody: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 16 },
+  agilitoAvatar: { width: 44, height: 44, resizeMode: 'contain' },
+  agilitoMsg: { flexShrink: 1, fontSize: 11, fontFamily: 'Poppins-Medium', lineHeight: 15 },
+
+  /* ── Updates: bulletin-board widget ── */
+  widget: {
+    borderRadius: 20, borderWidth: 1,
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
   },
-  countdownBigNumber: {
-    fontSize: 34,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    lineHeight: 38,
+  widgetHead: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
+  widgetIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  widgetTitle: { fontSize: 16, fontFamily: 'Poppins-Bold' },
+  widgetSub: { fontSize: 12.5, fontFamily: 'Poppins-Medium', marginTop: 2 },
+
+  // Recessed panel the notices are written directly onto — one shared
+  // surface, not a box per notice.
+  boardSurface: { marginHorizontal: 10, marginBottom: 10, borderRadius: 14, borderWidth: 1 },
+
+  note: { paddingHorizontal: 16, paddingVertical: 13 },
+  noteHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  noteIconCircle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  noteAvatarImg: { width: '100%', height: '100%' },
+  noteAvatarInit: { fontSize: 12, fontFamily: 'Poppins-Bold' },
+  noteTitle: { flexShrink: 1, fontSize: 14, fontFamily: 'Poppins-Bold', lineHeight: 19, textAlign: 'center' },
+  noteByRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 5 },
+  noteByTxt: { fontSize: 12, fontFamily: 'Poppins-Medium', flexShrink: 1 },
+  noteOrgChip: { backgroundColor: 'rgba(217,119,6,0.1)', borderColor: 'rgba(217,119,6,0.25)', borderWidth: 0.5, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  noteOrgChipTxt: { fontSize: 9.5, fontFamily: 'Poppins-Bold', color: '#D97706' },
+  noteDateRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3, marginTop: 6 },
+  noteDateTxt: { fontSize: 11, fontFamily: 'Poppins-Medium' },
+  noteBody: { fontSize: 12.5, fontFamily: 'Poppins-Regular', lineHeight: 17.5, marginTop: 8, textAlign: 'center' },
+
+  /* ── Sections ── */
+  section: { marginBottom: 26 },
+  secHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 13 },
+  secTitle: { fontSize: 16.5, fontFamily: 'Poppins-Bold', letterSpacing: -0.2 },
+  secSubtitle: { fontSize: 11.5, fontFamily: 'Poppins-Medium', marginTop: 2 },
+  secLink: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 4, paddingLeft: 8, flexShrink: 0 },
+  secLinkTxt: { fontSize: 14, fontFamily: 'Poppins-SemiBold' },
+
+  /* ── Itinerary timeline ── */
+  tRow: { flexDirection: 'row' },
+  tTimeCol: { width: 46, alignItems: 'flex-end', paddingTop: 14, paddingRight: 10 },
+  tTime: { fontSize: 12, fontFamily: 'Poppins-Bold' },
+  tAmpm: { fontSize: 8.5, fontFamily: 'Poppins-SemiBold', marginTop: 1 },
+  tTrackCol: { width: 16, alignItems: 'center', position: 'relative', paddingTop: 16 },
+  tDot: { width: 11, height: 11, borderRadius: 6, borderWidth: 2.5 },
+  tDotGlow: { position: 'absolute', top: 13, width: 17, height: 17, borderRadius: 9, opacity: 0.28 },
+  tDotMore: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderStyle: 'dashed' },
+  tLine: { position: 'absolute', top: 28, bottom: -2, width: 1.5 },
+  tCardWrap: { flex: 1, paddingLeft: 10 },
+  tCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 16, borderWidth: 1, padding: 10,
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
   },
-  countdownUnitText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    opacity: 0.8,
+  tThumb: { width: 52, height: 52, borderRadius: 13 },
+  tTitle: { fontSize: 13, fontFamily: 'Poppins-Bold' },
+  tChip: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5, marginTop: 4 },
+  tChipTxt: { fontSize: 8.5, fontFamily: 'Poppins-Bold' },
+  tLocRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  tLoc: { fontSize: 10, fontFamily: 'Poppins-Medium', flex: 1 },
+  tNowTag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(34,197,94,0.14)', borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3, alignSelf: 'flex-start' },
+  tNowDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#22C55E' },
+  tNowTxt: { color: '#16A34A', fontSize: 8, fontFamily: 'Poppins-Bold' },
+  moreRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 2 },
+  moreTxt: { fontSize: 12, fontFamily: 'Poppins-SemiBold', marginLeft: 10, paddingTop: 13 },
+
+  emptyBox: { alignItems: 'center', gap: 5, borderRadius: 18, borderWidth: 1, paddingVertical: 26, paddingHorizontal: 20 },
+  emptyTitle: { fontSize: 13, fontFamily: 'Poppins-Bold', marginTop: 4 },
+  emptyDesc: { fontSize: 11.5, fontFamily: 'Poppins-Medium', textAlign: 'center' },
+
+  /* ── Trip info grid (2×2 widget: crew / spend / dates / code) ── */
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  infoTile: {
+    width: '48%', borderRadius: 16, borderWidth: 1, padding: 13,
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
   },
-  countdownMetaBox: {
-    flex: 1,
-    gap: 4,
-  },
-  countdownLabel: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  countdownDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  countdownDateText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-  },
-  countdownPrepContainer: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    paddingTop: 12,
-  },
-  cmdCard: {
-    borderRadius: 20,
-    borderWidth: 1.2,
-    padding: 18,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cmdTop: { flexDirection: 'row', alignItems: 'center' },
-  cmdIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  cmdTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 2, letterSpacing: -0.2 },
-  cmdSub: { fontSize: 12, fontFamily: 'Poppins-Medium', opacity: 0.8 },
-  dayRing: { width: 46, height: 46, borderRadius: 23, borderWidth: 2.5, justifyContent: 'center', alignItems: 'center' },
-  dayRingTxt: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  duringGroup: { marginBottom: 16 },
-  prepWrap: { marginTop: 14 },
-  prepRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  prepLabel: { fontSize: 12, fontFamily: 'Poppins-Medium' },
-  prepPct: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  progTrack: { height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
-  progFill: { height: '100%', borderRadius: 4 },
-  prepSub: { fontSize: 11, fontFamily: 'Poppins-Medium', opacity: 0.7 },
-  afterRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1 },
-  afterStat: { flex: 1, alignItems: 'center' },
-  afterNum: { fontSize: 18, fontFamily: 'Poppins-ExtraBold', fontWeight: '800' },
-  afterLbl: { fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 2, textAlign: 'center' },
-  afterDivider: { width: 1, height: 30 },
-  checkInBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 20,
-    padding: 16,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  checkInLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  checkInIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.22)', justifyContent: 'center', alignItems: 'center' },
-  checkInTitle: { color: '#fff', fontSize: 14, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  checkInSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'Poppins-Medium' },
-  checkInArrow: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center' },
-  
-  // Agilito Greeting speech bubble (iOS widget level layout)
-  mascotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1.2,
-    padding: 16,
-    marginBottom: 24,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  mascotImg: { width: 56, height: 56, resizeMode: 'contain' },
-  mascotBubble: { flex: 1, marginLeft: 14, marginRight: 10 },
-  mascotTag: { fontSize: 11, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3 },
-  mascotMsg: { fontSize: 13, fontFamily: 'Poppins-Medium', lineHeight: 18, opacity: 0.9 },
-  mascotBar: { position: 'absolute', right: 0, top: 12, bottom: 12, width: 3.5, borderRadius: 2 },
-  
-  // Sections & Timeline Stops
-  section: { marginBottom: 24 },
-  secHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  secHeadL: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  secDot: { width: 8, height: 8, borderRadius: 4 },
-  secTitle: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: -0.2 },
-  secLink: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 5, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  secLinkTxt: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  actCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  actAccent: { width: 4, minHeight: 80 },
-  actBody: { flex: 1, padding: 14, gap: 4 },
-  actCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  timeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 7 },
-  timeBadgeTxt: { fontSize: 11, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  actTitle: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: -0.1 },
-  actLoc: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  actLocTxt: { fontSize: 11, fontFamily: 'Poppins-Medium' },
-  actDay: { fontSize: 11, fontFamily: 'Poppins-Medium' },
-  actCardEnd: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  itinCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  itinCardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  itinCardHeadLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  itinCardIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  itinCardHeadTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  itinCardHeadSub: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-  },
-  itinCardBody: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-  },
-  itinStop: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  itinStopTrack: {
-    alignItems: 'center',
-    width: 22,
-    marginRight: 12,
-  },
-  itinStopIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  itinStopLine: {
-    flex: 1,
-    width: 1.5,
-    minHeight: 32,
-    marginVertical: 4,
-    borderRadius: 1,
-  },
-  itinStopBody: {
-    flex: 1,
-    paddingBottom: 16,
-  },
-  itinStopTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  itinStopTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  itinDayPill: {
-    paddingVertical: 1,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-    borderWidth: 1,
-  },
-  itinDayPillTxt: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  itinStopNow: {
-    paddingVertical: 1.5,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-  },
-  itinStopNowTxt: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  itinStopTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  itinStopLoc: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  itinStopLocTxt: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-  },
-  itinStopDescPreview: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Italic',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  itinGapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 2,
-    marginVertical: 2,
-  },
-  itinGapLineCol: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  itinGapDashedLine: {
-    width: 0,
-    height: 18,
-    borderWidth: 1.2,
-    borderStyle: 'dashed',
-  },
-  itinGapBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  itinGapText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  itinStopMore: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  itinCardEmpty: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 6,
-  },
-  itinCardEmptyTxt: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-  },
-  miniStop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    marginTop: 6,
-    gap: 10,
-  },
-  miniStopDot: { width: 8, height: 8, borderRadius: 4 },
-  miniStopInfo: { flex: 1 },
-  miniStopTime: { fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 1 },
-  miniStopTitle: { fontSize: 13, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
-  miniStopDay: { fontSize: 10, fontFamily: 'Poppins-Medium' },
-  emptyCard: { borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', padding: 26, alignItems: 'center', gap: 6 },
-  emptyTxt: { fontSize: 13, fontFamily: 'Poppins-Medium' },
-  emptyLink: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  
-  // Route timeline container
-  tlCard: {
-    borderRadius: 20,
-    borderWidth: 1.2,
-    padding: 18,
-    position: 'relative',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  tlConnector: { position: 'absolute', left: 29, top: 38, bottom: 38, width: 2, zIndex: 1 },
-  tlRow: { flexDirection: 'row', alignItems: 'flex-start', zIndex: 2 },
-  tlNodeCol: { width: 24, alignItems: 'center', marginRight: 16, marginTop: 2 },
-  tlNodeActiveCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-  tlNodeIdleCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-  tlIdleDot: { width: 8, height: 8, borderRadius: 4 },
-  tlContent: { flex: 1 },
-  tlTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  tlBadge: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6 },
-  tlBadgeTxt: { color: '#fff', fontSize: 9, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  tlTime: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  tlItemTitle: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 2 },
-  tlLoc: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  tlLocTxt: { fontSize: 11, fontFamily: 'Poppins-Medium', opacity: 0.8 },
-  tlEmpty: { alignItems: 'center', gap: 6, padding: 14 },
-  
-  // Recap row / grids
-  reliveRow: { flexDirection: 'row', gap: 12 },
-  reliveCard: { flex: 1, borderRadius: 20, borderWidth: 1.2, padding: 18, alignItems: 'center', gap: 6, overflow: 'hidden' },
-  reliveTitle: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700', textAlign: 'center', marginTop: 2 },
-  reliveSub: { fontSize: 11, fontFamily: 'Poppins-Medium', opacity: 0.7 },
-  attPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3.5, paddingHorizontal: 10, borderRadius: 12, backgroundColor: '#ECFDF5' },
-  attPillDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
-  attPillTxt: { color: '#065F46', fontSize: 11, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  
-  // Travel group avatars pile
-  membersCard: {
-    borderRadius: 22,
-    borderWidth: 1.2,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  membersScroll: { paddingHorizontal: 16, paddingVertical: 16, gap: 16 },
-  memberItem: { alignItems: 'center', width: 62, position: 'relative' },
-  memberRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 2.5, padding: 2, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  memberAvImg: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  memberDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, position: 'absolute', top: 38, right: 4 },
-  memberInit: { color: '#fff', fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  memberLbl: { fontSize: 11, fontFamily: 'Poppins-Medium', marginTop: 6, textAlign: 'center', opacity: 0.9 },
-  orgStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 18, borderTopWidth: 1 },
-  orgAvatar: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  orgAvatarInit: { color: '#fff', fontSize: 8, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  orgTxt: { fontSize: 12, fontFamily: 'Poppins-Medium', opacity: 0.8 },
-  
-  // Essentials — iOS grouped list style
-  essListCard: {
-    borderRadius: 20,
-    borderWidth: 1.2,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  essRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  essRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  essRowBody: { flex: 1 },
-  essRowLabel: { fontSize: 15, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
-  essRowValue: { fontSize: 13, fontFamily: 'Poppins-Regular', marginTop: 1 },
-  // Assistive-touch FAB
-  fabBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.22)', zIndex: 800 },
-  atBallWrap: { position: 'absolute', bottom: 28, right: 20, zIndex: 999 },
+  infoTileRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoTileIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  infoTileValue: { fontSize: 14, fontFamily: 'Poppins-Bold', letterSpacing: -0.2 },
+  infoTileLabel: { fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 2 },
+  infoAvatars: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  infoAvatar: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5 },
+  infoAvatarImg: { width: '100%', height: '100%', borderRadius: 8.5 },
+  infoAvatarInit: { fontSize: 7, fontFamily: 'Poppins-Bold' },
+  infoAvatarMore: { fontSize: 9.5, fontFamily: 'Poppins-Bold', marginLeft: 3 },
+  spendMiniBar: { flexDirection: 'row', height: 3, borderRadius: 1.5, overflow: 'hidden', marginTop: 9 },
+  checkInStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, marginTop: 10 },
+  checkInStripTxt: { fontSize: 11, fontFamily: 'Poppins-Medium' },
+
+  /* ── Poll ── */
+  pollCard: { borderRadius: 18, borderWidth: 1, padding: 14 },
+  pollQ: { fontSize: 13.5, fontFamily: 'Poppins-Bold', lineHeight: 19, marginBottom: 13 },
+  pollOpt: { borderRadius: 13, borderWidth: 1, padding: 11, marginBottom: 8 },
+  pollOptTop: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 8 },
+  pollRadio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  pollOptTxt: { flex: 1, fontSize: 12.5, fontFamily: 'Poppins-SemiBold' },
+  pollOptPct: { fontSize: 12.5, fontFamily: 'Poppins-Bold' },
+  pollTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  pollFill: { height: '100%', borderRadius: 2 },
+  pollFooter: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  pollFooterTxt: { fontSize: 10.5, fontFamily: 'Poppins-Medium' },
+
+  /* ── FAB ── */
+  fabBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.2)', zIndex: 800 },
+  atBallWrap: { position: 'absolute', bottom: 24, right: 16, zIndex: 999 },
   atBall: {
-    width: 58, height: 58, borderRadius: 29,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.28)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 10, elevation: 14,
+    width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.24, shadowRadius: 8, elevation: 10,
   },
-  atActionRow: {
-    position: 'absolute', bottom: 28, right: 20, zIndex: 900,
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-  },
+  atActionRow: { position: 'absolute', bottom: 24, right: 16, zIndex: 900, flexDirection: 'row', alignItems: 'center', gap: 10 },
   atLabel: {
-    fontSize: 12, fontFamily: 'Poppins-SemiBold', fontWeight: '600',
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.14, shadowRadius: 4, elevation: 3,
+    fontSize: 11.5, fontFamily: 'Poppins-SemiBold', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 11, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3,
   },
   atBubble: {
-    width: 48, height: 48, borderRadius: 24,
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6,
+    width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 5, elevation: 5,
   },
 });

@@ -727,28 +727,25 @@ export default function TripItinerary({
 
   return (
     <View style={styles.container}>
-      {/* ── STICKY TOP ACTION ROW ────────────────────────────────────── */}
-      <View style={[styles.timelineHeader, { borderBottomColor: colors.cardBorder }]}>
-        <View>
-          <Text style={[styles.timelineHeaderTitle, { color: colors.text }]}>Timeline Schedule</Text>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: 'Poppins-Medium' }}>
-            {trip.destination} • {duration} day plan
-          </Text>
+      {/* ── TOP ACTION ROW — eyebrow + title, no divider line, airy like a curated itinerary page ── */}
+      <View style={styles.timelineHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.timelineEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination} · {duration}-day plan</Text>
+          <Text style={[styles.timelineHeaderTitle, { color: colors.text }]}>Your itinerary</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity 
-            style={[styles.headerActionBtn, { backgroundColor: colors.brand }]} 
-            onPress={handleOpenCopilot}
-          >
-            <Ionicons name="sparkles" size={15} color="#FFFFFF" />
-            <Text style={styles.headerActionText}>Ask AI</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.headerActionBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 }]} 
+          <TouchableOpacity
+            style={[styles.headerActionBtn, { backgroundColor: colors.surface }]}
             onPress={handleOpenCustomAdd}
           >
-            <Ionicons name="add" size={15} color={colors.textSecondary} />
-            <Text style={[styles.headerActionText, { color: colors.text }]}>Add stop</Text>
+            <Ionicons name="add" size={16} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerActionBtn, styles.headerActionBtnWide, { backgroundColor: colors.brand }]}
+            onPress={handleOpenCopilot}
+          >
+            <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+            <Text style={styles.headerActionText}>Ask AI</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1471,36 +1468,55 @@ const styles = StyleSheet.create({
   timelineHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    paddingTop: 14,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  timelineEyebrow: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.2,
+    marginBottom: 2,
   },
   timelineHeaderTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    fontSize: 20,
+    fontFamily: 'Poppins-ExtraBold',
+    letterSpacing: -0.3,
   },
   headerActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     gap: 4,
+  },
+  headerActionBtnWide: {
+    width: undefined,
+    height: undefined,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+    borderRadius: 17,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
+    elevation: 3,
   },
   headerActionText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Poppins-Bold',
   },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1.5,
-    paddingBottom: 6,
-    marginBottom: 8,
-    marginTop: 8,
+    paddingBottom: 8,
+    marginBottom: 10,
+    marginTop: 10,
   },
   transitionBadge: {
     flexDirection: 'row',
@@ -1986,6 +2002,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
     gap: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   horizontalCardImage: {
     width: 90,

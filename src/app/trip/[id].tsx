@@ -294,22 +294,21 @@ export default function TripHomeScreen() {
       {/* Sticky Trip Context Header — always know which trip you're in */}
       <View style={[styles.customHeader, { backgroundColor: colors.card, borderBottomColor: colors.cardBorder }]}>
         <View style={styles.headerTopRow}>
-          <TouchableOpacity onPress={handleHeaderBack} style={styles.headerBackBtn}>
+          <TouchableOpacity onPress={handleHeaderBack} style={styles.headerBackBtn} hitSlop={8} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color={colors.brand} />
             <Text style={[styles.headerBackText, { color: colors.brand }]}>{headerBackLabel}</Text>
           </TouchableOpacity>
-          <View style={styles.headerTitleBox}>
-            <Text style={[styles.headerDestText, { color: colors.textSecondary }]} numberOfLines={1}>
-              {trip.destination}
-            </Text>
 
-          </View>
+          <Text style={[styles.headerCenterTitle, { color: colors.text }]} numberOfLines={1}>
+            {trip.destination}
+          </Text>
+
           {isOrganizer ? (
-            <TouchableOpacity style={styles.headerSettingsBtn} onPress={openEditModal}>
+            <TouchableOpacity style={styles.headerActionBtn} onPress={openEditModal} hitSlop={8} activeOpacity={0.7}>
               <Ionicons name="create-outline" size={22} color={colors.brand} />
             </TouchableOpacity>
           ) : (
-            <View style={{ width: 24 }} />
+            <View style={styles.headerActionSpacer} />
           )}
         </View>
       </View>
@@ -443,7 +442,6 @@ const styles = StyleSheet.create({
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 12,
     height: 46,
   },
@@ -458,27 +456,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Medium',
     fontWeight: '500',
   },
-  headerTitleBox: {
+  headerCenterTitle: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerDestText: {
+    textAlign: 'center',
     fontSize: 15,
     fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
     letterSpacing: -0.2,
+    paddingHorizontal: 4,
   },
-  headerTitleText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    marginTop: 1,
-  },
-  headerSettingsBtn: {
+  headerActionBtn: {
     width: 86,
     alignItems: 'flex-end',
     paddingRight: 6,
+  },
+  headerActionSpacer: {
+    width: 86,
   },
   bottomTabBar: {
     position: 'absolute',

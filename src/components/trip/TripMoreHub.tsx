@@ -1,7 +1,9 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import TripDocuments from './TripDocuments';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 interface TripMoreHubProps {
   trip: any;
@@ -45,61 +47,39 @@ export default function TripMoreHub({
     ]},
   ];
 
+  const quickActions = [
+    { key: 'share', label: 'Share code', icon: 'share-social-outline', color: colors.brand, bg: colors.brandLight, onPress: handleShareCode },
+    ...(isOrganizer ? [{ key: 'edit', label: 'Edit trip', icon: 'create-outline', color: '#6366F1', bg: '#EEF2FF', onPress: openEditModal }] : []),
+    { key: 'pdf', label: 'Export PDF', icon: 'document-text-outline', color: '#EF4444', bg: '#FEE2E2', onPress: () => {} },
+    { key: 'template', label: 'Save template', icon: 'copy-outline', color: '#8B5CF6', bg: '#EDE9FE', onPress: () => {} },
+  ];
+
   return (
     <View style={{ flex: 1 }}>
-      {/* Sticky Header matching TripPeopleHub layout */}
+      {/* Header — eyebrow + title, matches the rest of the app */}
       <View style={styles.headerContainer}>
-        <View style={styles.headerTitleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{trip.title} Settings</Text>
-          </View>
-        </View>
+        <Text style={[styles.headerEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>Trip settings</Text>
       </View>
 
       <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 110 }]} showsVerticalScrollIndicator={false}>
 
-      {/* ── QUICK ACCESS ── */}
-      <View style={styles.cardGroup}>
-        <TouchableOpacity
-          style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-          onPress={handleShareCode}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconBox, { backgroundColor: colors.brandLight }]}>
-            <Ionicons name="share-social-outline" size={20} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.cardLabel, { color: colors.text }]}>Share Invite Code</Text>
-            <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>{trip.code}</Text>
-          </View>
-          <View style={[styles.chevron, { backgroundColor: colors.surface }]}>
-            <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
-          </View>
-        </TouchableOpacity>
-
-        {isOrganizer && (
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-            onPress={openEditModal}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}>
-              <Ionicons name="create-outline" size={20} color="#6366F1" />
+      {/* ── QUICK ACCESS — icon tiles, browsable at a glance like a category grid ── */}
+      <View style={styles.quickGrid}>
+        {quickActions.map(a => (
+          <TouchableOpacity key={a.key} style={styles.quickTile} onPress={a.onPress} activeOpacity={0.85}>
+            <View style={[styles.quickIconBox, { backgroundColor: a.bg }]}>
+              <Ionicons name={a.icon as any} size={20} color={a.color} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardLabel, { color: colors.text }]}>Edit Trip Details</Text>
-              <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>Change title, destination, or dates</Text>
-            </View>
-            <View style={[styles.chevron, { backgroundColor: colors.surface }]}>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </View>
+            <Text style={[styles.quickLabel, { color: colors.text }]} numberOfLines={1}>{a.label}</Text>
           </TouchableOpacity>
-        )}
+        ))}
       </View>
 
-
-
-
+      <View style={[styles.codeStrip, { backgroundColor: colors.brandLight }]}>
+        <Ionicons name="key-outline" size={13} color={colors.brand} />
+        <Text style={[styles.codeStripTxt, { color: colors.brand }]}>Invite code: <Text style={{ fontFamily: 'Poppins-ExtraBold' }}>{trip.code}</Text></Text>
+      </View>
 
       {/* ── DOCUMENT VAULT (inline) ── */}
       {isEnabled('documents') && (
@@ -161,51 +141,6 @@ export default function TripMoreHub({
         </View>
       )}
 
-      {/* ── GENERAL TOOLS ── */}
-      <View style={styles.section}>
-        <View style={styles.secHeader}>
-          <View style={styles.secHeaderLeft}>
-            <View style={[styles.secDot, { backgroundColor: colors.textMuted }]} />
-            <Text style={[styles.secTitle, { color: colors.text }]}>General</Text>
-          </View>
-        </View>
-        <View style={styles.cardGroup}>
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-            onPress={() => {}}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="document-text-outline" size={20} color="#EF4444" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardLabel, { color: colors.text }]}>Export PDF Summary</Text>
-              <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>Download a shareable trip recap</Text>
-            </View>
-            <View style={[styles.chevron, { backgroundColor: colors.surface }]}>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-            onPress={() => {}}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconBox, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="copy-outline" size={20} color="#8B5CF6" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardLabel, { color: colors.text }]}>Save as Template</Text>
-              <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>Reuse this trip structure later</Text>
-            </View>
-            <View style={[styles.chevron, { backgroundColor: colors.surface }]}>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-
     </ScrollView>
   </View>
 );
@@ -219,19 +154,55 @@ const styles = StyleSheet.create({
   headerContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+  headerEyebrow: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    flex: 1,
+    letterSpacing: -0.3,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  quickTile: {
+    width: (SCREEN_W - 32 - 30) / 4,
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickLabel: {
+    fontSize: 10.5,
+    fontFamily: 'Poppins-SemiBold',
+    textAlign: 'center',
+  },
+  codeStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  codeStripTxt: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-SemiBold',
   },
   section: {
     marginTop: 20,
