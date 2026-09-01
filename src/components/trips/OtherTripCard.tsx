@@ -20,7 +20,12 @@ export default function OtherTripCard({
 }: OtherTripCardProps) {
   const { isDark } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+  const imageUrl = trip?.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+  const members: any[] = Array.isArray(trip?.members) ? trip.members : (Array.isArray(trip?.trip_members) ? trip.trip_members : []);
+  const destination = trip?.destination || 'DESTINATION';
+  const title = trip?.title || 'Untitled Trip';
+  const startDate = trip?.startDate || trip?.start_date || new Date().toISOString();
+  const endDate = trip?.endDate || trip?.end_date || new Date().toISOString();
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -43,8 +48,8 @@ export default function OtherTripCard({
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
-        key={trip.id}
-        onPress={() => router.push(`/trip/${trip.id}`)}
+        key={trip?.id}
+        onPress={() => router.push(`/trip/${trip?.id}`)}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         activeOpacity={0.92}
@@ -64,10 +69,10 @@ export default function OtherTripCard({
         <View style={styles.tripDetails}>
           <View style={styles.topInfo}>
             <Text style={[styles.tripDestinationText, { color: colors.brand }]}>
-              {trip.destination.toUpperCase()}
+              {destination.toUpperCase()}
             </Text>
             <Text style={[styles.tripTitleText, { color: colors.text }]} numberOfLines={2}>
-              {trip.title}
+              {title}
             </Text>
           </View>
 
@@ -75,11 +80,11 @@ export default function OtherTripCard({
           <View style={styles.bottomInfoRow}>
             <View style={styles.dateAndMembers}>
               <Text style={[styles.tripDateText, { color: colors.textSecondary }]}>
-                {formatTripDate(trip.startDate, trip.endDate)}
+                {formatTripDate(startDate, endDate)}
               </Text>
               <View style={[styles.statDot, { backgroundColor: colors.textMuted }]} />
               <Text style={[styles.membersCountText, { color: colors.textSecondary }]}>
-                {trip.members.length} {trip.members.length === 1 ? 'buddy' : 'buddies'}
+                {members.length} {members.length === 1 ? 'buddy' : 'buddies'}
               </Text>
             </View>
 

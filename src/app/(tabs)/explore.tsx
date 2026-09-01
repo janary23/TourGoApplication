@@ -26,6 +26,8 @@ import {
 import { loadExploreLog, saveExploreLog, type ExploreLog } from '../../services/exploreLog';
 import { getWishlistCatalog, type SavedSpot } from '../../services/wishlistCatalog';
 import { getTrips } from '../../services/tripService';
+import { isTripCompleted } from '../../services/tripStatus';
+import { shareTrip, shareToFacebook, buildAlbumShareMessage } from '../../services/tripShare';
 import { supabase } from '../../services/supabase';
 import {
   ExploreMap,
@@ -100,7 +102,7 @@ export default function ExploreScreen() {
   const { colors, isDark } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const mapRef = useRef<ExploreMapHandle>(null);
-  const params = useLocalSearchParams<{ selectProvinceId?: string }>();
+  const params = useLocalSearchParams<{ selectProvinceId?: string; tab?: string }>();
 
   const [viewType, setViewType] = useState<'map' | 'list' | 'province-detail'>('list');
   const [exploreTab, setExploreTab] = useState<'wishlist' | 'albums'>('wishlist');
@@ -114,6 +116,13 @@ export default function ExploreScreen() {
       useNativeDriver: true,
     }).start();
   }, [exploreTab]);
+
+  useEffect(() => {
+    if (params.tab === 'albums') {
+      setExploreTab('albums');
+      router.setParams({ tab: undefined } as any);
+    }
+  }, [params.tab]);
   const [albumsSubView, setAlbumsSubView] = useState<'gallery' | 'map'>('gallery');
   const [statusFilter, setStatusFilter] = useState<'all' | 'explored' | 'unexplored'>('all');
   const [regionFilter, setRegionFilter] = useState<string>('All');
@@ -246,20 +255,78 @@ export default function ExploreScreen() {
         if (!active) return;
         try {
           const tripsData = await getTrips();
-          const now = new Date();
-          const visited = new Set<string>(logData.visitedProvinces);
+          const visited = new Set<string>();
           const saved = new Set<string>(logData.savedProvinces);
+          const visitedDests = new Set<string>();
+
+          // Identify all completed trips (marked as completed by organizer or endDate past)
+          const completedTrips = tripsData.filter((t: any) => isTripCompleted(t));
+          const completedTripIds = completedTrips.map((t: any) => t.id);
+
           for (const trip of tripsData) {
             if (!trip.destination) continue;
             const provinceId = findProvinceIdForDestination(trip.destination);
+            const isCompleted = isTripCompleted(trip);
             if (provinceId) {
-              const endDate = new Date(trip.endDate);
-              if (endDate < now) visited.add(provinceId);
+              if (isCompleted) visited.add(provinceId);
               else saved.add(provinceId);
             }
+
+            // If trip is completed, match its destination to catalog destinations
+            if (isCompleted) {
+              const matchedDest = DESTINATIONS.find(d => 
+                trip.destination.toLowerCase().includes(d.name.toLowerCase()) ||
+                d.name.toLowerCase().includes(trip.destination.toLowerCase())
+              );
+              if (matchedDest) {
+                visitedDests.add(matchedDest.id);
+                if (matchedDest.provinceId) visited.add(matchedDest.provinceId);
+              }
+            }
           }
+
+          // Fetch all itinerary items for completed trips and automatically map them!
+          let tripItinerariesMap: Record<string, any[]> = {};
+          if (completedTripIds.length > 0) {
+            const { data: itinData } = await supabase
+              .from('itinerary_items')
+              .select('*')
+              .in('trip_id', completedTripIds)
+              .order('day_index')
+              .order('time_label');
+
+            if (itinData && itinData.length > 0) {
+              itinData.forEach((item: any) => {
+                if (!tripItinerariesMap[item.trip_id]) tripItinerariesMap[item.trip_id] = [];
+                tripItinerariesMap[item.trip_id].push(item);
+
+                // Add location/title province to visited
+                const itemLoc = item.location || item.title || '';
+                const pId = findProvinceIdForDestination(itemLoc);
+                if (pId) visited.add(pId);
+
+                // Match against catalog destinations
+                const matched = DESTINATIONS.find(d =>
+                  (item.title && d.name.toLowerCase().includes(item.title.toLowerCase())) ||
+                  (item.title && item.title.toLowerCase().includes(d.name.toLowerCase())) ||
+                  (item.location && d.name.toLowerCase().includes(item.location.toLowerCase())) ||
+                  (item.location && item.location.toLowerCase().includes(d.name.toLowerCase()))
+                );
+                if (matched) {
+                  visitedDests.add(matched.id);
+                  if (matched.provinceId) visited.add(matched.provinceId);
+                }
+              });
+            }
+          }
+
           logData.visitedProvinces = Array.from(visited);
           logData.savedProvinces = Array.from(saved);
+          logData.visitedDestinations = Array.from(visitedDests);
+
+          // Save synced collection log to persistent storage
+          await saveExploreLog(logData);
+
           const tripIds = tripsData.map(t => t.id);
           let tripMembersMap: Record<string, string[]> = {};
           if (tripIds.length > 0) {
@@ -275,10 +342,14 @@ export default function ExploreScreen() {
               });
             }
           }
-          const tripsWithMembers = tripsData.map(t => ({ ...t, membersList: tripMembersMap[t.id] || [] }));
-          if (active) setUserTrips(tripsWithMembers);
+          const tripsWithDetails = tripsData.map(t => ({
+            ...t,
+            membersList: tripMembersMap[t.id] || [],
+            itineraryItems: tripItinerariesMap[t.id] || [],
+          }));
+          if (active) setUserTrips(tripsWithDetails);
         } catch (err) {
-          console.error('Error loading trips for collection map:', err);
+          console.error('Error loading trips for collection map & albums:', err);
         }
         if (active) { setLog(logData); setLoaded(true); }
       }
@@ -331,21 +402,10 @@ export default function ExploreScreen() {
     setLog(prev => { const next = { ...prev, ...patch }; saveExploreLog(next); return next; });
   }, []);
 
-  const toggleProvinceVisited = useCallback((id: string) => {
-    const visited = log.visitedProvinces.includes(id);
-    updateLog({ visitedProvinces: visited ? log.visitedProvinces.filter(x => x !== id) : [...log.visitedProvinces, id] });
-    if (!visited) setShowMoment(id);
-  }, [log.visitedProvinces, updateLog]);
-
   const toggleProvinceSaved = useCallback((id: string) => {
     const saved = log.savedProvinces.includes(id);
     updateLog({ savedProvinces: saved ? log.savedProvinces.filter(x => x !== id) : [...log.savedProvinces, id] });
   }, [log.savedProvinces, updateLog]);
-
-  const toggleDestVisited = useCallback((id: string) => {
-    const visited = log.visitedDestinations.includes(id);
-    updateLog({ visitedDestinations: visited ? log.visitedDestinations.filter(x => x !== id) : [...log.visitedDestinations, id] });
-  }, [log.visitedDestinations, updateLog]);
 
   const toggleDestSaved = useCallback((id: string) => {
     const saved = log.savedDestinations.includes(id);
@@ -391,6 +451,20 @@ export default function ExploreScreen() {
   const visitedProvincesList = useMemo(() => {
     return CANONICAL_PROVINCES.filter(p => log.visitedProvinces.includes(p.id));
   }, [log.visitedProvinces, CANONICAL_PROVINCES]);
+
+  // Completed trips belong in the Album automatically — whether the user
+  // organized the trip or joined someone else's. userTrips already contains
+  // every trip this user is a member of, one row each, so there is nothing to
+  // dedupe and no separate album record to keep in sync.
+  const completedTripAlbums = useMemo(() => {
+    return (userTrips || [])
+      .filter((t: any) => isTripCompleted(t))
+      .sort((a: any, b: any) => {
+        const aEnd = new Date(a.completed_at || a.endDate || 0).getTime();
+        const bEnd = new Date(b.completed_at || b.endDate || 0).getTime();
+        return bEnd - aEnd; // most recent first
+      });
+  }, [userTrips]);
 
   const wishlistDests = useMemo(() => {
     const known: Record<string, SavedSpot> = {};
@@ -646,26 +720,33 @@ export default function ExploreScreen() {
                 </View>
                 {selectedProvince && (
                   <View style={styles.detailHeaderActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.toggle,
-                        {
-                          backgroundColor: log.visitedProvinces.includes(selectedProvince.id) ? 'rgba(153, 27, 27, 0.1)' : colors.surface,
-                          borderColor: log.visitedProvinces.includes(selectedProvince.id) ? CRIMSON_WAX : colors.cardBorder,
-                        },
-                      ]}
-                      onPress={() => toggleProvinceVisited(selectedProvince.id)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name={log.visitedProvinces.includes(selectedProvince.id) ? 'ribbon' : 'ribbon-outline'}
-                        size={14}
-                        color={log.visitedProvinces.includes(selectedProvince.id) ? CRIMSON_WAX : colors.textMuted}
-                      />
-                      <Text style={[styles.toggleText, { color: log.visitedProvinces.includes(selectedProvince.id) ? CRIMSON_WAX : colors.textMuted }]}>
-                        {log.visitedProvinces.includes(selectedProvince.id) ? 'Stamped' : 'Stamp'}
-                      </Text>
-                    </TouchableOpacity>
+                    {log.visitedProvinces.includes(selectedProvince.id) ? (
+                      <View
+                        style={[
+                          styles.toggle,
+                          {
+                            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                            borderColor: '#10B981',
+                          },
+                        ]}
+                      >
+                        <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                        <Text style={[styles.toggleText, { color: '#10B981' }]}>Explored</Text>
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.toggle,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.cardBorder,
+                          },
+                        ]}
+                      >
+                        <Ionicons name="compass-outline" size={14} color={colors.textMuted} />
+                        <Text style={[styles.toggleText, { color: colors.textMuted }]}>Unexplored</Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -837,39 +918,33 @@ export default function ExploreScreen() {
                           </View>
 
                           <View style={styles.destCardActions}>
-                            <TouchableOpacity
-                              style={[
-                                styles.destCardPill,
-                                {
-                                  flex: 1,
-                                  backgroundColor: isVisited ? colors.brandLight : colors.surface,
-                                  borderColor: isVisited ? colors.brand : colors.cardBorder,
+                            {isVisited && (
+                              <View
+                                style={{
+                                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                  borderColor: '#10B981',
                                   borderWidth: 1,
                                   height: 38,
                                   borderRadius: 12,
+                                  paddingHorizontal: 12,
                                   justifyContent: 'center',
                                   alignItems: 'center',
                                   flexDirection: 'row',
-                                  gap: 6
-                                },
-                              ]}
-                              onPress={() => toggleDestVisited(dest.id)}
-                            >
-                              <Ionicons
-                                name={isVisited ? 'checkmark-circle' : 'ellipse-outline'}
-                                size={14}
-                                color={isVisited ? colors.brand : colors.textSecondary}
-                              />
-                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: isVisited ? colors.brand : colors.textSecondary }}>
-                                {isVisited ? 'Visited' : 'Mark Visited'}
-                              </Text>
-                            </TouchableOpacity>
+                                  gap: 5,
+                                }}
+                              >
+                                <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#10B981' }}>
+                                  Visited
+                                </Text>
+                              </View>
+                            )}
 
                             <TouchableOpacity
                               style={[
                                 styles.destCardPill,
                                 {
-                                  flex: 1.2,
+                                  flex: 1,
                                   backgroundColor: colors.brand,
                                   height: 38,
                                   borderRadius: 12,
@@ -898,12 +973,12 @@ export default function ExploreScreen() {
               <View style={{ height: 100 }} />
             </ScrollView>
           ) : exploreTab === 'albums' ? (
-            /* ── Modern Albums Gallery Screen ── */
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 16 }}>
-                  <Text style={{ fontSize: 28, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, letterSpacing: -0.5 }}>Travel Albums</Text>
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Albums of visited destinations in explored provinces</Text>
+            /* ── Past Memories Scrapbook & Travel Albums Screen ── */
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 30, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Travel Albums</Text>
+                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Past memories scrapbook & collection map of completed journeys</Text>
                 </View>
                 
                 {/* Share Collection Button */}
@@ -915,102 +990,299 @@ export default function ExploreScreen() {
                     backgroundColor: colors.brandLight,
                     borderColor: colors.brand,
                     borderWidth: 1,
-                    paddingHorizontal: 14,
+                    paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderRadius: 12,
-                    gap: 6,
+                    gap: 5,
                   }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="share-social-outline" size={14} color={colors.brand} />
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share Map</Text>
+                  <Text style={{ fontSize: 11.5, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share</Text>
                 </TouchableOpacity>
               </View>
-              {visitedProvincesList.length > 0 ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                  {visitedProvincesList.map((item) => {
-                    const bgImage = getProvinceImage(item.id, item.region);
-                    const matchingDests = allDestinations.filter(d => d.provinceId === item.id && log.visitedDestinations.includes(d.id));
-                    return (
-                      <Pressable
-                        key={item.id}
-                        style={({ pressed }) => [
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.cardBorder,
-                            borderWidth: 1,
-                            borderRadius: 18,
-                            overflow: 'hidden',
-                            width: (windowWidth - 44) / 2,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.03,
-                            shadowRadius: 8,
-                            elevation: 2,
-                            transform: [{ scale: pressed ? 0.97 : 1 }]
-                          }
-                        ]}
-                        onPress={() => {
-                          setSelectedAlbumProvinceId(item.id);
-                        }}
-                      >
-                        <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
-                          <ImageBackground source={{ uri: bgImage }} style={{ width: '100%', height: '100%' }}>
-                            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
-                            <View
-                              style={{
+
+              {/* ── Summary Stats Milestone Bar ── */}
+              {completedTripAlbums.length > 0 && (
+                <View style={{
+                  flexDirection: 'row',
+                  backgroundColor: colors.card,
+                  borderColor: colors.cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 18,
+                  padding: 14,
+                  marginBottom: 22,
+                  justifyContent: 'space-around',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.02,
+                  shadowRadius: 6,
+                  elevation: 1,
+                }}>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                      {completedTripAlbums.length}
+                    </Text>
+                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {completedTripAlbums.length === 1 ? 'Trip Memory' : 'Trip Memories'}
+                    </Text>
+                  </View>
+                  <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: '#10B981' }}>
+                      {visitedProvincesList.length}
+                    </Text>
+                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Provinces Explored
+                    </Text>
+                  </View>
+                  <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: '#F59E0B' }}>
+                      {log.visitedDestinations.length}
+                    </Text>
+                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Spots on Map
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ── Past Memories Scrapbook Section ── */}
+              {completedTripAlbums.length > 0 ? (
+                <>
+                  <View style={{ marginBottom: 26 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
+                        Past Memories Scrapbook
+                      </Text>
+                    </View>
+
+                    {/* Polaroid Scrapbook Grid */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                      {completedTripAlbums.map((trip: any) => {
+                        const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1000';
+                        const cardWidth = (windowWidth - 44) / 2;
+                        const itinCount = (trip.itineraryItems || []).length;
+                        const buddyCount = trip.members?.length || 1;
+
+                        return (
+                          <TouchableOpacity
+                            key={trip.id}
+                            activeOpacity={0.9}
+                            onPress={() => router.push(`/trip/${trip.id}`)}
+                            style={{
+                              width: cardWidth,
+                              backgroundColor: colors.card,
+                              borderColor: colors.cardBorder,
+                              borderWidth: 1,
+                              borderRadius: 18,
+                              padding: 8,
+                              marginBottom: 16,
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.04,
+                              shadowRadius: 8,
+                              elevation: 2,
+                            }}
+                          >
+                            {/* Polaroid Photo with Memory Stamp */}
+                            <View style={{ position: 'relative', height: 118, width: '100%', borderRadius: 12, overflow: 'hidden' }}>
+                              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover', opacity: isDark ? 0.9 : 1 }} />
+                              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.5)']} style={StyleSheet.absoluteFillObject} />
+
+                              {/* Memory Sticker Badge */}
+                              <View style={{
                                 position: 'absolute',
-                                top: 8,
-                                left: 8,
-                                backgroundColor: 'rgba(0,0,0,0.6)',
-                                paddingHorizontal: 8,
-                                paddingVertical: 4,
-                                borderRadius: 8,
+                                bottom: 6,
+                                left: 6,
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 4
+                                gap: 3,
+                                backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                                paddingHorizontal: 6,
+                                paddingVertical: 2.5,
+                                borderRadius: 6,
+                              }}>
+                                <Ionicons name="checkmark-done-outline" size={10} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 7.5, fontFamily: 'Poppins-Bold', letterSpacing: 0.5 }}>MEMORY</Text>
+                              </View>
+
+                              {/* Role Chip */}
+                              <View style={{
+                                position: 'absolute',
+                                top: 6,
+                                right: 6,
+                                backgroundColor: trip.role === 'organizer' ? 'rgba(2, 132, 199, 0.9)' : 'rgba(100, 116, 139, 0.85)',
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                              }}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 7, fontFamily: 'Poppins-Bold' }}>
+                                  {trip.role === 'organizer' ? 'ORGANIZED' : 'JOINED'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Polaroid Card Details */}
+                            <View style={{ paddingTop: 8, paddingHorizontal: 2 }}>
+                              <Text style={{ fontSize: 8.5, fontFamily: 'Poppins-Bold', color: colors.brand, letterSpacing: 0.8 }} numberOfLines={1}>
+                                {trip.destination.split(',')[0].toUpperCase()}
+                              </Text>
+                              <Text style={{ fontSize: 12.5, fontFamily: 'Poppins-Bold', color: colors.text, marginVertical: 2 }} numberOfLines={1}>
+                                {trip.title}
+                              </Text>
+                              <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>
+                                {new Date(trip.endDate || trip.startDate).getFullYear()} • {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
+                              </Text>
+
+                              {itinCount > 0 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+                                  <Ionicons name="location-outline" size={10} color={colors.textSecondary} />
+                                  <Text style={{ fontSize: 9, fontFamily: 'Poppins-Medium', color: colors.textSecondary }} numberOfLines={1}>
+                                    {itinCount} itinerary {itinCount === 1 ? 'stop' : 'stops'}
+                                  </Text>
+                                </View>
+                              )}
+
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                  <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Bold', color: colors.brand }}>Open Memory</Text>
+                                  <Ionicons name="chevron-forward" size={10} color={colors.brand} />
+                                </View>
+
+                                {trip.role === 'organizer' && (
+                                  <TouchableOpacity
+                                    onPress={async (e) => {
+                                      e.stopPropagation();
+                                      const { error } = await shareTrip(trip);
+                                      if (error) Alert.alert('Could not share trip', error);
+                                    }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={{ padding: 2 }}
+                                  >
+                                    <Ionicons name="share-social-outline" size={13} color={colors.brand} />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* ── Collection Map Highlights ── */}
+                  {visitedProvincesList.length > 0 && (
+                    <View style={{ marginBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
+                          <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
+                            Collection Map & Footprints
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => setViewType('map')}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                        >
+                          <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>View Map</Text>
+                          <Ionicons name="chevron-forward" size={12} color={colors.brand} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                        {visitedProvincesList.map((item) => {
+                          const bgImage = getProvinceImage(item.id, item.region);
+                          const matchingDests = allDestinations.filter(d => d.provinceId === item.id && log.visitedDestinations.includes(d.id));
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={({ pressed }) => [
+                                {
+                                  backgroundColor: colors.card,
+                                  borderColor: colors.cardBorder,
+                                  borderWidth: 1,
+                                  borderRadius: 18,
+                                  overflow: 'hidden',
+                                  width: (windowWidth - 44) / 2,
+                                  shadowColor: '#000',
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.03,
+                                  shadowRadius: 8,
+                                  elevation: 2,
+                                  transform: [{ scale: pressed ? 0.97 : 1 }]
+                                }
+                              ]}
+                              onPress={() => {
+                                setSelectedAlbumProvinceId(item.id);
                               }}
                             >
-                              <Ionicons name="images-outline" size={10} color="#FFFFFF" />
-                              <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
-                                {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
-                              </Text>
-                            </View>
-                          </ImageBackground>
-                        </View>
-                        <View style={{ padding: 12 }}>
-                          <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
-                            {item.name}
-                          </Text>
-                          <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
-                            {item.region} Region
-                          </Text>
-                        </View>
-                      </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
-                    <Ionicons name="camera-outline" size={40} color={colors.textMuted} style={{ marginBottom: 12 }} />
-                    <Text style={{ fontSize: 15, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 4 }}>No Albums Yet</Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 16, marginBottom: 18 }}>
-                      Mark destinations as "Visited" during your journeys to build your travel photo collection.
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => { router.push('/'); }}
-                      style={{ backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold' }}>Browse Tourist Spots</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </ScrollView>
+                              <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
+                                <ImageBackground source={{ uri: bgImage }} style={{ width: '100%', height: '100%' }}>
+                                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
+                                  <View
+                                    style={{
+                                      position: 'absolute',
+                                      top: 8,
+                                      left: 8,
+                                      backgroundColor: 'rgba(0,0,0,0.6)',
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 4,
+                                      borderRadius: 8,
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4
+                                    }}
+                                  >
+                                    <Ionicons name="images-outline" size={10} color="#FFFFFF" />
+                                    <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
+                                      {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
+                                    </Text>
+                                  </View>
+                                </ImageBackground>
+                              </View>
+                              <View style={{ padding: 12 }}>
+                                <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
+                                  {item.name}
+                                </Text>
+                                <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                                  {item.region} Region
+                                </Text>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                /* Empty Scrapbook */
+                <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+                  <Ionicons name="images-outline" size={48} color={colors.brand} style={{ marginBottom: 14 }} />
+                  <Text style={{ fontSize: 17, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 6 }}>
+                    Your Travel Scrapbook
+                  </Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 18, marginBottom: 20, maxWidth: 300 }}>
+                    When an organizer marks a trip as finished, the journey and all its itinerary spots automatically move to your Albums and light up on your Collection Map!
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/trips')}
+                    style={{ backgroundColor: colors.brand, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14 }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontFamily: 'Poppins-Bold' }}>View My Journeys</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
           ) : (
             /* ── Wishlist Tab ── */
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 160 }}>
               <View style={{ marginTop: 10, marginBottom: 20 }}>
-                <Text style={{ fontSize: 28, fontFamily: 'Poppins-Bold', fontWeight: '700', color: colors.text, letterSpacing: -0.5 }}>My Wishlist</Text>
+                <Text style={{ fontSize: 30, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>My Wishlist</Text>
                 <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Your saved spots and destinations for future travels</Text>
               </View>
               {wishlistDests.length > 0 ? (
@@ -1364,19 +1636,31 @@ export default function ExploreScreen() {
                   )}
                 </View>
 
-                {/* Floating Navigation Header (Left: Close, Right: Download) - Hidden during export */}
+                {/* Floating Navigation Header (Left: Close, Right: Facebook & Download) - Hidden during export */}
                 {!isExporting && (
                   <View style={{ position: 'absolute', top: 12, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', zIndex: 20 }}>
                     <TouchableOpacity onPress={() => setShareOpen(false)} style={styles.floatingGlassBtn}>
                       <Ionicons name="close" size={22} color="#FFFFFF" />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={handleSaveImage} style={styles.floatingGlassBtn} disabled={isSaving}>
-                      {isSaving ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Ionicons name="download-outline" size={22} color="#FFFFFF" />
-                      )}
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          const msg = buildAlbumShareMessage(completedTripAlbums.length, visitedProvincesList.length, log.visitedDestinations.length);
+                          const { error } = await shareToFacebook(msg);
+                          if (error) Alert.alert('Facebook Share', error);
+                        }}
+                        style={[styles.floatingGlassBtn, { backgroundColor: '#1877F2' }]}
+                      >
+                        <Ionicons name="logo-facebook" size={20} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleSaveImage} style={styles.floatingGlassBtn} disabled={isSaving}>
+                        {isSaving ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Ionicons name="download-outline" size={22} color="#FFFFFF" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 

@@ -10,7 +10,7 @@ interface DestinationSheetContentProps {
   dest: Destination;
   visited: boolean;
   saved: boolean;
-  onToggleVisited: () => void;
+  onToggleVisited?: () => void;
   onToggleSaved: () => void;
   onViewDestination: () => void;
   onBack: () => void;
@@ -82,26 +82,20 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
       </ScrollView>
 
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[
-            styles.actionPill,
-            {
-              backgroundColor: visited ? colors.brandLight : colors.surface,
-              borderColor: visited ? colors.brand : colors.cardBorder,
-            },
-          ]}
-          onPress={onToggleVisited}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={visited ? 'checkmark-circle' : 'ellipse-outline'}
-            size={16}
-            color={visited ? colors.brand : colors.textMuted}
-          />
-          <Text style={[styles.actionText, { color: visited ? colors.brand : colors.textMuted }]}>
-            {visited ? 'Visited' : 'Visited?'}
-          </Text>
-        </TouchableOpacity>
+        {visited && (
+          <View
+            style={[
+              styles.actionPill,
+              {
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                borderColor: '#10B981',
+              },
+            ]}
+          >
+            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+            <Text style={[styles.actionText, { color: '#10B981' }]}>Visited in Trip</Text>
+          </View>
+        )}
         <TouchableOpacity
           style={[
             styles.actionPill,

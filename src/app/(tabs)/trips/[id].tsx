@@ -24,6 +24,8 @@ import TripMembers from '../../../components/trip/TripMembers';
 import TripExpenses from '../../../components/trip/TripExpenses';
 import TripMoreHub from '../../../components/trip/TripMoreHub';
 import TripSafetyHub from '../../../components/trip/TripSafetyHub';
+import { Sheet, Field, Button, Txt } from '../../../components/ui/primitives';
+import { space } from '../../../components/ui/tokens';
 
 type Section = 'overview' | 'plan' | 'people' | 'money' | 'more';
 type PeopleView = 'hub' | 'chat' | 'polls' | 'announcements' | 'members';
@@ -307,113 +309,71 @@ export default function TripHomeScreen() {
       {/* Room content */}
       <View style={{ flex: 1 }}>{content}</View>
 
-      {/* ── EDIT TRIP MODAL (Organizer Only) ─────────────────────────────── */}
-      <Modal
+      {/* ── EDIT TRIP (organizer only) ─────────────────────────────────── */}
+      <Sheet
         visible={editModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditModalVisible(false)}
+        onClose={() => setEditModalVisible(false)}
+        title="Edit trip"
+        primaryAction={{
+          label: 'Save changes',
+          onPress: handleSaveEdit,
+          disabled: !editTitle.trim() || !editDestination.trim(),
+        }}
       >
-        <View style={styles.editModalOverlay}>
-          <View style={[styles.editModalSheet, { backgroundColor: colors.card }]}>
-            {/* Handle bar */}
-            <View style={[styles.editModalHandle, { backgroundColor: colors.cardBorder }]} />
+        <Field
+          label="Trip name"
+          value={editTitle}
+          onChangeText={setEditTitle}
+          placeholder="Barkada Palawan 2026"
+        />
 
-            {/* Header */}
-            <View style={styles.editModalHeader}>
-              <View>
-                <Text style={[styles.editModalTitle, { color: colors.text }]}>Edit Trip</Text>
-                <Text style={[styles.editModalSub, { color: colors.textSecondary }]}>Organizer controls</Text>
-              </View>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={[styles.editModalCloseBtn, { backgroundColor: colors.surface }]}>
-                <Ionicons name="close" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <Field
+          label="Destination"
+          value={editDestination}
+          onChangeText={setEditDestination}
+          placeholder="El Nido, Palawan"
+          style={{ marginTop: space.xl }}
+        />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-              {/* Trip Title */}
-              <View style={styles.editFieldGroup}>
-                <Text style={[styles.editFieldLabel, { color: colors.textSecondary }]}>TRIP TITLE</Text>
-                <TextInput
-                  value={editTitle}
-                  onChangeText={setEditTitle}
-                  placeholder="e.g. Barkada Palawan 2026"
-                  placeholderTextColor="#9E9E9E"
-                  style={[styles.editInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                />
-              </View>
-
-              {/* Destination */}
-              <View style={styles.editFieldGroup}>
-                <Text style={[styles.editFieldLabel, { color: colors.textSecondary }]}>DESTINATION</Text>
-                <TextInput
-                  value={editDestination}
-                  onChangeText={setEditDestination}
-                  placeholder="e.g. El Nido, Palawan"
-                  placeholderTextColor="#9E9E9E"
-                  style={[styles.editInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                />
-              </View>
-
-              {/* Dates row */}
-              <View style={styles.editDatesRow}>
-                <View style={[styles.editFieldGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={[styles.editFieldLabel, { color: colors.textSecondary }]}>START DATE</Text>
-                  <TextInput
-                    value={editStartDate}
-                    onChangeText={setEditStartDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9E9E9E"
-                    style={[styles.editInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-                <View style={[styles.editFieldGroup, { flex: 1 }]}>
-                  <Text style={[styles.editFieldLabel, { color: colors.textSecondary }]}>END DATE</Text>
-                  <TextInput
-                    value={editEndDate}
-                    onChangeText={setEditEndDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9E9E9E"
-                    style={[styles.editInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-              </View>
-
-              {/* Info note */}
-              <View style={[styles.editInfoNote, { backgroundColor: colors.brandLight }]}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.brand} />
-                <Text style={[styles.editInfoNoteText, { color: colors.brand }]}>
-                  To change features (checklist, polls, etc.) tap the ⚙ Settings option inside Resources.
-                </Text>
-              </View>
-
-              {/* Save button */}
-              <TouchableOpacity
-                style={[styles.editSaveBtn, { backgroundColor: colors.brand }]}
-                onPress={handleSaveEdit}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
-                <Text style={styles.editSaveBtnText}>Save Changes</Text>
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View style={[styles.editDivider, { backgroundColor: colors.cardBorder }]} />
-
-              {/* Danger zone */}
-              <Text style={[styles.editDangerLabel, { color: '#EF4444' }]}>DANGER ZONE</Text>
-              <TouchableOpacity
-                style={styles.editDeleteBtn}
-                onPress={handleDeleteTrip}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                <Text style={styles.editDeleteBtnText}>Delete This Trip</Text>
-              </TouchableOpacity>
-            </ScrollView>
+        <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.xl }}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Starts"
+              value={editStartDate}
+              onChangeText={setEditStartDate}
+              placeholder="YYYY-MM-DD"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Ends"
+              value={editEndDate}
+              onChangeText={setEditEndDate}
+              placeholder="YYYY-MM-DD"
+            />
           </View>
         </View>
-      </Modal>
+
+        <Txt variant="footnote" tone="muted" style={{ marginTop: space.lg }}>
+          Features like the checklist and polls are turned on in Trip settings.
+        </Txt>
+
+        <View style={{ marginTop: space.xxl }}>
+          <Txt variant="overline" tone="muted" uppercase style={{ marginBottom: space.sm }}>
+            Danger zone
+          </Txt>
+          <Button
+            label="Delete this trip"
+            variant="destructive"
+            icon="trash-outline"
+            onPress={handleDeleteTrip}
+            fullWidth
+          />
+          <Txt variant="caption" tone="muted" align="center" style={{ marginTop: space.sm }}>
+            This removes the trip for everyone. It cannot be undone.
+          </Txt>
+        </View>
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -471,125 +431,6 @@ const styles = StyleSheet.create({
   },
 
   // Organizer edit modal styles
-  editModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  editModalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    maxHeight: '85%',
-  },
-  editModalHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  editModalTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  editModalSub: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  editModalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editFieldGroup: {
-    marginBottom: 16,
-  },
-  editFieldLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  editInput: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontFamily: 'Poppins-Medium',
-    fontSize: 14,
-  },
-  editDatesRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  editInfoNote: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 20,
-  },
-  editInfoNoteText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-    flex: 1,
-    lineHeight: 15,
-  },
-  editSaveBtn: {
-    height: 48,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-  },
-  editSaveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  editDivider: {
-    height: 1,
-    marginVertical: 20,
-  },
-  editDangerLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-  },
-  editDeleteBtn: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 20,
-  },
-  editDeleteBtnText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
 });
 
 

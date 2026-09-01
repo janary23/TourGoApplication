@@ -1,8 +1,36 @@
 import { storageGet, storageSet } from './storage';
+import { supabase } from './supabase';
 import { DESTINATIONS } from './destinations';
 import type { SpotInfo } from './homeSpots';
 
 const PREFS_KEY = 'tourgo.preferences.topics.v1';
+
+/**
+ * Preferences are scoped to the signed-in user, the same way the explore log is.
+ * Without this, a second account signing in on the same device inherited the
+ * first account's travel preferences and skipped preference onboarding.
+ * The unscoped key is still read once as a migration path for existing users.
+ */
+async function prefsKey(): Promise<string> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) return `${PREFS_KEY}:${user.id}`;
+  } catch {
+    // Offline or not signed in — fall back to the shared key.
+  }
+  return PREFS_KEY;
+}
+
+function parsePrefs(raw: string | null): Preferences | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((id) => typeof id === 'string');
+  } catch {
+    // ignore malformed
+  }
+  return null;
+}
 
 export interface PreferenceTopic {
   id: string;
@@ -60,21 +88,23 @@ export const PREFERENCE_TOPICS: PreferenceTopic[] = [
 export type Preferences = string[];
 
 export async function loadPreferences(): Promise<Preferences> {
-  const raw = await storageGet(PREFS_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((id) => typeof id === 'string');
+  const key = await prefsKey();
+  const scoped = parsePrefs(await storageGet(key));
+  if (scoped) return scoped;
+
+  // One-time migration: adopt the pre-scoping preferences for this account.
+  if (key !== PREFS_KEY) {
+    const legacy = parsePrefs(await storageGet(PREFS_KEY));
+    if (legacy && legacy.length > 0) {
+      await storageSet(key, JSON.stringify(legacy));
+      return legacy;
     }
-  } catch {
-    // ignore malformed
   }
   return [];
 }
 
 export async function savePreferences(prefs: Preferences): Promise<void> {
-  await storageSet(PREFS_KEY, JSON.stringify(prefs));
+  await storageSet(await prefsKey(), JSON.stringify(prefs));
 }
 
 export async function hasSetPreferences(): Promise<boolean> {

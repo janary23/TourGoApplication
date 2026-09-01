@@ -11,6 +11,7 @@ import {
   StyleSheet,
   LayoutChangeEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
@@ -158,12 +159,18 @@ const TABS = [
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { colors, isDark } = useTheme();
+  // The bar floats above the bottom edge. Without the safe-area inset it sits
+  // a fixed 20px up, which collides with the home indicator on gesture-nav
+  // devices and leaves an odd gap on devices without one.
+  const insets = useSafeAreaInsets();
+  const bottomOffset = Math.max(insets.bottom, 12);
 
   return (
     <View
       style={[
         styles.tabBar,
         {
+          bottom: bottomOffset,
           backgroundColor: isDark ? 'rgba(20,20,20,0.97)' : 'rgba(255,255,255,0.97)',
           borderColor: colors.cardBorder,
         },
@@ -206,7 +213,6 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: 20,
     left: 16,
     right: 16,
     height: 64,

@@ -1,5 +1,5 @@
--- Create wishlist_items table in Supabase
--- Run this in your Supabase SQL Editor (Dashboard > SQL Editor > New Query)
+-- Create wishlist_items table in Supabase (Idempotent script)
+-- Safe to run multiple times in your Supabase SQL Editor
 
 CREATE TABLE IF NOT EXISTS public.wishlist_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.wishlist_items (
 ALTER TABLE public.wishlist_items ENABLE ROW LEVEL SECURITY;
 
 -- 1. Policy: Users can only select their own wishlist items
+DROP POLICY IF EXISTS "Users can view their own wishlist items" ON public.wishlist_items;
 CREATE POLICY "Users can view their own wishlist items"
   ON public.wishlist_items
   FOR SELECT
@@ -20,6 +21,7 @@ CREATE POLICY "Users can view their own wishlist items"
   USING (auth.uid() = user_id);
 
 -- 2. Policy: Users can only insert their own wishlist items
+DROP POLICY IF EXISTS "Users can insert their own wishlist items" ON public.wishlist_items;
 CREATE POLICY "Users can insert their own wishlist items"
   ON public.wishlist_items
   FOR INSERT
@@ -27,6 +29,7 @@ CREATE POLICY "Users can insert their own wishlist items"
   WITH CHECK (auth.uid() = user_id);
 
 -- 3. Policy: Users can only delete their own wishlist items
+DROP POLICY IF EXISTS "Users can delete their own wishlist items" ON public.wishlist_items;
 CREATE POLICY "Users can delete their own wishlist items"
   ON public.wishlist_items
   FOR DELETE

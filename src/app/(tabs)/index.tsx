@@ -1681,7 +1681,7 @@ const styles = StyleSheet.create({
 
   greetingBlock: { paddingHorizontal: 20, marginTop: 10, marginBottom: 20 },
   eyebrowText: { fontSize: 10.5, fontFamily: 'Poppins-Bold', letterSpacing: 1.4 },
-  greetingTitle: { fontFamily: 'Poppins-Bold', fontWeight: '700', fontSize: 28, letterSpacing: -0.5 },
+  greetingTitle: { fontFamily: 'Poppins-ExtraBold', fontWeight: '800', fontSize: 30, letterSpacing: -0.7, lineHeight: 36 },
   greetingSubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, marginTop: 2 },
 
   searchContainer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },

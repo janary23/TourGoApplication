@@ -14,7 +14,7 @@ interface ProvinceSheetContentProps {
   savedDests: string[];
   provinceVisited: boolean;
   provinceSaved: boolean;
-  onToggleVisited: () => void;
+  onToggleVisited?: () => void;
   onToggleSaved: () => void;
   onSelectMuni: (id: string) => void;
   onSelectDest: (id: string) => void;
@@ -83,26 +83,20 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
           </Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={[
-              styles.toggle,
-              {
-                backgroundColor: provinceVisited ? 'rgba(153, 27, 27, 0.1)' : colors.surface,
-                borderColor: provinceVisited ? CRIMSON_WAX : colors.cardBorder,
-              },
-            ]}
-            onPress={onToggleVisited}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={provinceVisited ? 'ribbon' : 'ribbon-outline'}
-              size={14}
-              color={provinceVisited ? CRIMSON_WAX : colors.textMuted}
-            />
-            <Text style={[styles.toggleText, { color: provinceVisited ? CRIMSON_WAX : colors.textMuted }]}>
-              {provinceVisited ? 'Stamped' : 'Stamp'}
-            </Text>
-          </TouchableOpacity>
+          {provinceVisited ? (
+            <View
+              style={[
+                styles.toggle,
+                {
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  borderColor: '#10B981',
+                },
+              ]}
+            >
+              <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+              <Text style={[styles.toggleText, { color: '#10B981' }]}>Explored</Text>
+            </View>
+          ) : null}
           <TouchableOpacity
             style={[
               styles.toggle,

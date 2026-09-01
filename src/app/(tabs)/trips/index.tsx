@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getTrips, TripWithRole, getTripById } from '../../../services/tripService';
+import { isTripCompleted, deriveTripStatus } from '../../../services/tripStatus';
 import { useTheme } from '../../../context/ThemeContext';
 import { Button } from '../../../components/ui/Button';
 import { subscribeOnboardingActive } from '../../../services/mascotBridge';
@@ -335,53 +336,6 @@ function InteractiveButton({ onPress, style, children, activeScale = 0.94 }: any
     <Animated.View style={{ transform: [{ scale }] }}>
       <TouchableOpacity activeOpacity={0.9} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} style={style}>
         {children}
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// Polaroid-style Card Component for grid scrapbook (Past trips)
-function ScrapbookCard({ trip, colors, isDark, router }: { trip: TripWithRole, colors: any, isDark: boolean, router: any }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1000';
-
-  const onPressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.94, useNativeDriver: true, tension: 160, friction: 10 }).start();
-  };
-  const onPressOut = () => {
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 160, friction: 10 }).start();
-  };
-
-  return (
-    <Animated.View style={{ width: GRID_CARD_WIDTH, transform: [{ scale: scaleAnim }], marginBottom: 16 }}>
-      <TouchableOpacity
-        onPress={() => router.push(`/trip/${trip.id}`)}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        activeOpacity={0.9}
-        style={[styles.polaroidCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: StyleSheet.hairlineWidth }]}
-      >
-        <View style={styles.polaroidImageWrapper}>
-          <Image source={{ uri: imageUrl }} style={[styles.polaroidPhoto, isDark && { opacity: 0.85 }]} />
-          <View style={[styles.polaroidBanner, { backgroundColor: 'rgba(15, 23, 42, 0.65)' }]}>
-            <Ionicons name="checkmark-done-outline" size={10} color="#FFFFFF" />
-            <Text style={styles.polaroidBannerText}>MEMORY</Text>
-          </View>
-        </View>
-
-        <View style={styles.polaroidInfo}>
-          <Text style={[styles.polaroidDest, { color: colors.brand }]} numberOfLines={1}>
-            {trip.destination.split(',')[0].toUpperCase()}
-          </Text>
-          <Text style={[styles.polaroidTitle, { color: colors.text }]} numberOfLines={1}>{trip.title}</Text>
-          <Text style={[styles.polaroidDate, { color: colors.textMuted }]}>
-            {new Date(trip.startDate).getFullYear()} • {trip.members.length} {trip.members.length === 1 ? 'buddy' : 'buddies'}
-          </Text>
-          <View style={styles.polaroidAction}>
-            <Text style={[styles.polaroidActionText, { color: colors.brand }]}>Open Memory</Text>
-            <Ionicons name="chevron-forward" size={10} color={colors.brand} />
-          </View>
-        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -795,24 +749,14 @@ export default function TripsScreen() {
         return true;
       });
 
-      const upcoming = filtered.filter(trip => {
-        const start = new Date(trip.startDate);
-        start.setHours(0, 0, 0, 0);
-        return start >= todayDate;
-      });
-
-      let feat = null;
-      if (upcoming.length > 0) {
-        const sorted = [...upcoming].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-        feat = sorted[0];
-      } else {
-        const past = filtered.filter(trip => {
-          const start = new Date(trip.startDate);
-          start.setHours(0, 0, 0, 0);
-          return start < todayDate;
-        });
-        if (past.length > 0) {
-          const sorted = [...past].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+      const activeOrUpcoming = filtered.filter(trip => !isTripCompleted(trip));
+      let feat: TripWithRole | null = null;
+      if (activeOrUpcoming.length > 0) {
+        const inProgress = activeOrUpcoming.filter(trip => deriveTripStatus(trip) === 'active');
+        if (inProgress.length > 0) {
+          feat = inProgress[0];
+        } else {
+          const sorted = [...activeOrUpcoming].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
           feat = sorted[0];
         }
       }
@@ -892,47 +836,27 @@ export default function TripsScreen() {
     return true;
   });
 
+  const activeOrUpcomingTrips = filteredTrips.filter(trip => !isTripCompleted(trip));
+
   const getFeaturedTrip = () => {
-    const upcoming = filteredTrips.filter(trip => {
-      const start = new Date(trip.startDate);
-      start.setHours(0, 0, 0, 0);
-      return start >= today;
-    });
-    if (upcoming.length > 0) {
-      const sorted = [...upcoming].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-      return { trip: sorted[0], type: 'upcoming' as const };
+    if (activeOrUpcomingTrips.length === 0) return null;
+    const inProgress = activeOrUpcomingTrips.filter(trip => deriveTripStatus(trip) === 'active');
+    if (inProgress.length > 0) {
+      return { trip: inProgress[0], type: 'active' as const };
     }
-    const past = filteredTrips.filter(trip => {
-      const start = new Date(trip.startDate);
-      start.setHours(0, 0, 0, 0);
-      return start < today;
-    });
-    if (past.length > 0) {
-      const sorted = [...past].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-      return { trip: sorted[0], type: 'past' as const };
-    }
-    return null;
+    const sorted = [...activeOrUpcomingTrips].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+    return { trip: sorted[0], type: 'upcoming' as const };
   };
 
   const featuredInfo = getFeaturedTrip();
   const featuredTrip = featuredInfo?.trip || null;
 
-  const otherUpcomingTrips = filteredTrips
-    .filter(trip => {
-      if (featuredTrip && trip.id === featuredTrip.id) return false;
-      const end = new Date(trip.endDate);
-      end.setHours(0, 0, 0, 0);
-      return end >= today;
-    })
+  const otherUpcomingTrips = activeOrUpcomingTrips
+    .filter(trip => !featuredTrip || trip.id !== featuredTrip.id)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
 
   const pastTrips = filteredTrips
-    .filter(trip => {
-      if (featuredTrip && trip.id === featuredTrip.id) return false;
-      const end = new Date(trip.endDate);
-      end.setHours(0, 0, 0, 0);
-      return end < today;
-    })
+    .filter(trip => isTripCompleted(trip))
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 
   // Multi-destination support: a trip's destination can list several stops
@@ -992,16 +916,18 @@ export default function TripsScreen() {
           <Text style={[styles.stickyHeaderTitle, { color: colors.text }]}>Adventures</Text>
         </Animated.View>
 
-        <View style={styles.headerActions}>
-          <InteractiveButton onPress={() => router.push('/trip/join')} style={[styles.smallActionButton, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
-            <Ionicons name="enter-outline" size={14} color={colors.brand} style={{ marginRight: 4 }} />
-            <Text style={[styles.smallActionButtonText, { color: colors.brand }]}>Join</Text>
-          </InteractiveButton>
-          <InteractiveButton onPress={() => router.push('/trip/create')} style={[styles.smallActionButton, { backgroundColor: colors.brand, borderColor: colors.brand }]}>
-            <Ionicons name="add" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
-            <Text style={[styles.smallActionButtonText, { color: '#FFFFFF' }]}>Create</Text>
-          </InteractiveButton>
-        </View>
+        {trips.length > 0 && (
+          <View style={styles.headerActions}>
+            <InteractiveButton onPress={() => router.push('/trip/join')} style={[styles.smallActionButton, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
+              <Ionicons name="enter-outline" size={14} color={colors.brand} style={{ marginRight: 4 }} />
+              <Text style={[styles.smallActionButtonText, { color: colors.brand }]}>Join</Text>
+            </InteractiveButton>
+            <InteractiveButton onPress={() => router.push('/trip/create')} style={[styles.smallActionButton, { backgroundColor: colors.brand, borderColor: colors.brand }]}>
+              <Ionicons name="add" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
+              <Text style={[styles.smallActionButtonText, { color: '#FFFFFF' }]}>Create</Text>
+            </InteractiveButton>
+          </View>
+        )}
       </View>
 
       {isLoading ? (
@@ -1147,17 +1073,32 @@ export default function TripsScreen() {
               )}
 
               {pastTrips.length > 0 && (
-                <View style={styles.scrapbookContainer}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Ionicons name="images-outline" size={15} color={colors.textSecondary} />
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PAST MEMORIES SCRAPBOOK</Text>
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  onPress={() => router.push({ pathname: '/(tabs)/explore', params: { tab: 'albums' } } as any)}
+                  style={[
+                    styles.albumBannerCard,
+                    { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={[styles.albumIconBox, { backgroundColor: colors.brandLight }]}>
+                      <Ionicons name="images" size={20} color={colors.brand} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.albumBannerTitle, { color: colors.text }]}>
+                        {pastTrips.length} {pastTrips.length === 1 ? 'Trip Memory' : 'Trip Memories'} in Albums
+                      </Text>
+                      <Text style={[styles.albumBannerSub, { color: colors.textMuted }]}>
+                        View your completed memories scrapbook & collection map
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.scrapbookGrid}>
-                    {pastTrips.map((item) => (
-                      <ScrapbookCard key={item.id} trip={item} colors={colors} isDark={isDark} router={router} />
-                    ))}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>Open</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
             </>
           ) : (
@@ -1279,7 +1220,7 @@ const styles = StyleSheet.create({
   smallActionButtonText: { fontFamily: 'Poppins-Bold', fontWeight: '700', fontSize: 12 },
   listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
   titleContainer: { marginTop: 10, marginBottom: 20 },
-  pageTitle: { fontFamily: 'Poppins-Bold', fontWeight: '700', fontSize: 28, letterSpacing: -0.5 },
+  pageTitle: { fontFamily: 'Poppins-ExtraBold', fontWeight: '800', fontSize: 30, letterSpacing: -0.7, lineHeight: 36 },
   pageSubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, marginTop: 2 },
   searchBarRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'center' },
   searchBar: {
@@ -1295,19 +1236,35 @@ const styles = StyleSheet.create({
   segmentedTabText: { fontSize: 12 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   sectionTitle: { fontSize: 11, fontFamily: 'Poppins-Bold', textTransform: 'uppercase', letterSpacing: 1.2 },
-  scrapbookContainer: { width: '100%' },
-  scrapbookGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  polaroidCard: { borderRadius: 16, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
-  polaroidImageWrapper: { position: 'relative', height: 105, width: '100%', borderRadius: 10, overflow: 'hidden' },
-  polaroidPhoto: { height: '100%', width: '100%', resizeMode: 'cover' },
-  polaroidBanner: { position: 'absolute', bottom: 6, left: 6, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
-  polaroidBannerText: { color: '#FFFFFF', fontSize: 7, fontFamily: 'Poppins-Bold', letterSpacing: 0.5 },
-  polaroidInfo: { paddingTop: 10, paddingBottom: 4, paddingHorizontal: 2 },
-  polaroidDest: { fontSize: 8, fontFamily: 'Poppins-Bold', letterSpacing: 0.8 },
-  polaroidTitle: { fontSize: 12, fontFamily: 'Poppins-Bold', lineHeight: 16, marginVertical: 1 },
-  polaroidDate: { fontSize: 9, fontFamily: 'Poppins-Medium' },
-  polaroidAction: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 2 },
-  polaroidActionText: { fontSize: 9, fontFamily: 'Poppins-Bold' },
+  albumBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 18,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  albumIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  albumBannerTitle: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Bold',
+  },
+  albumBannerSub: {
+    fontSize: 10.5,
+    fontFamily: 'Poppins-Regular',
+    marginTop: 1,
+  },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50 },
   emptyTitle: { fontFamily: 'Poppins-Bold', fontSize: 18, marginBottom: 6, marginTop: 8 },
   emptySubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 20, paddingHorizontal: 10 },
@@ -1418,4 +1375,79 @@ const styles = StyleSheet.create({
   v2StateIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   v2StateTitle: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700' },
   v2StateBody: { fontSize: 13, fontFamily: 'Poppins-Regular', textAlign: 'center', lineHeight: 19, maxWidth: 280 },
+
+  // ---- Debug delete styles ----
+  debugBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  debugTripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  debugTripTitle: { fontSize: 13, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
+  debugTripMeta: { fontSize: 11, fontFamily: 'Poppins-Regular', marginTop: 2 },
+  debugDeleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    backgroundColor: '#FEE2E2',
+  },
+
+  // ---- Delete confirmation modal ----
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  deleteModalCard: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  deleteModalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  deleteModalTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 8 },
+  deleteModalBody: { fontSize: 13, fontFamily: 'Poppins-Regular', textAlign: 'center', lineHeight: 20, marginBottom: 22 },
+  deleteModalActions: { flexDirection: 'row', gap: 10, width: '100%' },
+  deleteModalBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalBtnText: { fontSize: 14, fontFamily: 'Poppins-Bold', fontWeight: '700' },
 });

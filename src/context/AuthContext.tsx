@@ -9,11 +9,14 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
+import * as Linking from 'expo-linking';
 import { supabase } from '../services/supabase';
 import {
   signIn as _signIn,
   signUp as _signUp,
   signOut as _signOut,
+  signInWithGoogle as _signInWithGoogle,
+  completeOAuthSignIn,
   getCurrentProfile,
   UserProfile,
 } from '../services/authService';
@@ -25,6 +28,7 @@ interface AuthContextValue {
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -62,12 +66,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [loadProfile]);
 
+  // Catch the OAuth redirect coming back into the app as a deep link. Covers
+  // both a cold start (getInitialURL) and the app already running (listener).
+  useEffect(() => {
+    let cancelled = false;
+
+    const handleUrl = async (url: string | null) => {
+      if (!url || cancelled) return;
+      const { handled, error } = await completeOAuthSignIn(url);
+      if (handled && error) console.warn('Google sign-in failed:', error);
+    };
+
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => { handleUrl(url); });
+
+    return () => { cancelled = true; sub.remove(); };
+  }, []);
+
   const signIn = useCallback(async (email: string, password: string) => {
     return _signIn(email, password);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
     return _signUp(email, password, name);
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    return _signInWithGoogle();
   }, []);
 
   const signOut = useCallback(async () => {
@@ -81,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   return (
-    <AuthContext.Provider value={{ session, profile, isLoading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, profile, isLoading, signIn, signUp, signInWithGoogle, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

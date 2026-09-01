@@ -211,6 +211,17 @@ export default function ProfileScreen() {
               onPress={() => setShowPreferences(true)}
             />
 
+            {/* Subscription */}
+            <ProfileSettingRow
+              iconName="ribbon-outline"
+              iconColor="#F59E0B"
+              iconBgColor={isDark ? '#2E2718' : '#FFFBEB'}
+              title="Subscription"
+              subtitle="Your plan and what it includes"
+              colors={colors}
+              onPress={() => router.push('/subscription')}
+            />
+
             {/* Replay App Tour */}
             <ProfileSettingRow
               iconName="play-circle-outline"

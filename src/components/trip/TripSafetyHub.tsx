@@ -1,21 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
+  StyleSheet, View, Text, ScrollView, Alert, Image, Modal, Animated, Easing, Pressable,
   ActivityIndicator,
-  Image,
-  Modal,
-  Animated,
-  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { toggleCheckIn as dbToggleCheckIn } from '../../services/tripService';
+import {
+  toggleCheckIn as dbToggleCheckIn,
+  addAnnouncement as dbAddAnnouncement,
+  addPoll as dbAddPoll,
+} from '../../services/tripService';
 import TripGuardian from './TripGuardian';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  ScreenHeader, Section, SectionLabel, ListGroup, ListRow, Segmented,
+  Button, EmptyState, Txt, Badge, Avatar, IconButton, Sheet, ProgressBar, Press,
+} from '../ui/primitives';
+import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
 
 interface TripSafetyHubProps {
   trip: any;
@@ -25,634 +26,554 @@ interface TripSafetyHubProps {
   initialTab?: 'safety' | 'tracking';
 }
 
-const TABS = [
-  { id: 'safety',   label: 'Safety',   icon: 'checkmark-circle-outline' },
-  { id: 'tracking', label: 'Tracking', icon: 'location-outline' },
-] as const;
-
 type Tab = 'safety' | 'tracking';
 
+/** memberId -> ISO timestamp of arrival, keyed by stop. */
+type Arrivals = Record<string, Record<string, string>>;
+
+/** Minutes since midnight for a "10:00 AM" style label. */
+function parseClock(t?: string): number | null {
+  const m = (t || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const ap = m[3]?.toUpperCase();
+  if (ap === 'PM' && h < 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + parseInt(m[2], 10);
+}
+
+/** How late an arrival was against the stop's scheduled time. */
+function minutesLate(scheduled?: string, arrivedISO?: string): number | null {
+  const sched = parseClock(scheduled);
+  if (sched == null || !arrivedISO) return null;
+  const d = new Date(arrivedISO);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getHours() * 60 + d.getMinutes() - sched;
+}
+
+function lateLabel(mins: number | null): string {
+  if (mins == null) return '';
+  if (mins <= 2) return 'on time';
+  if (mins < 60) return `${mins} min late`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m late` : `${h}h late`;
+}
+
+function clockOf(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function TripSafetyHub({
-  trip,
-  colors,
-  currentUserName,
-  loadTrip,
-  initialTab = 'safety',
+  trip, currentUserName, loadTrip, initialTab = 'safety',
 }: TripSafetyHubProps) {
-  const [currentTab, setCurrentTab] = useState<Tab>(initialTab);
-  const [failedAvatars, setFailedAvatars] = useState(new Set<string>());
+  const { colors, isDark } = useTheme();
+  const sc = stateColor(isDark);
 
-  // Per-stop roll-call state: Map of stopId -> Set of member IDs who arrived
-  const [stopArrivals, setStopArrivals] = useState<Record<string, Set<string>>>({});
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [arrivals, setArrivals] = useState<Arrivals>({});
+  const [stopIndex, setStopIndex] = useState(0);
 
-  // Which stop's QR is being shown (organizer) / being scanned (member)
-  const [activeQrStop, setActiveQrStop] = useState<any>(null);
-  const [qrModalVisible, setQrModalVisible] = useState(false);
-  const [scannerModalVisible, setScannerModalVisible] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
-  const laserAnim = React.useRef(new Animated.Value(0)).current;
-  const hasScannedRef = React.useRef(false);
-
-  // Camera permissions
   const [permission, requestPermission] = useCameraPermissions();
+  const laser = useRef(new Animated.Value(0)).current;
+  const scannedRef = useRef(false);
 
-  // ── Member info ──
-  const currentUserMember = trip.members.find((m: any) => m.name === currentUserName);
-  const isOrganizer = currentUserMember?.role === 'organizer';
+  const members = trip.members ?? [];
+  const me = members.find((m: any) => m.name === currentUserName);
+  const isOrganizer = me?.role === 'organizer';
 
-  // Group itinerary stops by day
-  const itinerary: any[] = trip.itinerary || [];
-  const days = Array.from(new Set(itinerary.map((i: any) => i.dayIndex))).sort((a, b) => a - b);
+  // Every stop across every day, in the order the group will do them.
+  const stops = useMemo(() => {
+    const parse = (t: string) => {
+      const m = (t || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (!m) return 0;
+      let h = parseInt(m[1], 10);
+      if (m[3]?.toUpperCase() === 'PM' && h < 12) h += 12;
+      if (m[3]?.toUpperCase() === 'AM' && h === 12) h = 0;
+      return h * 60 + parseInt(m[2], 10);
+    };
+    return [...(trip.itinerary || [])].sort(
+      (a: any, b: any) => a.dayIndex - b.dayIndex || parse(a.time) - parse(b.time)
+    );
+  }, [trip.itinerary]);
 
-  // ── Helpers ──
-  const getStopArrivals = (stopId: string): Set<string> =>
-    stopArrivals[stopId] || new Set<string>();
+  const current = stops[stopIndex];
+  const currentArrivals = current ? (arrivals[current.id] || {}) : {};
+  const arrivedCount = Object.keys(currentArrivals).length;
+  const iArrived = !!(me && currentArrivals[me.id]);
 
-  const markArrived = (stopId: string, memberId: string) => {
-    setStopArrivals(prev => {
-      const updated = new Set(prev[stopId] || new Set<string>());
-      updated.add(memberId);
-      return { ...prev, [stopId]: updated };
+  const markArrived = (stopId: string, memberId: string) =>
+    setArrivals(prev => ({
+      ...prev,
+      [stopId]: { ...(prev[stopId] || {}), [memberId]: new Date().toISOString() },
+    }));
+
+  const undoArrival = (stopId: string, memberId: string) =>
+    setArrivals(prev => {
+      const next = { ...(prev[stopId] || {}) };
+      delete next[memberId];
+      return { ...prev, [stopId]: next };
     });
-  };
 
-  const handleManualArrived = async (stop: any) => {
-    if (!currentUserMember) return;
-    markArrived(stop.id, currentUserMember.id);
-    // Also sync global check-in to DB
-    const { error } = await dbToggleCheckIn(trip.id, false);
-    if (error) {
-      Alert.alert('Error', error);
-    } else {
-      loadTrip();
+  const handleArrive = async (stop: any, memberId: string) => {
+    markArrived(stop.id, memberId);
+    // Keep the trip-level check-in in sync for the member marking themselves.
+    if (me && memberId === me.id) {
+      const { error } = await dbToggleCheckIn(trip.id, false);
+      if (error) Alert.alert('Could not check in', error);
+      else loadTrip();
     }
   };
 
-  const handleScanSuccess = async (stop: any) => {
-    setIsScanning(true);
-    if (currentUserMember) {
-      markArrived(stop.id, currentUserMember.id);
-    }
-    const { error } = await dbToggleCheckIn(trip.id, false);
-    setIsScanning(false);
-    setScannerModalVisible(false);
-    setActiveQrStop(null);
-    if (error) {
-      Alert.alert('Scan Failed', error);
-    } else {
-      loadTrip();
-      Alert.alert('Arrived!', `You have been marked as arrived at "${stop.title}".`);
-    }
+  const handleScanned = async (stop: any) => {
+    setScanning(true);
+    if (me) await handleArrive(stop, me.id);
+    setScanning(false);
+    setScanOpen(false);
   };
 
   const onBarcodeScanned = ({ data }: { data: string }) => {
-    if (hasScannedRef.current || !activeQrStop) return;
-    // QR payload: tourgo:arrive:<tripId>:<stopId>
-    const expected = `tourgo:arrive:${trip.id}:${activeQrStop.id}`;
-    if (data === expected) {
-      hasScannedRef.current = true;
-      handleScanSuccess(activeQrStop);
+    if (scannedRef.current || !current) return;
+    if (data === `tourgo:arrive:${trip.id}:${current.id}`) {
+      scannedRef.current = true;
+      handleScanned(current);
     }
   };
 
-  React.useEffect(() => {
-    if (scannerModalVisible) {
-      hasScannedRef.current = false;
-      laserAnim.setValue(0);
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(laserAnim, {
-            toValue: 1,
-            duration: 1500,
-            easing: Easing.linear,
-            useNativeDriver: true,
-          }),
-          Animated.timing(laserAnim, {
-            toValue: 0,
-            duration: 1500,
-            easing: Easing.linear,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      return () => { laserAnim.stopAnimation(); };
+  useEffect(() => {
+    if (!scanOpen) return;
+    scannedRef.current = false;
+    laser.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(laser, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(laser, { toValue: 0, duration: 1500, easing: Easing.linear, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scanOpen]);
+
+  const openScanner = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert('Camera needed', 'Allow camera access to scan the arrival code.');
+        return;
+      }
     }
-  }, [scannerModalVisible]);
+    setScanOpen(true);
+  };
 
-  // ── Per-stop Roll-Call Card ──
-  const renderStopRollCall = (stop: any) => {
-    const arrivals = getStopArrivals(stop.id);
-    const arrivedCount = arrivals.size;
-    const totalCount = trip.members.length;
-    const progress = totalCount > 0 ? Math.round((arrivedCount / totalCount) * 100) : 0;
-    const currentUserArrived = currentUserMember ? arrivals.has(currentUserMember.id) : false;
+  /** Attendance across the whole trip, per member — connects roll call to the
+   *  full itinerary rather than just the stop in front of you. */
+  const tripSummary = useMemo(() => {
+    return members.map((m: any) => {
+      let present = 0;
+      let lateTotal = 0;
+      let lateStops = 0;
+      for (const st of stops) {
+        const at = arrivals[st.id]?.[m.id];
+        if (!at) continue;
+        present += 1;
+        const late = minutesLate(st.time, at);
+        if (late != null && late > 2) { lateTotal += late; lateStops += 1; }
+      }
+      return { member: m, present, lateStops, lateTotal };
+    }).sort((a: any, b: any) => b.present - a.present);
+  }, [members, stops, arrivals]);
 
-    return (
-      <View
-        key={stop.id}
-        style={{
-          backgroundColor: colors.card,
-          borderRadius: 20,
-          marginBottom: 14,
-          overflow: 'hidden',
-          shadowColor: '#0F172A',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.06,
-          shadowRadius: 10,
-          elevation: 2,
-        }}
-      >
-        {/* Stop Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: 14,
-          gap: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.cardBorder,
-        }}>
-          <View style={{
-            width: 34,
-            height: 34,
-            borderRadius: 17,
-            backgroundColor: arrivedCount === totalCount ? '#ECFDF5' : colors.brandLight,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}>
-            <Ionicons
-              name={arrivedCount === totalCount ? 'checkmark-done' : 'location-outline'}
-              size={16}
-              color={arrivedCount === totalCount ? '#10B981' : colors.brand}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }} numberOfLines={1}>
-              {stop.title}
-            </Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textSecondary }}>
-              {stop.time}{stop.location ? ` · ${stop.location}` : ''}
-            </Text>
-          </View>
-          {/* Progress badge */}
-          <View style={{
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 20,
-            backgroundColor: arrivedCount === totalCount ? '#ECFDF5' : colors.surface,
-            borderWidth: 1,
-            borderColor: arrivedCount === totalCount ? '#6EE7B7' : colors.cardBorder,
-          }}>
-            <Text style={{
-              fontSize: 11,
-              fontFamily: 'Poppins-Bold',
-              color: arrivedCount === totalCount ? '#065F46' : colors.textSecondary,
-            }}>
-              {arrivedCount}/{totalCount}
-            </Text>
-          </View>
-        </View>
+  /** Post a notice to the group naming who we're waiting on — reuses the
+   *  existing Announcements feature instead of inventing a new channel. */
+  const handleNudge = async (waiting: any[]) => {
+    if (waiting.length === 0 || !current) return;
+    const names = waiting.map((m: any) => m.name).join(', ');
+    setNudging(true);
+    try {
+      const { error } = await dbAddAnnouncement(
+        trip.id,
+        `Waiting at ${current.title}`,
+        `Still waiting on ${names} at ${current.title}` +
+          (current.time ? ` (scheduled ${current.time}).` : '.') +
+          ' Please check in when you arrive.',
+        true,
+      );
+      if (error) Alert.alert('Could not post', error);
+      else Alert.alert('Posted', 'The group has been notified in Announcements.');
+    } finally {
+      setNudging(false);
+    }
+  };
 
-        {/* Progress bar */}
-        <View style={{ height: 4, backgroundColor: colors.surface, width: '100%' }}>
-          <View style={{ height: '100%', width: `${progress}%`, backgroundColor: '#10B981' }} />
-        </View>
+  /** Put "wait or move on" to the group as a real poll — the decision a late
+   *  arrival actually forces, answered in the Decisions tab everyone can see. */
+  const handleWaitPoll = async (waiting: any[]) => {
+    if (waiting.length === 0 || !current) return;
+    const names = waiting.length === 1
+      ? waiting[0].name
+      : `${waiting.length} people`;
 
-        {/* Member roll-call list */}
-        <View style={{ padding: 12, gap: 6 }}>
-          {trip.members.map((member: any, idx: number) => {
-            const isArrived = arrivals.has(member.id);
-            return (
-              <View
-                key={member.id || idx}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  paddingVertical: 6,
-                  paddingHorizontal: 4,
-                  borderRadius: 10,
-                  backgroundColor: isArrived ? '#F0FDF4' : 'transparent',
-                }}
-              >
-                {/* Avatar */}
-                <View style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  borderWidth: 1.5,
-                  borderColor: isArrived ? '#10B981' : colors.cardBorder,
-                  backgroundColor: isArrived ? '#ECFDF5' : colors.surface,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  overflow: 'hidden',
-                }}>
-                  {member.avatar_url && !failedAvatars.has(member.avatar_url) ? (
-                    <Image
-                      source={{ uri: member.avatar_url }}
-                      style={{ width: 30, height: 30 }}
-                      onError={() => setFailedAvatars(prev => new Set(prev).add(member.avatar_url))}
-                    />
-                  ) : (
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: isArrived ? '#10B981' : colors.textSecondary }}>
-                      {member.name.charAt(0).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
+    const question = `We're waiting on ${names} at ${current.title}. What should we do?`;
+    const options = ['Wait 15 more minutes', 'Wait 30 more minutes', 'Move on to the next stop'];
 
-                {/* Name */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }} numberOfLines={1}>
-                    {member.name}
-                  </Text>
-                  <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: isArrived ? '#10B981' : colors.textMuted }}>
-                    {member.role === 'organizer' ? 'Coordinator' : 'Traveler'}
-                  </Text>
-                </View>
-
-                {/* Status */}
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  paddingHorizontal: 8,
-                  paddingVertical: 3,
-                  borderRadius: 20,
-                  backgroundColor: isArrived ? '#D1FAE5' : colors.surface,
-                  borderWidth: 1,
-                  borderColor: isArrived ? '#6EE7B7' : colors.cardBorder,
-                }}>
-                  <Ionicons
-                    name={isArrived ? 'checkmark-circle' : 'time-outline'}
-                    size={10}
-                    color={isArrived ? '#10B981' : colors.textMuted}
-                  />
-                  <Text style={{ fontSize: 9, fontFamily: 'Poppins-Bold', color: isArrived ? '#065F46' : colors.textMuted }}>
-                    {isArrived ? 'Arrived' : 'Pending'}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Action buttons */}
-        <View style={{ flexDirection: 'row', gap: 8, padding: 12, paddingTop: 4 }}>
-          {/* Manual arrived (for self if not yet arrived) */}
-          {!currentUserArrived && (
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                backgroundColor: '#14B8A6',
-                borderRadius: 10,
-                paddingVertical: 10,
-              }}
-              onPress={() => handleManualArrived(stop)}
-            >
-              <Ionicons name="checkmark-circle-outline" size={13} color="#FFFFFF" />
-              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>
-                I Arrived
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Organizer: show QR */}
-          {isOrganizer && (
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                backgroundColor: colors.brand,
-                borderRadius: 10,
-                paddingVertical: 10,
-              }}
-              onPress={() => {
-                setActiveQrStop(stop);
-                setQrModalVisible(true);
-              }}
-            >
-              <Ionicons name="qr-code-outline" size={13} color="#FFFFFF" />
-              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>
-                Show QR
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Member: scan QR */}
-          {!isOrganizer && !currentUserArrived && (
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                backgroundColor: '#10B981',
-                borderRadius: 10,
-                paddingVertical: 10,
-              }}
-              onPress={() => {
-                setActiveQrStop(stop);
-                setScannerModalVisible(true);
-              }}
-            >
-              <Ionicons name="camera-outline" size={13} color="#FFFFFF" />
-              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>
-                Scan QR
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+    Alert.alert(
+      'Ask the group?',
+      `${question}\n\n· ${options.join('\n· ')}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Create poll',
+          onPress: async () => {
+            setPolling(true);
+            try {
+              const { error } = await dbAddPoll(trip.id, question, options.map(text => ({ text })), false);
+              if (error) Alert.alert('Could not create poll', error);
+              else Alert.alert('Poll created', 'The group can vote in Decisions.');
+            } finally {
+              setPolling(false);
+            }
+          },
+        },
+      ]
     );
   };
 
-  // ── Render Safety tab ──
-  const renderSafetyPanel = () => {
-    const totalCheckedIn = trip.members.filter((m: any) => m.checkedIn).length;
+  // ── Roll call ──
+  const renderRollCall = () => {
+    if (stops.length === 0) {
+      return (
+        <EmptyState
+          icon="location-outline"
+          title="No stops to check into"
+          description="Add stops to the itinerary and the group can confirm arrival at each one."
+        />
+      );
+    }
+
+    const pending = members.filter((m: any) => !currentArrivals[m.id]);
+    const arrived = members
+      .filter((m: any) => currentArrivals[m.id])
+      .sort((a: any, b: any) => currentArrivals[a.id].localeCompare(currentArrivals[b.id]));
 
     return (
-      <ScrollView
-        contentContainerStyle={styles.panelScroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Overall progress summary */}
-        <View style={{
-          flexDirection: 'row',
-          gap: 8,
-          marginBottom: 20,
-        }}>
-          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
-            <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#10B981' }}>{totalCheckedIn}</Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Arrived</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
-            <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#F59E0B' }}>{trip.members.length - totalCheckedIn}</Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>En Route</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: colors.card }]}>
-            <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#14B8A6' }}>{itinerary.length}</Text>
-            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Stops</Text>
-          </View>
-        </View>
-
-        {/* Per-destination roll-call sections */}
-        {itinerary.length === 0 ? (
-          <View style={{ alignItems: 'center', padding: 40, gap: 10 }}>
-            <Ionicons name="map-outline" size={40} color={colors.textMuted} />
-            <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textAlign: 'center' }}>
-              No itinerary stops yet
-            </Text>
-            <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textMuted, textAlign: 'center' }}>
-              Add destinations in the Itinerary tab to enable per-stop roll-call.
-            </Text>
-          </View>
-        ) : (
-          days.map(day => {
-            const dayStops = itinerary.filter((i: any) => i.dayIndex === day);
-            return (
-              <View key={day} style={{ marginBottom: 8 }}>
-                {/* Day header */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <View style={{ height: 1, flex: 1, backgroundColor: colors.cardBorder }} />
-                  <View style={{
-                    backgroundColor: colors.brandLight,
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 20,
-                  }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand, textTransform: 'uppercase' }}>
-                      Day {day + 1}
-                    </Text>
-                  </View>
-                  <View style={{ height: 1, flex: 1, backgroundColor: colors.cardBorder }} />
-                </View>
-
-                {dayStops.map(stop => renderStopRollCall(stop))}
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-    );
-  };
-
-  // ── Render Tracking tab ──
-  const renderTrackingPanel = () => (
-    <TripGuardian
-      trip={trip}
-      colors={colors}
-      loadTrip={loadTrip}
-      hideHeader={true}
-    />
-  );
-
-  return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Panel content — full screen background! */}
-      <View style={StyleSheet.absoluteFillObject}>
-        {currentTab === 'safety' && renderSafetyPanel()}
-        {currentTab === 'tracking' && renderTrackingPanel()}
-      </View>
-
-      {/* Floating Tab bar */}
-      <View style={[styles.tabsOuter, { backgroundColor: colors.card + 'D8', borderColor: colors.cardBorder }]}>
-        {TABS.map((tab) => {
-          const isActive = currentTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tabItem, isActive && [styles.tabItemActive, { backgroundColor: colors.surface }]]}
-              onPress={() => setCurrentTab(tab.id)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.tabItemInner}>
-                <Ionicons
-                  name={tab.icon as any}
-                  size={14}
-                  color={isActive ? colors.brand : colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.tabItemLabel,
-                    {
-                      color: isActive ? colors.text : colors.textSecondary,
-                      fontFamily: isActive ? 'Poppins-Bold' : 'Poppins-Medium',
-                    },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* QR Code Modal for Organizer (per stop) */}
-      <Modal
-        visible={qrModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setQrModalVisible(false); setActiveQrStop(null); }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: colors.card, padding: 24, borderRadius: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 15, elevation: 10, width: '90%' }}>
-            <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text }}>Roll-Call QR Code</Text>
-              <TouchableOpacity onPress={() => { setQrModalVisible(false); setActiveQrStop(null); }}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {activeQrStop && (
-              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.brand, marginBottom: 12 }} numberOfLines={1}>
-                {activeQrStop.title}
-              </Text>
-            )}
-
-            <Text style={{ fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 }}>
-              Display this QR for travelers to scan when they arrive at this stop.
-            </Text>
-
-            <View style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder, marginBottom: 20 }}>
-              {activeQrStop && (
-                <Image
-                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=tourgo:arrive:${trip.id}:${activeQrStop.id}&color=14B8A6` }}
-                  style={{ width: 200, height: 200 }}
-                />
+      <>
+        {/* ── Current stop ── */}
+        <Section>
+          <View style={[styles.stopCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.md }}>
+              <Txt variant="overline" tone="accent" uppercase style={{ flex: 1 }}>
+                Day {(current.dayIndex ?? 0) + 1} · Stop {stopIndex + 1} of {stops.length}
+              </Txt>
+              {arrivedCount === members.length && members.length > 0 && (
+                <Badge label="All here" tone="positive" />
               )}
             </View>
 
-            {/* Attendance for this stop */}
-            {activeQrStop && (
-              <View style={{ width: '100%', backgroundColor: colors.surface, padding: 12, borderRadius: 14, borderWidth: 0.5, borderColor: colors.cardBorder, alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Roll Call Progress
-                </Text>
-                <Text style={{ fontSize: 18, fontFamily: 'Poppins-ExtraBold', color: '#10B981', marginTop: 4 }}>
-                  {getStopArrivals(activeQrStop.id).size} / {trip.members.length} Arrived
-                </Text>
-              </View>
-            )}
+            <Txt variant="title" numberOfLines={2}>{current.title}</Txt>
+            <Txt variant="subhead" tone="muted" numberOfLines={1} style={{ marginTop: space.xs }}>
+              {[current.time, current.location].filter(Boolean).join(' · ')}
+            </Txt>
 
-            <TouchableOpacity
-              style={{ width: '100%', height: 44, backgroundColor: colors.brand, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}
-              onPress={() => { setQrModalVisible(false); setActiveQrStop(null); }}
-            >
-              <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Scanner Modal for Members (per stop) */}
-      <Modal
-        visible={scannerModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setScannerModalVisible(false); setActiveQrStop(null); }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: colors.card, padding: 24, borderRadius: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 15, elevation: 10, width: '90%' }}>
-            <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text }}>Scan Arrival QR</Text>
-              <TouchableOpacity onPress={() => { setScannerModalVisible(false); setActiveQrStop(null); }}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
+            <View style={{ marginTop: space.lg, marginBottom: space.sm }}>
+              <ProgressBar value={members.length ? arrivedCount / members.length : 0} />
             </View>
+            <Txt variant="footnote" tone="muted">
+              {arrivedCount} of {members.length} arrived
+            </Txt>
 
-            {activeQrStop && (
-              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.brand, marginBottom: 12 }} numberOfLines={1}>
-                {activeQrStop.title}
-              </Text>
-            )}
+            {/* Organizer advances the group through the itinerary */}
+            {isOrganizer && (
+              <View style={styles.navRow}>
+                <Press onPress={() => setStopIndex(i => Math.max(0, i - 1))} disabled={stopIndex === 0}>
+                  <View style={[styles.navBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+                    <Ionicons name="chevron-back" size={15} color={stopIndex === 0 ? colors.textMuted : colors.text} />
+                    <Text style={[T.emphasis, { color: stopIndex === 0 ? colors.textMuted : colors.text }]}>
+                      Previous
+                    </Text>
+                  </View>
+                </Press>
 
-            <Text style={{ fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
-              Align the organizer's QR code within the frame to mark your arrival.
-            </Text>
-
-            {/* Viewport or Permission Request */}
-            {!permission ? (
-              <View style={{ width: 220, height: 220, justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
-                <ActivityIndicator size="small" color="#10B981" />
-              </View>
-            ) : !permission.granted ? (
-              <View style={{ width: 220, height: 220, backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.cardBorder, padding: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 24, gap: 12 }}>
-                <Ionicons name="camera-outline" size={32} color={colors.textSecondary} />
-                <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', fontFamily: 'Poppins-Medium' }}>
-                  Camera access is required to scan QR codes.
-                </Text>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#10B981', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                  onPress={requestPermission}
+                <Press
+                  onPress={() => setStopIndex(i => Math.min(stops.length - 1, i + 1))}
+                  disabled={stopIndex >= stops.length - 1}
                 >
-                  <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Grant Permission</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ width: 220, height: 220, backgroundColor: '#000000', borderRadius: 18, borderWidth: 1.5, borderColor: '#10B981', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', position: 'relative', marginBottom: 24 }}>
-                <CameraView
-                  style={StyleSheet.absoluteFillObject}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                  onBarcodeScanned={onBarcodeScanned}
-                />
-
-                {/* Viewfinder corners */}
-                <View style={{ position: 'absolute', top: 12, left: 12, width: 20, height: 20, borderTopWidth: 2, borderLeftWidth: 2, borderColor: '#10B981' }} />
-                <View style={{ position: 'absolute', top: 12, right: 12, width: 20, height: 20, borderTopWidth: 2, borderRightWidth: 2, borderColor: '#10B981' }} />
-                <View style={{ position: 'absolute', bottom: 12, left: 12, width: 20, height: 20, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: '#10B981' }} />
-                <View style={{ position: 'absolute', bottom: 12, right: 12, width: 20, height: 20, borderBottomWidth: 2, borderRightWidth: 2, borderColor: '#10B981' }} />
-
-                {/* Laser line */}
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    left: 10,
-                    right: 10,
-                    height: 2,
-                    backgroundColor: '#10B981',
-                    shadowColor: '#10B981',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.8,
-                    shadowRadius: 4,
-                    elevation: 5,
-                    transform: [{
-                      translateY: laserAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-90, 90],
-                      }),
-                    }],
-                  }}
-                />
+                  <View style={[styles.navBtn, {
+                    backgroundColor: stopIndex >= stops.length - 1 ? colors.surface : colors.brand,
+                    borderColor: stopIndex >= stops.length - 1 ? colors.cardBorder : colors.brand,
+                  }]}>
+                    <Text style={[T.emphasis, {
+                      color: stopIndex >= stops.length - 1 ? colors.textMuted : '#FFFFFF',
+                    }]}>
+                      Next stop
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={15}
+                      color={stopIndex >= stops.length - 1 ? colors.textMuted : '#FFFFFF'}
+                    />
+                  </View>
+                </Press>
               </View>
             )}
+          </View>
+        </Section>
 
-            {isScanning ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <ActivityIndicator size="small" color="#10B981" />
-                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#10B981' }}>Verifying Code...</Text>
+        {/* ── Check-in action ── */}
+        <Section>
+          {isOrganizer ? (
+            <Button label="Show arrival code" icon="qr-code-outline" onPress={() => setQrOpen(true)} fullWidth />
+          ) : iArrived ? (
+            <Button
+              label="You are checked in"
+              variant="secondary"
+              icon="checkmark-circle-outline"
+              fullWidth
+              onPress={() => me && undoArrival(current.id, me.id)}
+            />
+          ) : (
+            <View style={{ gap: space.sm }}>
+              <Button label="Scan arrival code" icon="scan-outline" onPress={openScanner} fullWidth />
+              <Button
+                label="Mark me arrived"
+                variant="plain"
+                onPress={() => me && handleArrive(current, me.id)}
+                fullWidth
+              />
+            </View>
+          )}
+        </Section>
+
+        {/* ── Waiting on — links roll call to Announcements and Live location ── */}
+        {pending.length > 0 && arrivedCount > 0 && (
+          <Section>
+            <View style={[styles.waitCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                <Ionicons name="hourglass-outline" size={17} color={sc.attention} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt variant="emphasis">
+                    Waiting on {pending.length} {pending.length === 1 ? 'person' : 'people'}
+                  </Txt>
+                  <Txt variant="footnote" tone="muted" numberOfLines={1}>
+                    {pending.map((m: any) => m.name).join(', ')}
+                  </Txt>
+                </View>
               </View>
-            ) : (
-              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textSecondary, marginBottom: 12 }}>
-                Point camera at the organizer's QR for this stop
-              </Text>
-            )}
 
-            <TouchableOpacity
-              style={{ width: '100%', height: 44, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}
-              onPress={() => { setScannerModalVisible(false); setActiveQrStop(null); }}
-            >
-              <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Cancel</Text>
-            </TouchableOpacity>
+              {isOrganizer && (
+                <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg }}>
+                  {[
+                    { key: 'notify', icon: 'megaphone-outline', label: 'Announce', busy: nudging, onPress: () => handleNudge(pending) },
+                    { key: 'poll', icon: 'bar-chart-outline', label: 'Ask group', busy: polling, onPress: () => handleWaitPoll(pending) },
+                    { key: 'find', icon: 'navigate-outline', label: 'Locate', busy: false, onPress: () => setTab('tracking') },
+                  ].map((a: any) => (
+                    <Press key={a.key} onPress={a.onPress} disabled={a.busy} style={{ flex: 1 }}>
+                      <View style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+                        {a.busy
+                          ? <ActivityIndicator size="small" color={colors.brand} />
+                          : <Ionicons name={a.icon} size={17} color={colors.brand} />}
+                        <Text style={[T.caption, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
+                          {a.label}
+                        </Text>
+                      </View>
+                    </Press>
+                  ))}
+                </View>
+              )}
+            </View>
+          </Section>
+        )}
+
+        {/* ── Attendance ── */}
+        <Section>
+          <SectionLabel>Attendance · this stop</SectionLabel>
+          <ListGroup>
+            {[...arrived, ...pending].map((m: any) => {
+              const at = currentArrivals[m.id];
+              const here = !!at;
+              return (
+                <ListRow
+                  key={m.id}
+                  title={m.name === currentUserName ? `${m.name} (you)` : m.name}
+                  subtitle={
+                    here
+                      ? `Arrived ${clockOf(at)} · ${lateLabel(minutesLate(current.time, at))}`
+                      : m.location ? 'Not arrived · sharing location' : 'Not arrived'
+                  }
+                  leading={<Avatar name={m.name} uri={m.avatar_url || undefined} size={32} />}
+                  showChevron={false}
+                  // Organizers can mark anyone in or out for this stop
+                  onPress={
+                    isOrganizer
+                      ? () => (here ? undoArrival(current.id, m.id) : handleArrive(current, m.id))
+                      : undefined
+                  }
+                  trailing={
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                      {here ? (
+                        (() => {
+                          const late = minutesLate(current.time, at);
+                          const isLate = late != null && late > 2;
+                          return (
+                            <Text style={[T.emphasis, { color: isLate ? sc.attention : sc.positive }]}>
+                              {isLate ? `+${late}m` : 'on time'}
+                            </Text>
+                          );
+                        })()
+                      ) : m.location ? (
+                        <Ionicons name="location" size={14} color={colors.textMuted} />
+                      ) : null}
+                      <Ionicons
+                        name={here ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={19}
+                        color={here ? sc.positive : colors.textMuted}
+                      />
+                    </View>
+                  }
+                />
+              );
+            })}
+          </ListGroup>
+
+          <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.md }}>
+            {isOrganizer
+              ? 'Tap a member to mark them arrived or undo it.'
+              : 'Your organizer advances the group to the next stop.'}
+          </Txt>
+        </Section>
+
+        {/* ── Trip-wide record ── */}
+        <Section>
+          <Press onPress={() => setShowSummary(v => !v)}>
+            <View style={styles.summaryHead}>
+              <SectionLabel style={{ flex: 1, marginBottom: 0 }}>
+                Trip record · {stops.length} stops
+              </SectionLabel>
+              <Ionicons
+                name={showSummary ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={colors.textMuted}
+              />
+            </View>
+          </Press>
+
+          {showSummary && (
+            <ListGroup>
+              {tripSummary.map(({ member, present, lateStops, lateTotal }: any) => (
+                <ListRow
+                  key={member.id}
+                  title={member.name === currentUserName ? `${member.name} (you)` : member.name}
+                  subtitle={
+                    lateStops > 0
+                      ? `${lateStops} late arrival${lateStops === 1 ? '' : 's'} · ${lateTotal} min total`
+                      : present > 0 ? 'Always on time' : 'No check-ins yet'
+                  }
+                  leading={<Avatar name={member.name} uri={member.avatar_url || undefined} size={30} />}
+                  showChevron={false}
+                  trailing={
+                    <Text style={[T.mono, { color: present === stops.length && stops.length > 0 ? sc.positive : colors.textSecondary }]}>
+                      {present}/{stops.length}
+                    </Text>
+                  }
+                />
+              ))}
+            </ListGroup>
+          )}
+        </Section>
+      </>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.head}>
+        <ScreenHeader eyebrow={trip.destination} title="Safety" />
+        <Segmented<Tab>
+          value={tab}
+          onChange={setTab}
+          segments={[
+            { value: 'safety', label: 'Roll call' },
+            { value: 'tracking', label: 'Live location' },
+          ]}
+        />
+      </View>
+
+      {tab === 'tracking' ? (
+        <TripGuardian trip={trip} colors={undefined as any} loadTrip={loadTrip} hideHeader />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {renderRollCall()}
+        </ScrollView>
+      )}
+
+      {/* ── Organizer: arrival code ── */}
+      <Sheet visible={qrOpen} onClose={() => setQrOpen(false)} title={current?.title}>
+        <View style={{ alignItems: 'center' }}>
+          <Txt variant="subhead" tone="muted" align="center" style={{ marginBottom: space.xl }}>
+            Have the group scan this to confirm they have arrived.
+          </Txt>
+          <View style={[styles.qrFrame, { borderColor: colors.cardBorder }]}>
+            {!!current && (
+              <Image
+                source={{
+                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=0&data=tourgo:arrive:${trip.id}:${current.id}`,
+                }}
+                style={{ width: 220, height: 220 }}
+              />
+            )}
+          </View>
+          <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.xl }}>
+            {arrivedCount} of {members.length} arrived
+          </Txt>
+        </View>
+      </Sheet>
+
+      {/* ── Member: scanner ── */}
+      <Modal visible={scanOpen} animationType="slide" onRequestClose={() => setScanOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+          {scanOpen && (
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={onBarcodeScanned}
+            />
+          )}
+
+          <View style={styles.scanOverlay} pointerEvents="none">
+            <View style={styles.reticle}>
+              <Animated.View
+                style={[
+                  styles.laser,
+                  { transform: [{ translateY: laser.interpolate({ inputRange: [0, 1], outputRange: [0, 210] }) }] },
+                ]}
+              />
+            </View>
+          </View>
+
+          <View style={styles.scanHeader}>
+            <Pressable onPress={() => setScanOpen(false)} style={styles.scanClose}>
+              <Ionicons name="close" size={19} color="#FFFFFF" />
+            </Pressable>
+          </View>
+
+          <View style={styles.scanFooter}>
+            <Txt variant="headline" align="center" style={{ color: '#FFFFFF' }}>
+              {scanning ? 'Checking you in' : current?.title}
+            </Txt>
+            <Txt variant="subhead" align="center" style={{ color: 'rgba(255,255,255,0.7)', marginTop: space.xs }}>
+              {scanning ? 'One moment' : 'Point at the organizer’s code'}
+            </Txt>
           </View>
         </View>
       </Modal>
@@ -662,69 +583,80 @@ export default function TripSafetyHub({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  tabsOuter: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    zIndex: 99,
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+  head: { paddingHorizontal: space.xl, paddingTop: space.lg },
+  scroll: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: 120 },
+  stopCard: {
+    padding: space.xl,
+    borderRadius: radius.xl,
+    borderWidth: hairline,
   },
-  tabItem: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 11,
+  quickAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs + 1,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+    minHeight: 62,
+  },
+  waitCard: {
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+  },
+  summaryHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.xs,
+    marginBottom: space.sm,
+  },
+  navRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+    marginTop: space.xl,
+  },
+  navBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+    minWidth: 124,
+  },
+  qrFrame: {
+    padding: space.lg,
+    borderRadius: radius.xl,
+    borderWidth: hairline,
+    backgroundColor: '#FFFFFF',
+  },
+  scanOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabItemActive: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+  reticle: {
+    width: 240, height: 240,
+    borderRadius: radius.xxl,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    overflow: 'hidden',
   },
-  tabItemInner: {
+  laser: { height: 2, width: '100%', backgroundColor: 'rgba(255,255,255,0.9)' },
+  scanHeader: {
+    position: 'absolute',
+    top: 56, left: space.xl, right: space.xl,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
   },
-  tabItemLabel: {
-    fontSize: 12,
+  scanClose: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
-
-  panelScroll: {
-    paddingHorizontal: 16,
-    paddingTop: 80,
-    paddingBottom: 120,
-  },
-
-  statBox: {
-    flex: 1,
-    borderRadius: 18,
-    padding: 14,
-    alignItems: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-
-  capsLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  scanFooter: {
+    position: 'absolute',
+    left: space.xl, right: space.xl, bottom: 56,
   },
 });

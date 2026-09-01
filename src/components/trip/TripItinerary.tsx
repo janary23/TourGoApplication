@@ -30,6 +30,18 @@ import {
   suggestInteractiveStops,
   InteractiveSuggestedStop
 } from '../../services/aiService';
+import { estimateTravelMinutes, estimateDistanceKm } from '../../services/travelEstimate';
+import { findDuplicateActivities } from '../../services/itineraryInsights';
+import {
+  getWishlistSuggestions,
+  type WishlistSuggestion
+} from '../../services/wishlistSuggestions';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button,
+  Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section,
+} from '../ui/primitives';
+import { space, radius, hairline, type as T, stateColor, shadow } from '../ui/tokens';
 
 // Enable layout animation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -76,6 +88,9 @@ export default function TripItinerary({
   loadTrip,
 }: TripItineraryProps) {
   // Modal states
+  const { isDark } = useTheme();
+  const sc = stateColor(isDark);
+
   const [copilotModalVisible, setCopilotModalVisible] = useState(false);
   const [copilotTab, setCopilotTab] = useState<'day' | 'ai' | 'warnings'>('day');
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -91,6 +106,11 @@ export default function TripItinerary({
   const [rejectedSuggestions, setRejectedSuggestions] = useState<string[]>([]);
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [lastAddedPlace, setLastAddedPlace] = useState<string>('');
+
+  // Wishlist places the user already saved, offered as itinerary suggestions
+  const [wishlistSpots, setWishlistSpots] = useState<WishlistSuggestion[]>([]);
+  const [isLoadingWishlist, setIsLoadingWishlist] = useState(false);
+  const [addingWishlistId, setAddingWishlistId] = useState<string | null>(null);
 
   // Warnings engine states
   const [warnings, setWarnings] = useState<WarningItem[]>([]);
@@ -213,32 +233,9 @@ export default function TripItinerary({
     return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // Local travel estimation (in minutes)
-  const getTravelTimeMinutes = (locA: string, locB: string) => {
-    if (!locA || !locB) return 30;
-    const cleanA = locA.trim().toLowerCase();
-    const cleanB = locB.trim().toLowerCase();
-    if (cleanA === cleanB) return 10;
-
-    const isCebu = (s: string) => s.includes('cebu') || s.includes('mactan') || s.includes('airport') || s.includes('ocean park') || s.includes('temple of leah') || s.includes('tops');
-    const isMoalboal = (s: string) => s.includes('moalboal') || s.includes('sardine') || s.includes('panagsama');
-    const isOslob = (s: string) => s.includes('oslob') || s.includes('whale') || s.includes('sumilon');
-    const isKawasan = (s: string) => s.includes('kawasan') || s.includes('badian') || s.includes('falls');
-
-    if (isCebu(cleanA) && isMoalboal(cleanB)) return 150;
-    if (isMoalboal(cleanA) && isCebu(cleanB)) return 150;
-    if (isCebu(cleanA) && isOslob(cleanB)) return 180;
-    if (isOslob(cleanA) && isCebu(cleanB)) return 180;
-    if (isCebu(cleanA) && isKawasan(cleanB)) return 150;
-    if (isKawasan(cleanA) && isCebu(cleanB)) return 150;
-    
-    if (isMoalboal(cleanA) && isKawasan(cleanB)) return 45;
-    if (isKawasan(cleanA) && isMoalboal(cleanB)) return 45;
-    if (isMoalboal(cleanA) && isOslob(cleanB)) return 90;
-    if (isOslob(cleanA) && isMoalboal(cleanB)) return 90;
-
-    return 30;
-  };
+  // Local travel estimation (in minutes) — coordinate-based, with the original
+  // hardcoded Cebu routes preserved as overrides inside the shared estimator.
+  const getTravelTimeMinutes = (locA: string, locB: string) => estimateTravelMinutes(locA, locB);
 
   // Warning rules engine
   useEffect(() => {
@@ -273,32 +270,20 @@ export default function TripItinerary({
         const dayIdx = parseInt(dayKey);
         const dayStops = [...itemsByDay[dayIdx]].sort((a, b) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
 
-        // Duplicates
-        for (let i = 0; i < dayStops.length; i++) {
-          for (let j = i + 1; j < dayStops.length; j++) {
-            const itemA = dayStops[i];
-            const itemB = dayStops[j];
-            const titleA = itemA.title.toLowerCase();
-            const titleB = itemB.title.toLowerCase();
-
-            if (titleA === titleB || 
-                (titleA.includes('lunch') && titleB.includes('lunch')) || 
-                (titleA.includes('dinner') && titleB.includes('dinner')) || 
-                (titleA.includes('breakfast') && titleB.includes('breakfast')) ||
-                (titleA.includes('kawasan') && titleB.includes('kawasan')) ||
-                (titleA.includes('sardine') && titleB.includes('sardine'))) {
-              list.push({
-                id: `duplicate_${itemA.id}_${itemB.id}`,
-                type: 'duplicate',
-                title: 'Duplicate Activity Warning',
-                message: `"${itemA.title}" and "${itemB.title}" appear to be duplicate events on Day ${dayIdx + 1}.`,
-                itemId: itemA.id,
-                itemId2: itemB.id,
-                dayIndex: dayIdx
-              });
-            }
-          }
-        }
+        // Duplicates — same place added twice, or two stops of the same kind
+        // (two lunches, two café stops, ...). See services/itineraryInsights.
+        findDuplicateActivities(dayStops, dayIdx).forEach((dup) => {
+          list.push({
+            id: `duplicate_${dup.a.id}_${dup.b.id}`,
+            type: 'duplicate',
+            title: dup.kind === 'same_category' ? 'Repeated Activity Type' : 'Duplicate Activity Warning',
+            message: dup.message,
+            itemId: dup.a.id,
+            itemId2: dup.b.id,
+            dayIndex: dayIdx,
+            meta: { duplicateKind: dup.kind, category: dup.category }
+          });
+        });
 
         // Overlaps & Buffers
         for (let i = 0; i < dayStops.length - 1; i++) {
@@ -334,15 +319,17 @@ export default function TripItinerary({
               meta: { travelTime, recommendedTime: formatMinToTime(endMin + travelTime) }
             });
           } else if (travelTime >= 120) {
+            const km = estimateDistanceKm(current.location || current.title, next.location || next.title);
+            const distancePhrase = km ? ` They're roughly ${Math.round(km)} km apart.` : '';
             list.push({
               id: `too_far_${current.id}_${next.id}`,
               type: 'too_far_apart',
               title: 'Distant Locations',
-              message: `"${current.title}" and "${next.title}" are far apart. Travel takes over ${Math.round(travelTime/60)} hours.`,
+              message: `"${current.title}" and "${next.title}" are far apart. Travel takes over ${Math.round(travelTime/60)} hours.${distancePhrase} Consider choosing a closer activity or moving one to another day.`,
               itemId: current.id,
               itemId2: next.id,
               dayIndex: dayIdx,
-              meta: { travelTime }
+              meta: { travelTime, distanceKm: km ?? undefined }
             });
           }
         }
@@ -383,6 +370,68 @@ export default function TripItinerary({
   }, [trip.itinerary, dayDestinations]);
 
   // AI co-pilot actions
+  // Load the user's saved Wishlist places once the co-pilot sheet is opened,
+  // ranked against this trip's destination.
+  useEffect(() => {
+    if (!copilotModalVisible) return;
+    let cancelled = false;
+    setIsLoadingWishlist(true);
+    getWishlistSuggestions(trip.destination)
+      .then((spots) => {
+        if (!cancelled) setWishlistSpots(spots);
+      })
+      .catch((err) => console.warn('Failed to load wishlist suggestions:', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingWishlist(false);
+      });
+    return () => { cancelled = true; };
+  }, [copilotModalVisible, trip.destination]);
+
+  /** Add a saved Wishlist place straight into the day being planned. */
+  const handleAddWishlistStop = async (spot: WishlistSuggestion) => {
+    const warn = getPlaceWarning(spot.name);
+    const doAdd = async () => {
+      setAddingWishlistId(spot.id);
+      try {
+        const descParts = [
+          'Saved from your Wishlist.',
+          spot.bestTime ? `Best time: ${spot.bestTime}` : '',
+          spot.image ? `Image: ${spot.image}` : '',
+        ].filter(Boolean);
+
+        const { error } = await dbAddItineraryItem(
+          trip.id,
+          activeDay,
+          '10:00 AM',
+          spot.name,
+          descParts.join('\n'),
+          spot.locationLabel || spot.name
+        );
+        if (error) {
+          Alert.alert('Could not add stop', error);
+          return;
+        }
+        setLastAddedPlace(spot.name);
+        loadTrip();
+      } finally {
+        setAddingWishlistId(null);
+      }
+    };
+
+    if (warn) {
+      Alert.alert(
+        'Already on this day',
+        `${spot.name} — ${warn}. Add it anyway?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Add anyway', onPress: doAdd },
+        ]
+      );
+      return;
+    }
+    await doAdd();
+  };
+
   const handleConfirmDestination = (destText: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const updated = [...dayDestinations];
@@ -683,7 +732,7 @@ export default function TripItinerary({
   const handleCreatePollForStop = async (s: InteractiveSuggestedStop) => {
     const question = `Should we do "${s.title}" on Day ${activeDay + 1} at ${s.time}?`;
     const options = ["Yes, let's do it!", "No, skip this one"];
-    const { error } = await dbAddPoll(trip.id, question, options, false);
+    const { error } = await dbAddPoll(trip.id, question, options.map(text => ({ text })), false);
     if (error) {
       Alert.alert('Error', error);
       return;
@@ -708,7 +757,7 @@ export default function TripItinerary({
     setCopilotModalVisible(true);
   };
 
-  const isDarkTheme = colors.background === '#121212' || colors.surface === '#1E1E1E' || colors.card === '#1E1E1E';
+  const isDarkTheme = isDark;
 
   // Get active tab speech bubble guidelines
   const getContextMessage = () => {
@@ -725,172 +774,217 @@ export default function TripItinerary({
       : `I detected ${count} warning markers. Select fix parameters below to let me automatically align the durations.`;
   };
 
+  const activeWarnings = warnings.filter(w => !acknowledgedWarnings.includes(w.id));
+  const totalStops = (trip.itinerary || []).length;
+
   return (
     <View style={styles.container}>
-      {/* ── TOP ACTION ROW — eyebrow + title, no divider line, airy like a curated itinerary page ── */}
+      {/* ── Header ── */}
       <View style={styles.timelineHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.timelineEyebrow, { color: colors.brand }]} numberOfLines={1}>{trip.destination} · {duration}-day plan</Text>
-          <Text style={[styles.timelineHeaderTitle, { color: colors.text }]}>Your itinerary</Text>
+          <Txt variant="largeTitle">Itinerary</Txt>
+          <Txt variant="subhead" tone="muted" numberOfLines={1} style={{ marginTop: 2 }}>
+            {totalStops} {totalStops === 1 ? 'stop' : 'stops'} across {duration} {duration === 1 ? 'day' : 'days'}
+          </Txt>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            style={[styles.headerActionBtn, { backgroundColor: colors.surface }]}
-            onPress={handleOpenCustomAdd}
-          >
-            <Ionicons name="add" size={16} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerActionBtn, styles.headerActionBtnWide, { backgroundColor: colors.brand }]}
-            onPress={handleOpenCopilot}
-          >
-            <Ionicons name="sparkles" size={14} color="#FFFFFF" />
-            <Text style={styles.headerActionText}>Ask AI</Text>
-          </TouchableOpacity>
-        </View>
+        {isOrganizer && (
+          <>
+            <IconButton icon="add" onPress={handleOpenCustomAdd} />
+            <IconButton icon="sparkles" onPress={handleOpenCopilot} />
+          </>
+        )}
       </View>
 
-      {/* ── TIMELINE TIMELINE LIST ────────────────────────────────────── */}
-      <ScrollView 
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 10 }} 
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 130 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Members see the plan but cannot change it — the database enforces
+            the same rule, so the UI must not offer controls that would fail. */}
+        {!isOrganizer && (
+          <View style={[styles.readOnlyNote, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+            <Ionicons name="eye-outline" size={15} color={colors.textMuted} />
+            <Txt variant="footnote" tone="muted" style={{ flex: 1 }}>
+              Only the organizer can change this plan.
+            </Txt>
+          </View>
+        )}
+        {/* Plan check */}
+        {isOrganizer && activeWarnings.length > 0 && (
+          <Press onPress={() => { setCopilotTab('warnings'); handleOpenCopilot(); }}>
+            <View style={[styles.checkStrip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Ionicons name="alert-circle-outline" size={17} color={sc.attention} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Txt variant="emphasis">
+                  {activeWarnings.length} {activeWarnings.length === 1 ? 'thing' : 'things'} to review
+                </Txt>
+                <Txt variant="footnote" tone="muted" numberOfLines={1}>
+                  {activeWarnings[0].message}
+                </Txt>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </View>
+          </Press>
+        )}
+
         {dayIndices.map(day => {
           const dayActivities = (trip.itinerary || [])
             .filter((i: any) => i.dayIndex === day)
             .sort((a: any, b: any) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
 
-          const hasTransitions = dayDestinations[day] !== dayDestinations[day - 1] && day > 0;
+          const isTransition = day > 0 && dayDestinations[day] !== dayDestinations[day - 1];
+          const dayLabel = dayDestinations[day] || trip.destination;
 
           return (
-            <View key={day} style={{ marginBottom: 20 }}>
-              
-              {/* Day Destination Context Header */}
-              <View style={[styles.dayHeader, { borderBottomColor: colors.cardBorder }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-ExtraBold', color: colors.brand, textTransform: 'uppercase' }}>Day {day + 1}</Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>• {dayDestinations[day] || trip.destination}</Text>
+            <Section key={day}>
+              {/* Day header — sits outside the group, iOS section style */}
+              <View style={styles.dayHeader}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt variant="overline" tone="accent" uppercase>Day {day + 1}</Txt>
+                  <Txt variant="emphasis" tone="secondary" numberOfLines={1} style={{ marginTop: 1 }}>
+                    {dayLabel}
+                  </Txt>
                 </View>
-                {hasTransitions && (
-                  <View style={[styles.transitionBadge, { backgroundColor: isDarkTheme ? '#1E293B' : '#FFFBEB', borderColor: '#F59E0B' }]}>
-                    <Ionicons name="airplane-outline" size={10} color="#F59E0B" />
-                    <Text style={{ fontSize: 8, color: '#F59E0B', fontFamily: 'Poppins-Bold' }}>TRANSITION DAY</Text>
-                  </View>
+                {isTransition && <Badge label="Travel day" />}
+                {dayActivities.length > 0 && (
+                  <Txt variant="footnote" tone="muted">
+                    {dayActivities.length}
+                  </Txt>
                 )}
               </View>
 
               {dayActivities.length === 0 ? (
-                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: colors.textMuted, fontStyle: 'italic' }}>
-                    No stops planned for this day. Tap Ask AI at the top to build it collaboratively.
-                  </Text>
-                </View>
+                isOrganizer ? (
+                  <Press onPress={handleOpenCustomAdd}>
+                    <View style={[styles.dayEmpty, { borderColor: colors.cardBorder }]}>
+                      <Ionicons name="add" size={15} color={colors.textMuted} />
+                      <Txt variant="subhead" tone="muted">Add the first stop</Txt>
+                    </View>
+                  </Press>
+                ) : (
+                  <View style={[styles.dayEmpty, { borderColor: colors.cardBorder }]}>
+                    <Txt variant="subhead" tone="muted">Nothing planned yet</Txt>
+                  </View>
+                )
               ) : (
-                <View style={{ paddingLeft: 4 }}>
-                  {dayActivities.map((act: any, idx: number) => {
-                    const isLast = idx === dayActivities.length - 1;
-                    const nextAct = dayActivities[idx + 1];
-                    const gapTime = nextAct ? getTimeDifference(act.time, nextAct.time) : null;
-                    const isOverlapped = warnings.some(w => w.type === 'overlap' && (w.itemId === act.id && w.itemId2 === nextAct?.id));
+                dayActivities.map((act: any, idx: number) => {
+                  const isLast = idx === dayActivities.length - 1;
+                  const nextAct = dayActivities[idx + 1];
+                  const gapTime = nextAct ? getTimeDifference(act.time, nextAct.time) : null;
+                  const flagged = warnings.some(
+                    w => (w.itemId === act.id || w.itemId2 === act.id) && !acknowledgedWarnings.includes(w.id)
+                  );
 
-                    // Time split helper
-                    const [timeVal, ampm] = (act.time || 'TBD').split(' ');
+                  const [timeVal, ampm] = (act.time || 'TBD').split(' ');
+                  const imgUrl = getImgUrl(act);
+                  const categoryLabel = inferCategory(act.title);
+                  const durationLabel = getDurationLabel(act);
+                  const cleanDesc = getCleanDesc(act.description);
 
-                    // Thumbnail image resolver
-                    const imgUrl = getImgUrl(act);
+                  return (
+                    <View key={act.id || idx} style={styles.stopBlock}>
+                      {/* Time rail */}
+                      <View style={styles.railCol}>
+                        <Text style={[styles.railTime, { color: colors.text }]}>{timeVal}</Text>
+                        {!!ampm && (
+                          <Text style={[styles.railAmpm, { color: colors.textMuted }]}>{ampm}</Text>
+                        )}
+                      </View>
 
-                    // Category inferrer
-                    const categoryLabel = inferCategory(act.title);
-                    const catColors = getCategoryColor(categoryLabel);
+                      {/* Track: dot + connector */}
+                      <View style={styles.trackCol}>
+                        <View style={[styles.railDot, {
+                          borderColor: flagged ? sc.attention : colors.brand,
+                          backgroundColor: colors.background,
+                        }]}>
+                          <View style={[styles.railDotCore, {
+                            backgroundColor: flagged ? sc.attention : colors.brand,
+                          }]} />
+                        </View>
+                        {!isLast && (
+                          <View style={[styles.railLine, { backgroundColor: colors.cardBorder }]} />
+                        )}
+                      </View>
 
-                    // Clean description preview
-                    const cleanDesc = getCleanDesc(act.description);
+                      {/* Card */}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Press onPress={isOrganizer ? () => handleOpenEdit(act) : undefined} scaleTo={0.985}>
+                          <View style={[
+                            styles.stopCard,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: flagged ? sc.attention : colors.cardBorder,
+                            },
+                            shadow(1, isDark),
+                          ]}>
+                            {!!imgUrl && (
+                              <Image source={{ uri: imgUrl }} style={styles.stopThumb} resizeMode="cover" />
+                            )}
 
-                    // Duration parsed label
-                    const durationLabel = getDurationLabel(act);
-
-                    return (
-                      <View key={act.id || idx}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                          {/* Time Column (aligned right) */}
-                          <View style={styles.timeCol}>
-                            <Text style={[styles.timeValText, { color: colors.text }]}>{timeVal}</Text>
-                            <Text style={[styles.ampmText, { color: colors.textSecondary }]}>{ampm || ''}</Text>
-                          </View>
-
-                          {/* Timeline dot track */}
-                          <View style={{ alignItems: 'center', width: 20, marginRight: 12, height: '100%', position: 'relative' }}>
-                            <View style={[styles.dotCircleRing, { borderColor: colors.brand }]}>
-                              <View style={[styles.dotCircleInner, { backgroundColor: colors.brand }]} />
-                            </View>
-                            {!isLast && <View style={[styles.verticalTrackLine, { borderColor: colors.cardBorder }]} />}
-                          </View>
-
-                          {/* Activity info horizontal stop card */}
-                          <TouchableOpacity
-                            style={[
-                              styles.horizontalActivityCard,
-                              {
-                                backgroundColor: colors.card,
-                                borderColor: isOverlapped ? '#EF4444' : colors.cardBorder
-                              }
-                            ]}
-                            onPress={() => handleOpenEdit(act)}
-                            activeOpacity={0.8}
-                          >
-                            {/* Left side: rounded thumbnail image */}
-                            <Image source={{ uri: imgUrl }} style={styles.horizontalCardImage} resizeMode="cover" />
-
-                            {/* Right side: text details */}
-                            <View style={{ flex: 1, justifyContent: 'center' }}>
-                              <Text style={[styles.horizontalCardTitle, { color: colors.text }]} numberOfLines={1}>{act.title}</Text>
-                              
-                              {/* Category tag pill */}
-                              <View style={[styles.iosTagPill, { backgroundColor: catColors.bg }]}>
-                                <Text style={[styles.iosTagPillText, { color: catColors.text }]}>{categoryLabel}</Text>
+                            <View style={styles.stopBody}>
+                              <View style={styles.stopTitleRow}>
+                                <Text numberOfLines={1} style={[T.headline, { flex: 1, color: colors.text }]}>
+                                  {act.title}
+                                </Text>
+                                {flagged && (
+                                  <Ionicons name="alert-circle" size={14} color={sc.attention} />
+                                )}
                               </View>
 
-                              {cleanDesc ? (
-                                <Text style={[styles.horizontalCardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                              {!!categoryLabel && (
+                                <View style={[styles.chip, { backgroundColor: colors.surface }]}>
+                                  <Text style={[styles.chipTxt, { color: colors.textSecondary }]}>
+                                    {categoryLabel}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {!!cleanDesc && (
+                                <Text numberOfLines={2} style={[styles.stopDesc, { color: colors.textMuted }]}>
                                   {cleanDesc}
                                 </Text>
-                              ) : null}
+                              )}
 
-                              {/* Duration row */}
-                              <View style={styles.iosDurationRow}>
-                                <Ionicons name="time-outline" size={10} color={colors.textMuted} style={{ marginRight: 2 }} />
-                                <Text style={[styles.iosDurationText, { color: colors.textMuted }]}>{durationLabel}</Text>
-                              </View>
+                              {!!durationLabel && (
+                                <View style={styles.durationRow}>
+                                  <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+                                  <Text style={[styles.durationTxt, { color: colors.textMuted }]}>
+                                    {durationLabel}
+                                  </Text>
+                                </View>
+                              )}
                             </View>
-                          </TouchableOpacity>
-                        </View>
+                          </View>
+                        </Press>
 
-                        {/* Travel time gap indicator */}
-                        {gapTime && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 3 }}>
-                            {/* Offset for Time Col */}
-                            <View style={{ width: 48, marginRight: 6 }} />
-
-                            {/* Track Col */}
-                            <View style={{ alignItems: 'center', width: 20, marginRight: 12, position: 'relative' }}>
-                              <View style={[styles.gapDashLine, { borderColor: colors.cardBorder }]} />
-                            </View>
-
-                            {/* Badge Col */}
-                            <View style={[styles.gapBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                              <Ionicons name="time-outline" size={10} color={colors.textMuted} />
-                              <Text style={{ fontSize: 9, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>{gapTime} buffer</Text>
-                            </View>
+                        {/* Travel gap between cards */}
+                        {!!gapTime && (
+                          <View style={styles.gapRow}>
+                            <Ionicons name="ellipsis-vertical" size={10} color={colors.textMuted} />
+                            <Text style={[styles.gapTxt, { color: colors.textMuted }]}>{gapTime}</Text>
                           </View>
                         )}
                       </View>
-                    );
-                  })}
-                </View>
+                    </View>
+                  );
+                })
               )}
-            </View>
+            </Section>
           );
         })}
+
+        {totalStops === 0 && (
+          <EmptyState
+            icon="map-outline"
+            title="No stops yet"
+            description={
+              isOrganizer
+                ? 'Build the plan with Agilito, or add a stop yourself.'
+                : 'Your organizer has not added any stops yet.'
+            }
+            action={isOrganizer ? { label: 'Plan with Agilito', onPress: handleOpenCopilot } : undefined}
+          />
+        )}
       </ScrollView>
 
       {/* ── AGILITO AI BUILDER SHEET MODAL (iOS Segmented Weather UI Style) ────────── */}
@@ -910,74 +1004,28 @@ export default function TripItinerary({
           ]}
         >
           {/* iOS sheet drag handle */}
-          <View style={[styles.sheetHandleBar, { backgroundColor: colors.divider || '#E8E8E6' }]} />
+          <View style={[styles.sheetHandleBar, { backgroundColor: colors.divider }]} />
 
-          {/* iOS sheet header */}
+          {/* Header */}
           <View style={styles.copilotSheetHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[styles.sheetMascotRing, { backgroundColor: colors.brand }]}>
-                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
-              </View>
-              <Text style={[styles.sheetMascotTitle, { color: colors.text }]}>Agilito Co-pilot</Text>
+            <View style={{ flex: 1 }}>
+              <Txt variant="title">Agilito</Txt>
+              <Txt variant="footnote" tone="muted">Plan this trip together</Txt>
             </View>
-            <TouchableOpacity 
-              style={[styles.sheetCloseBtn, { backgroundColor: colors.surface }]}
-              onPress={handleCloseCopilot}
-            >
-              <Ionicons name="close" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <IconButton icon="close" onPress={handleCloseCopilot} size={32} />
           </View>
 
-          {/* Segmented control tabs switcher (Replicating Weather Expanded tabs) */}
-          <View style={[styles.weatherTabContainer, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <TouchableOpacity
-              onPress={() => setCopilotTab('day')}
-              style={[
-                styles.weatherTabBtn,
-                copilotTab === 'day' && { backgroundColor: colors.card }
+          {/* Tabs */}
+          <View style={{ paddingHorizontal: space.xl, paddingBottom: space.lg }}>
+            <Segmented<'day' | 'ai' | 'warnings'>
+              value={copilotTab}
+              onChange={setCopilotTab}
+              segments={[
+                { value: 'day', label: 'Day' },
+                { value: 'ai', label: 'Suggest' },
+                { value: 'warnings', label: 'Review', badge: activeWarnings.length },
               ]}
-            >
-              <Text
-                style={[
-                  styles.weatherTabBtnText,
-                  { color: copilotTab === 'day' ? colors.brand : colors.textMuted }
-                ]}
-              >
-                Day Context
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setCopilotTab('ai')}
-              style={[
-                styles.weatherTabBtn,
-                copilotTab === 'ai' && { backgroundColor: colors.card }
-              ]}
-            >
-              <Text
-                style={[
-                  styles.weatherTabBtnText,
-                  { color: copilotTab === 'ai' ? colors.brand : colors.textMuted }
-                ]}
-              >
-                Ask AI
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setCopilotTab('warnings')}
-              style={[
-                styles.weatherTabBtn,
-                copilotTab === 'warnings' && { backgroundColor: colors.card }
-              ]}
-            >
-              <Text
-                style={[
-                  styles.weatherTabBtnText,
-                  { color: copilotTab === 'warnings' ? colors.brand : colors.textMuted }
-                ]}
-              >
-                Review ({warnings.length})
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
 
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -1052,6 +1100,110 @@ export default function TripItinerary({
 
               {copilotTab === 'ai' && (
                 <View>
+                  {/* ── From Your Wishlist ── places the user already saved ── */}
+                  {(isLoadingWishlist || wishlistSpots.length > 0) && (
+                    <View style={{ marginBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={[styles.sheetSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>
+                          From Your Wishlist
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="heart" size={11} color={colors.brand} />
+                          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                            Day {activeDay + 1}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isLoadingWishlist ? (
+                        <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                          <ActivityIndicator size="small" color={colors.brand} />
+                        </View>
+                      ) : (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={{ gap: 10, paddingVertical: 8, paddingRight: 4 }}
+                        >
+                          {wishlistSpots.map((spot) => {
+                            const alreadyWarned = getPlaceWarning(spot.name);
+                            const isAdding = addingWishlistId === spot.id;
+                            return (
+                              <TouchableOpacity
+                                key={spot.id}
+                                activeOpacity={0.85}
+                                disabled={isAdding}
+                                onPress={() => handleAddWishlistStop(spot)}
+                                style={{
+                                  width: 150,
+                                  borderRadius: 14,
+                                  overflow: 'hidden',
+                                  backgroundColor: colors.surface,
+                                  borderWidth: 1,
+                                  borderColor: alreadyWarned ? colors.brand + '55' : colors.cardBorder,
+                                  opacity: isAdding ? 0.6 : 1,
+                                }}
+                              >
+                                {!!spot.image && (
+                                  <Image
+                                    source={{ uri: spot.image }}
+                                    style={{ width: '100%', height: 78 }}
+                                    resizeMode="cover"
+                                  />
+                                )}
+                                <View style={{ padding: 10 }}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}
+                                  >
+                                    {spot.name}
+                                  </Text>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}
+                                  >
+                                    {spot.distanceKm != null
+                                      ? `${Math.round(spot.distanceKm)} km from ${trip.destination}`
+                                      : spot.locationLabel || 'Saved place'}
+                                  </Text>
+
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                                    {isAdding ? (
+                                      <ActivityIndicator size="small" color={colors.brand} />
+                                    ) : (
+                                      <>
+                                        <Ionicons
+                                          name={alreadyWarned ? 'checkmark-circle' : 'add-circle'}
+                                          size={13}
+                                          color={colors.brand}
+                                        />
+                                        <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                                          {alreadyWarned ? 'Already added' : 'Add to day'}
+                                        </Text>
+                                      </>
+                                    )}
+                                  </View>
+                                </View>
+
+                                {spot.isNearDestination && (
+                                  <View style={{
+                                    position: 'absolute', top: 8, left: 8,
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8,
+                                  }}>
+                                    <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>
+                                      NEARBY
+                                    </Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      )}
+                    </View>
+                  )}
+
                   <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Choose Vibes</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                     {VIBE_OPTIONS.map(opt => {
@@ -1213,7 +1365,7 @@ export default function TripItinerary({
                 <View>
                   {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).length === 0 ? (
                     <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-                      <Ionicons name="checkmark-circle" size={42} color="#10B981" />
+                      <Ionicons name="checkmark-circle" size={42} color={sc.positive} />
                       <Text style={{ fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text, marginTop: 8 }}>Schedule Flowing Nicely</Text>
                       <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
                         Agilito confirms that daily pacing and transit guidelines are fully optimized.
@@ -1224,7 +1376,7 @@ export default function TripItinerary({
                       {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).map((warn) => (
                         <View key={warn.id} style={[styles.sheetWarnCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
                           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-                            <Ionicons name="warning-outline" size={16} color="#F59E0B" style={{ marginTop: 1 }} />
+                            <Ionicons name="warning-outline" size={16} color={sc.attention} style={{ marginTop: 1 }} />
                             <View style={{ flex: 1 }}>
                               <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: colors.text }}>{warn.title}</Text>
                               <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2, lineHeight: 15 }}>{warn.message}</Text>
@@ -1239,7 +1391,7 @@ export default function TripItinerary({
                             </TouchableOpacity>
                             {warn.type === 'duplicate' ? (
                               <TouchableOpacity 
-                                style={[styles.sheetWarnMiniBtn, { backgroundColor: '#EF4444' }]}
+                                style={[styles.sheetWarnMiniBtn, { backgroundColor: sc.destructive }]}
                                 onPress={() => handleResolveWarning(warn, 'delete')}
                               >
                                 <Text style={{ fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Delete One</Text>
@@ -1265,198 +1417,157 @@ export default function TripItinerary({
       </Modal>
 
       {/* ── EDIT ACTIVITY MODAL ─────────────────────────────────────── */}
-      <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Stop</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+      {/* ── Edit stop ── */}
+      <Sheet
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        title="Edit stop"
+        primaryAction={{
+          label: 'Save changes',
+          onPress: handleSaveEdit,
+          disabled: !editTitle.trim(),
+        }}
+      >
+        <Field label="Title" value={editTitle} onChangeText={setEditTitle} placeholder="Stop name" />
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-              <Text style={styles.modalLabel}>TITLE</Text>
-              <TextInput
-                value={editTitle}
-                onChangeText={setEditTitle}
-                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>START TIME</Text>
-                  <TextInput
-                    value={editTime}
-                    onChangeText={setEditTime}
-                    placeholder="e.g. 10:00 AM"
-                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>DURATION</Text>
-                  <TextInput
-                    value={editDuration}
-                    onChangeText={setEditDuration}
-                    placeholder="e.g. 2 hours"
-                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-              </View>
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>LOCATION</Text>
-              <TextInput
-                value={editLocation}
-                onChangeText={setEditLocation}
-                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DAY</Text>
-              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                {dayIndices.map(d => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[
-                      styles.daySelectorItem,
-                      {
-                        backgroundColor: editDayIndex === d ? colors.brand : colors.surface,
-                        borderColor: editDayIndex === d ? colors.brand : colors.cardBorder
-                      }
-                    ]}
-                    onPress={() => setEditDayIndex(d)}
-                  >
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: editDayIndex === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DESCRIPTION / NOTES</Text>
-              <TextInput
-                value={editDescription}
-                onChangeText={setEditDescription}
-                multiline
-                numberOfLines={3}
-                style={[styles.modalArea, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
-                <TouchableOpacity 
-                  style={[styles.modalBtn, { flex: 1, borderColor: '#EF4444', borderWidth: 1.5 }]} 
-                  onPress={() => handleRemoveActivity(editingItem.id)}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#EF4444' }}>Delete</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalBtn, { flex: 2, backgroundColor: colors.brand }]} 
-                  onPress={handleSaveEdit}
-                >
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Save Changes</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+        <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.xl }}>
+          <View style={{ flex: 1 }}>
+            <Field label="Start time" value={editTime} onChangeText={setEditTime} placeholder="10:00 AM" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field label="Duration" value={editDuration} onChangeText={setEditDuration} placeholder="2 hours" />
           </View>
         </View>
-      </Modal>
 
-      {/* ── ADD CUSTOM MODAL ────────────────────────────────────────── */}
-      <Modal visible={customModalVisible} animationType="slide" transparent onRequestClose={() => setCustomModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Add Custom Stop</Text>
-              <TouchableOpacity onPress={() => setCustomModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <Field
+          label="Location"
+          value={editLocation}
+          onChangeText={setEditLocation}
+          placeholder="Where is it?"
+          style={{ marginTop: space.xl }}
+        />
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-              <Text style={styles.modalLabel}>TITLE</Text>
-              <TextInput
-                value={customTitle}
-                onChangeText={setCustomTitle}
-                placeholder="e.g. Quick Coffee run"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>START TIME</Text>
-                  <TextInput
-                    value={customTime}
-                    onChangeText={setCustomTime}
-                    placeholder="e.g. 09:00 AM"
-                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>DURATION</Text>
-                  <TextInput
-                    value={customDuration}
-                    onChangeText={setCustomDuration}
-                    style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  />
-                </View>
-              </View>
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>LOCATION</Text>
-              <TextInput
-                value={customLocation}
-                onChangeText={setCustomLocation}
-                placeholder="e.g. Starbucks Cebu"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.modalInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DAY</Text>
-              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                {dayIndices.map(d => (
-                  <TouchableOpacity
-                    key={d}
+        <View style={{ marginTop: space.xl }}>
+          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+            Day
+          </Txt>
+          <View style={styles.dayPicker}>
+            {dayIndices.map(d => {
+              const on = editDayIndex === d;
+              return (
+                <Press key={d} onPress={() => setEditDayIndex(d)}>
+                  <View
                     style={[
-                      styles.daySelectorItem,
+                      styles.dayChip,
                       {
-                        backgroundColor: customDayIndex === d ? colors.brand : colors.surface,
-                        borderColor: customDayIndex === d ? colors.brand : colors.cardBorder
-                      }
+                        backgroundColor: on ? colors.brand : colors.surface,
+                        borderColor: on ? colors.brand : colors.cardBorder,
+                      },
                     ]}
-                    onPress={() => setCustomDayIndex(d)}
                   >
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: customDayIndex === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={[styles.modalLabel, { marginTop: 12 }]}>DESCRIPTION / NOTES</Text>
-              <TextInput
-                value={customDescription}
-                onChangeText={setCustomDescription}
-                multiline
-                numberOfLines={3}
-                style={[styles.modalArea, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 24 }}>
-                <TouchableOpacity 
-                  style={[styles.modalBtn, { flex: 1, borderColor: colors.cardBorder, borderWidth: 1.5 }]} 
-                  onPress={() => setCustomModalVisible(false)}
-                >
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalBtn, { flex: 2, backgroundColor: colors.brand }]} 
-                  onPress={handleSaveCustom}
-                >
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Add Activity</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                    <Text style={[T.caption, { color: on ? '#FFFFFF' : colors.text, fontFamily: 'Poppins-SemiBold' }]}>
+                      Day {d + 1}
+                    </Text>
+                  </View>
+                </Press>
+              );
+            })}
           </View>
         </View>
-      </Modal>
+
+        <Field
+          label="Notes"
+          value={editDescription}
+          onChangeText={setEditDescription}
+          placeholder="Anything worth remembering"
+          multiline
+          style={{ marginTop: space.xl }}
+        />
+
+        <Button
+          label="Remove this stop"
+          variant="destructive"
+          icon="trash-outline"
+          fullWidth
+          onPress={() => editingItem && handleRemoveActivity(editingItem.id)}
+          style={{ marginTop: space.xl }}
+        />
+      </Sheet>
+
+      {/* ── Add custom stop ── */}
+      <Sheet
+        visible={customModalVisible}
+        onClose={() => setCustomModalVisible(false)}
+        title="Add a stop"
+        primaryAction={{
+          label: 'Add to itinerary',
+          onPress: handleSaveCustom,
+          disabled: !customTitle.trim(),
+        }}
+      >
+        <Field
+          label="Title"
+          value={customTitle}
+          onChangeText={setCustomTitle}
+          placeholder="Quick coffee run"
+          autoFocus
+        />
+
+        <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.xl }}>
+          <View style={{ flex: 1 }}>
+            <Field label="Start time" value={customTime} onChangeText={setCustomTime} placeholder="09:00 AM" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field label="Duration" value={customDuration} onChangeText={setCustomDuration} placeholder="90 mins" />
+          </View>
+        </View>
+
+        <Field
+          label="Location"
+          value={customLocation}
+          onChangeText={setCustomLocation}
+          placeholder="Where is it?"
+          style={{ marginTop: space.xl }}
+        />
+
+        <View style={{ marginTop: space.xl }}>
+          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+            Day
+          </Txt>
+          <View style={styles.dayPicker}>
+            {dayIndices.map(d => {
+              const on = customDayIndex === d;
+              return (
+                <Press key={d} onPress={() => setCustomDayIndex(d)}>
+                  <View
+                    style={[
+                      styles.dayChip,
+                      {
+                        backgroundColor: on ? colors.brand : colors.surface,
+                        borderColor: on ? colors.brand : colors.cardBorder,
+                      },
+                    ]}
+                  >
+                    <Text style={[T.caption, { color: on ? '#FFFFFF' : colors.text, fontFamily: 'Poppins-SemiBold' }]}>
+                      Day {d + 1}
+                    </Text>
+                  </View>
+                </Press>
+              );
+            })}
+          </View>
+        </View>
+
+        <Field
+          label="Notes"
+          value={customDescription}
+          onChangeText={setCustomDescription}
+          placeholder="Anything worth remembering"
+          multiline
+          style={{ marginTop: space.xl }}
+        />
+      </Sheet>
+
     </View>
   );
 }
@@ -1467,117 +1578,9 @@ const styles = StyleSheet.create({
   },
   timelineHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingTop: 14,
-    paddingBottom: 14,
-    gap: 10,
-  },
-  timelineEyebrow: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    letterSpacing: 0.2,
-    marginBottom: 2,
-  },
-  timelineHeaderTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
-    letterSpacing: -0.3,
-  },
-  headerActionBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    gap: 4,
-  },
-  headerActionBtnWide: {
-    width: undefined,
-    height: undefined,
-    paddingVertical: 8,
-    paddingHorizontal: 13,
-    borderRadius: 17,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerActionText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 8,
-    marginBottom: 10,
-    marginTop: 10,
-  },
-  transitionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  dotCircle: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    marginTop: 10,
-    zIndex: 2,
-  },
-  trackLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: 4,
-    zIndex: 1,
-  },
-  dashLine: {
-    width: 0,
-    height: 16,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
-  activityCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-  },
-  activityTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    flex: 1,
-  },
-  activityTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-  },
-  activityLoc: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  activityDesc: {
-    fontSize: 10,
-    marginTop: 4,
-    lineHeight: 14,
-  },
-  gapBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
+    gap: space.sm,
+    paddingBottom: space.xl,
   },
   // iOS Premium dim backdrop
   sheetBackdrop: {
@@ -1612,25 +1615,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     marginBottom: 14,
-  },
-  sheetMascotRing: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetMascotTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
-    letterSpacing: -0.4,
-  },
-  sheetCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sheetBubble: {
     borderRadius: 16,
@@ -1829,7 +1813,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
+    
     marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1845,94 +1829,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // Modal standard structures
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    maxHeight: '80%',
-  },
-  modalHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-  },
-  modalLabel: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    color: '#8E8E93',
-    letterSpacing: 0.5,
-    marginTop: 10,
-  },
-  modalInput: {
-    height: 40,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-    marginTop: 4,
-  },
-  modalArea: {
-    height: 70,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-    textAlignVertical: 'top',
-    marginTop: 4,
-  },
-  daySelectorItem: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  modalBtn: {
-    height: 42,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
   // Replicating Weather Tab segmented control stylesheet
-  weatherTabContainer: {
-    flexDirection: 'row',
-    padding: 3,
-    marginBottom: 18,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  weatherTabBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: 9,
-  },
-  weatherTabBtnText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
-  },
   weatherMainCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1953,107 +1850,160 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins-Regular',
   },
-  timeCol: {
-    width: 48,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginRight: 6,
+  checkStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+    marginBottom: space.xl,
   },
-  timeValText: {
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.xs,
+    marginBottom: space.md,
+  },
+  stopBlock: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  railCol: {
+    width: 52,
+    alignItems: 'flex-end',
+    paddingRight: space.sm,
+    paddingTop: space.md,
+  },
+  railTime: {
     fontSize: 13,
     fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  ampmText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-SemiBold',
-    textTransform: 'uppercase',
-    marginTop: -2,
+  railAmpm: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+    marginTop: -1,
   },
-  dotCircleRing: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  trackCol: {
+    width: 22,
+    alignItems: 'center',
+    paddingTop: space.lg,
+  },
+  railDot: {
+    width: 13,
+    height: 13,
+    borderRadius: 7,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
-    backgroundColor: '#FFFFFF',
   },
-  dotCircleInner: {
+  railDotCore: {
     width: 4,
     height: 4,
     borderRadius: 2,
   },
-  verticalTrackLine: {
-    position: 'absolute',
-    top: 14,
-    bottom: -18,
-    width: 0,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    zIndex: 1,
-  },
-  horizontalActivityCard: {
+  railLine: {
     flex: 1,
+    width: 1.5,
+    marginTop: 2,
+    borderRadius: 1,
+  },
+  stopCard: {
+    flexDirection: 'row',
+    gap: space.md,
+    padding: space.md - 2,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+  },
+  stopThumb: {
+    width: 66,
+    height: 66,
+    borderRadius: radius.md,
+  },
+  stopBody: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  stopTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 12,
-    gap: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 1,
+    gap: space.sm,
   },
-  horizontalCardImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 14,
-  },
-  horizontalCardTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    lineHeight: 18,
-  },
-  iosTagPill: {
+  chip: {
     alignSelf: 'flex-start',
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginTop: 2.5,
-    marginBottom: 4.5,
-  },
-  iosTagPillText: {
-    fontSize: 8.5,
-    fontFamily: 'Poppins-Bold',
-  },
-  horizontalCardDesc: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-    lineHeight: 15,
-  },
-  iosDurationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm - 2,
     marginTop: 4,
   },
-  iosDurationText: {
+  chipTxt: {
+    fontSize: 9.5,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: 0.2,
+  },
+  stopDesc: {
+    fontSize: 11.5,
+    fontFamily: 'Poppins-Regular',
+    lineHeight: 15,
+    marginTop: 5,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 6,
+  },
+  durationTxt: {
+    fontSize: 10.5,
+    fontFamily: 'Poppins-Medium',
+  },
+  gapTxt: {
     fontSize: 10,
     fontFamily: 'Poppins-Medium',
   },
-  gapDashLine: {
-    width: 0,
-    height: 16,
-    borderWidth: 1,
+  readOnlyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+    marginBottom: space.xl,
+  },
+  dayEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    paddingVertical: space.xl,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
     borderStyle: 'dashed',
-    alignSelf: 'center',
+  },
+  dayPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  dayChip: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+  },
+  gapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: space.sm,
+    paddingLeft: space.xs,
   },
 });
-
 const getImgUrl = (item: any) => {
   if (item.description) {
     const match = item.description.match(/Image:\s*(https[^\n]+)/i);
@@ -2085,22 +2035,6 @@ const inferCategory = (title: string) => {
   return 'Sightseeing';
 };
 
-const getCategoryColor = (cat: string) => {
-  const c = cat.toLowerCase();
-  if (c === 'café' || c === 'food') {
-    return { bg: '#FFF7ED', text: '#EA580C' }; // orange
-  }
-  if (c === 'beach') {
-    return { bg: '#ECFDF5', text: '#059669' }; // teal/green
-  }
-  if (c === 'nature') {
-    return { bg: '#F0F9FF', text: '#0284C7' }; // blue
-  }
-  if (c === 'culture') {
-    return { bg: '#F5F3FF', text: '#7C3AED' }; // purple
-  }
-  return { bg: '#F3F4F6', text: '#4B5563' }; // grey
-};
 
 const getCleanDesc = (desc: string) => {
   if (!desc) return '';

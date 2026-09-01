@@ -1,9 +1,17 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import {
+  StyleSheet, View, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform,
+  Image, Alert, Modal, Pressable, ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { sendChatMessage as dbSendChat } from '../../services/tripService';
-import { LinearGradient } from 'expo-linear-gradient';
+import { sendChatMessage as dbSendChat, uploadTripImage } from '../../services/tripService';
+import * as ImagePicker from 'expo-image-picker';
 import { summarizeChatMessages, AI_FEATURES_ENABLED } from '../../services/aiService';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  Txt, Press, EmptyState, Sheet, Loading, Avatar, IconButton,
+} from '../ui/primitives';
+import { space, radius, hairline, type as T } from '../ui/tokens';
 
 interface TripChatProps {
   trip: any;
@@ -13,373 +21,397 @@ interface TripChatProps {
   onBack: () => void;
 }
 
+interface Grouped {
+  key: string;
+  msg: any;
+  isMe: boolean;
+  /** First message in a run by the same sender — show name and avatar. */
+  startsRun: boolean;
+  /** Last in a run — carries the tail corner and the timestamp. */
+  endsRun: boolean;
+}
+
 export default function TripChat({
-  trip,
-  colors,
-  currentUserName,
-  loadTrip,
-  onBack,
+  trip, currentUserName, loadTrip, onBack,
 }: TripChatProps) {
-  const [newChatText, setNewChatText] = useState('');
-  const chatEndRef = useRef<ScrollView>(null);
+  const { colors } = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
 
-  // AI Summarizer states
-  const [aiSummaryModal, setAiSummaryModal] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [chatSummary, setChatSummary] = useState('');
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
-  const handleCatchUp = async () => {
-    setAiLoading(true);
-    setAiSummaryModal(true);
+  const [recapOpen, setRecapOpen] = useState(false);
+  const [recapLoading, setRecapLoading] = useState(false);
+  const [recap, setRecap] = useState('');
+
+  const messages = trip.chatMessages ?? [];
+
+  // Group consecutive messages from the same sender so the thread reads as
+  // conversation rather than a wall of repeated avatars.
+  const grouped = useMemo<Grouped[]>(() => {
+    return messages.map((msg: any, i: number) => {
+      const prev = messages[i - 1];
+      const next = messages[i + 1];
+      return {
+        key: msg.id,
+        msg,
+        isMe: msg.sender === currentUserName,
+        startsRun: !prev || prev.sender !== msg.sender,
+        endsRun: !next || next.sender !== msg.sender,
+      };
+    });
+  }, [messages, currentUserName]);
+
+  /** Pick a photo to attach. Upload happens on send, so cancelling costs nothing. */
+  const handlePickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Photos needed', 'Allow photo access to share images in chat.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: false,
+    });
+    if (!res.canceled && res.assets?.[0]?.uri) setPendingImage(res.assets[0].uri);
+  };
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    if ((!text && !pendingImage) || sending) return;
+
+    const keptText = text;
+    const keptImage = pendingImage;
+    setDraft('');
+    setPendingImage(null);
+    setSending(true);
+
     try {
-      const summary = await summarizeChatMessages(trip.chatMessages);
-      setChatSummary(summary);
-    } catch (e) {
-      setChatSummary('Failed to summarize chat messages. Try again later!');
+      let imageUrl: string | null = null;
+      if (keptImage) {
+        setUploading(true);
+        const { url, error: upErr } = await uploadTripImage(keptImage, 'chat');
+        setUploading(false);
+        if (upErr || !url) {
+          // Restore the draft so nothing the user typed or picked is lost.
+          setDraft(keptText);
+          setPendingImage(keptImage);
+          Alert.alert('Could not upload image', upErr || 'Try again.');
+          return;
+        }
+        imageUrl = url;
+      }
+
+      const { error } = await dbSendChat(trip.id, keptText, imageUrl);
+      if (error) {
+        setDraft(keptText);
+        setPendingImage(keptImage);
+      } else {
+        loadTrip();
+      }
     } finally {
-      setAiLoading(false);
+      setSending(false);
+      setUploading(false);
     }
   };
 
-  const handleSendChat = async () => {
-    if (!newChatText.trim()) return;
-    const txt = newChatText.trim();
-    setNewChatText('');
-    const { error } = await dbSendChat(trip.id, txt);
-    if (error) {
-      // Revert or show alert
-      setNewChatText(txt);
-    } else {
-      loadTrip();
+  const handleRecap = async () => {
+    setRecapOpen(true);
+    setRecapLoading(true);
+    try {
+      setRecap(await summarizeChatMessages(messages));
+    } catch {
+      setRecap('The recap is unavailable right now. Try again in a moment.');
+    } finally {
+      setRecapLoading(false);
     }
   };
 
-  const renderEmptyState = (
-    title: string,
-    desc: string,
-    icon: string,
-    color: string,
-    actionLabel?: string,
-    onAction?: () => void
-  ) => {
-    return (
-      <View style={styles.emptyContainer}>
-        <View style={[styles.emptyIconBox, { backgroundColor: color + '12', borderColor: color + '25', borderWidth: 1 }]}>
-          <Ionicons name={icon as any} size={28} color={color} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>{desc}</Text>
-        {actionLabel && onAction && (
-          <TouchableOpacity style={[styles.emptyActionBtn, { backgroundColor: color, flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={onAction} activeOpacity={0.85}>
-            <Ionicons name="add" size={14} color="#FFFFFF" />
-            <Text style={styles.emptyActionBtnText}>{actionLabel}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
-  const renderRoomBack = (label: string, onPress: () => void) => {
-    return (
-      <TouchableOpacity style={styles.roomBackRow} onPress={onPress}>
-        <Ionicons name="arrow-back" size={16} color={colors.brand} />
-        <Text style={[styles.roomBackText, { color: colors.brand }]}>{label}</Text>
-      </TouchableOpacity>
-    );
-  };
+  const canSend = (draft.trim().length > 0 || !!pendingImage) && !sending;
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* ── Header ── */}
+      <View style={[styles.header, { borderBottomColor: colors.divider }]}>
+        <IconButton icon="chevron-back" onPress={onBack} size={34} />
         <View style={{ flex: 1 }}>
-          {renderRoomBack('Back to People', onBack)}
-          <Text style={[styles.tabContentTitle, { color: colors.text, marginTop: 8 }]}>Group Chat</Text>
+          <Txt variant="headline" numberOfLines={1}>Group chat</Txt>
+          <Txt variant="caption" tone="muted" numberOfLines={1}>
+            {trip.members?.length ?? 0} {(trip.members?.length ?? 0) === 1 ? 'member' : 'members'}
+          </Txt>
         </View>
-        {AI_FEATURES_ENABLED && trip.chatMessages.length > 0 && (
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.brandLight || '#E0F7F5',
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              borderRadius: 12,
-              gap: 4,
-              borderWidth: 1,
-              borderColor: colors.brand,
-              marginTop: 18,
-            }}
-            onPress={handleCatchUp}
-          >
-            <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>Catch me up</Text>
-          </TouchableOpacity>
+        {AI_FEATURES_ENABLED && messages.length > 0 && (
+          <Press onPress={handleRecap}>
+            <View style={[styles.recapBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+              <Text style={[T.caption, { color: colors.brand, fontFamily: 'Poppins-Bold' }]}>Recap</Text>
+            </View>
+          </Press>
         )}
       </View>
 
-      {trip.chatMessages.length === 0 ? (
+      {/* ── Thread ── */}
+      {messages.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          {renderEmptyState("Start the Conversation", "Coordinate with your group in real-time.", "chatbubbles-outline", "#0D9488", "Send a Hello", () => {
-            setNewChatText("Hello everyone!");
-          })}
+          <EmptyState
+            icon="chatbubble-outline"
+            title="No messages yet"
+            description="Start the conversation with your group."
+          />
         </View>
       ) : (
         <ScrollView
-          ref={chatEndRef}
-          contentContainerStyle={styles.chatScroll}
+          ref={scrollRef}
+          contentContainerStyle={styles.thread}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => chatEndRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
-          {trip.chatMessages.map((msg: any) => {
-            const isMe = msg.sender === currentUserName;
-            return (
-              <View key={msg.id} style={[styles.chatBubbleWrapper, isMe ? styles.myBubbleWrapper : styles.otherBubbleWrapper]}>
-                {!isMe && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder, justifyContent: 'center', alignItems: 'center' }}>
-                      {msg.senderAvatar ? (
-                        <Image source={{ uri: msg.senderAvatar }} style={{ width: 16, height: 16, borderRadius: 8 }} />
-                      ) : (
-                        <Text style={{ fontSize: 9, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>{msg.sender.charAt(0).toUpperCase()}</Text>
-                      )}
-                    </View>
-                    <Text style={[styles.chatSenderName, { color: colors.textSecondary }]}>{msg.sender}</Text>
-                  </View>
+          {grouped.map(({ key, msg, isMe, startsRun, endsRun }) => (
+            <View
+              key={key}
+              style={[
+                styles.row,
+                isMe ? styles.rowMe : styles.rowThem,
+                { marginTop: startsRun ? space.lg : 2 },
+              ]}
+            >
+              {/* Gutter keeps bubbles aligned whether or not an avatar shows */}
+              {!isMe && (
+                <View style={styles.gutter}>
+                  {endsRun && <Avatar name={msg.sender} size={26} />}
+                </View>
+              )}
+
+              <View style={{ maxWidth: '78%' }}>
+                {!isMe && startsRun && (
+                  <Txt variant="caption" tone="muted" style={{ marginBottom: 3, marginLeft: space.sm }}>
+                    {msg.sender}
+                  </Txt>
                 )}
-                {isMe ? (
-                  <LinearGradient
-                    colors={['#0D9488', '#0F766E']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.chatBubble, styles.myBubble]}
+
+                <View
+                  style={[
+                    styles.bubble,
+                    isMe
+                      ? {
+                          backgroundColor: colors.brand,
+                          borderBottomRightRadius: endsRun ? 6 : radius.lg,
+                        }
+                      : {
+                          backgroundColor: colors.card,
+                          borderWidth: hairline,
+                          borderColor: colors.cardBorder,
+                          borderBottomLeftRadius: endsRun ? 6 : radius.lg,
+                        },
+                  ]}
+                >
+                  {!!msg.imageUrl && (
+                    <Pressable onPress={() => setLightbox(msg.imageUrl)}>
+                      <Image
+                        source={{ uri: msg.imageUrl }}
+                        style={[styles.bubbleImage, !!msg.text && { marginBottom: space.sm }]}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
+                  )}
+                  {!!msg.text && (
+                    <Text style={[T.body, { color: isMe ? '#FFFFFF' : colors.text }]}>
+                      {msg.text}
+                    </Text>
+                  )}
+                </View>
+
+                {endsRun && (
+                  <Text
+                    style={[
+                      T.caption,
+                      {
+                        color: colors.textMuted,
+                        fontSize: 10,
+                        marginTop: 3,
+                        marginHorizontal: space.sm,
+                        textAlign: isMe ? 'right' : 'left',
+                      },
+                    ]}
                   >
-                    <Text style={[styles.chatText, styles.myChatText]}>
-                      {msg.text}
-                    </Text>
-                    <Text style={[styles.chatTime, { color: 'rgba(255,255,255,0.7)' }]}>{msg.timestamp}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.chatBubble, styles.otherBubble, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }]}>
-                    <Text style={[styles.chatText, { color: colors.text }]}>
-                      {msg.text}
-                    </Text>
-                    <Text style={[styles.chatTime, { color: colors.textMuted }]}>{msg.timestamp}</Text>
-                  </View>
+                    {msg.timestamp}
+                  </Text>
                 )}
               </View>
-            );
-          })}
+            </View>
+          ))}
         </ScrollView>
       )}
 
-      <View style={[styles.chatInputRow, { backgroundColor: colors.card, borderTopColor: colors.cardBorder }]}>
+      {/* ── Composer ── */}
+      {/* Pending attachment */}
+      {!!pendingImage && (
+        <View style={[styles.pendingBar, { borderTopColor: colors.divider, backgroundColor: colors.background }]}>
+          <Image source={{ uri: pendingImage }} style={styles.pendingThumb} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Txt variant="emphasis" numberOfLines={1}>Photo attached</Txt>
+            <Txt variant="footnote" tone="muted">
+              {uploading ? 'Uploading…' : 'Sends with your next message'}
+            </Txt>
+          </View>
+          {uploading
+            ? <ActivityIndicator size="small" color={colors.brand} />
+            : <IconButton icon="close" size={30} onPress={() => setPendingImage(null)} />}
+        </View>
+      )}
+
+      <View style={[styles.composer, { borderTopColor: colors.divider, backgroundColor: colors.background }]}>
+        <Press onPress={handlePickImage} disabled={sending}>
+          <View style={[styles.attachBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+            <Ionicons name="image-outline" size={18} color={colors.textSecondary} />
+          </View>
+        </Press>
         <TextInput
-          value={newChatText}
-          onChangeText={setNewChatText}
-          placeholder="Type message here..."
-          style={[styles.chatInput, { color: colors.text, backgroundColor: colors.surface }]}
-          placeholderTextColor="#9E9E9E"
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Message"
+          placeholderTextColor={colors.textMuted}
+          multiline
+          style={[
+            T.body,
+            styles.input,
+            { color: colors.text, backgroundColor: colors.surface, borderColor: colors.cardBorder },
+          ]}
         />
-        <TouchableOpacity style={[styles.chatSendBtn, { backgroundColor: colors.brand }]} onPress={handleSendChat}>
-          <Ionicons name="send" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+        <Press onPress={handleSend} disabled={!canSend}>
+          <View
+            style={[
+              styles.send,
+              { backgroundColor: canSend ? colors.brand : colors.surface },
+            ]}
+          >
+            <Ionicons
+              name="arrow-up"
+              size={17}
+              color={canSend ? '#FFFFFF' : colors.textMuted}
+            />
+          </View>
+        </Press>
       </View>
 
-      {/* AI CHAT SUMMARY MODAL */}
-      <Modal
-        visible={aiSummaryModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAiSummaryModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, maxHeight: '60%' }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.brand }]}>Agilito Recap</Text>
-              <TouchableOpacity onPress={() => setAiSummaryModal(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {aiLoading ? (
-              <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator size="large" color={colors.brand} />
-                <Text style={{ marginTop: 12, color: colors.textSecondary, fontFamily: 'Poppins-Medium' }}>Agilito is summarizing the conversation...</Text>
-              </View>
-            ) : (
-              <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-                <Text style={{ fontSize: 13, color: colors.text, lineHeight: 20, fontFamily: 'Poppins-Medium' }}>
-                  {chatSummary}
-                </Text>
-              </ScrollView>
-            )}
-          </View>
-        </View>
+      {/* Full-size image */}
+      <Modal visible={!!lightbox} transparent animationType="fade" onRequestClose={() => setLightbox(null)}>
+        <Pressable style={styles.lightbox} onPress={() => setLightbox(null)}>
+          {!!lightbox && (
+            <Image source={{ uri: lightbox }} style={styles.lightboxImage} resizeMode="contain" />
+          )}
+        </Pressable>
       </Modal>
-    </View>
+
+      {/* ── Recap ── */}
+      <Sheet visible={recapOpen} onClose={() => setRecapOpen(false)} title="Conversation recap">
+        {recapLoading ? (
+          <Loading label="Reading the conversation" />
+        ) : (
+          <Txt variant="body" tone="secondary">{recap}</Txt>
+        )}
+      </Sheet>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  roomBackRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 4,
+    gap: space.md,
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+    borderBottomWidth: hairline,
   },
-  roomBackText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginLeft: 2,
+  recapBtn: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm - 1,
+    borderRadius: radius.pill,
+    borderWidth: hairline,
   },
-  tabContentTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
+  thread: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.xl,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-  },
-  emptyIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  emptyTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  modalHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalHeader: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  emptyDesc: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    fontWeight: '500',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  emptyActionBtn: {
-    marginTop: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  emptyActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  chatScroll: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  chatBubbleWrapper: {
-    marginBottom: 10,
-    maxWidth: '80%',
-  },
-  myBubbleWrapper: {
-    alignSelf: 'flex-end',
     alignItems: 'flex-end',
+    gap: space.sm,
   },
-  otherBubbleWrapper: {
-    alignSelf: 'flex-start',
-    alignItems: 'flex-start',
+  rowMe: { justifyContent: 'flex-end' },
+  rowThem: { justifyContent: 'flex-start' },
+  gutter: { width: 26 },
+  bubble: {
+    paddingHorizontal: space.md + 1,
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.lg,
   },
-  chatSenderName: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    marginBottom: 2,
-    marginLeft: 4,
+  bubbleImage: {
+    width: 200,
+    height: 200,
+    borderRadius: radius.md,
   },
-  chatBubble: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-  },
-  myBubble: {
-    borderBottomRightRadius: 2,
-  },
-  otherBubble: {
-    borderBottomLeftRadius: 2,
-  },
-  chatText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    lineHeight: 18,
-  },
-  myChatText: {
-    color: '#FFFFFF',
-  },
-  otherChatText: {},
-  chatTime: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Medium',
-    alignSelf: 'flex-end',
-    marginTop: 4,
-  },
-  chatInputRow: {
+  pendingBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
+    gap: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderTopWidth: hairline,
   },
-  chatInput: {
-    flex: 1,
+  pendingThumb: {
+    width: 40,
     height: 40,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    marginRight: 10,
+    borderRadius: radius.sm,
   },
-  chatSendBtn: {
+  attachBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: hairline,
+  },
+  lightbox: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderTopWidth: hairline,
+  },
+  input: {
+    flex: 1,
+    borderRadius: radius.xl,
+    borderWidth: hairline,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md - 2,
+    paddingBottom: space.md - 2,
+    maxHeight: 120,
+    minHeight: 40,
+  },
+  send: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
   },
 });

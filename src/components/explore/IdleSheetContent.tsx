@@ -195,10 +195,8 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
           {/* Overlay if unvisited */}
           {!isVisited && <View style={styles.lockedOverlay} />}
 
-          {/* Floating Stamp / Wax Seal in the top-right corner */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => onToggleVisited(item.id)}
+          {/* Floating Stamp / Wax Seal badge in the top-right corner */}
+          <View
             style={[
               styles.waxSeal,
               isVisited ? styles.waxSealCollected : styles.waxSealLocked,
@@ -209,7 +207,7 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
             ) : (
               <Ionicons name="lock-closed" size={10} color="rgba(255, 255, 255, 0.85)" />
             )}
-          </TouchableOpacity>
+          </View>
 
           {/* Floating Region tag in the top-left corner */}
           <View style={[styles.floatingRegionBadge, { backgroundColor: isVisited ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0, 0, 0, 0.55)' }]}>

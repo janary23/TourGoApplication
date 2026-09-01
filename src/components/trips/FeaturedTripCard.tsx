@@ -23,7 +23,12 @@ export default function FeaturedTripCard({
 }: FeaturedTripCardProps) {
   const { isDark } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+  const imageUrl = trip?.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+  const members: any[] = Array.isArray(trip?.members) ? trip.members : (Array.isArray(trip?.trip_members) ? trip.trip_members : []);
+  const destination = trip?.destination || 'DESTINATION';
+  const title = trip?.title || 'Untitled Trip';
+  const startDate = trip?.startDate || trip?.start_date || new Date().toISOString();
+  const endDate = trip?.endDate || trip?.end_date || new Date().toISOString();
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -107,8 +112,8 @@ export default function FeaturedTripCard({
                   }
                 ]}
               >
-                <Text style={styles.tripDestinationText}>{trip.destination.toUpperCase()}</Text>
-                <Text style={styles.tripTitleText} numberOfLines={2}>{trip.title}</Text>
+                <Text style={styles.tripDestinationText}>{destination.toUpperCase()}</Text>
+                <Text style={styles.tripTitleText} numberOfLines={2}>{title}</Text>
 
                 {/* Stats and Avatars Stack */}
                 <View style={styles.metaRow}>
@@ -116,7 +121,7 @@ export default function FeaturedTripCard({
                     <View style={styles.statItem}>
                       <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.85)" />
                       <Text style={styles.statText}>
-                        {new Date(trip.startDate).toLocaleDateString('default', { month: 'short', day: 'numeric' })}
+                        {new Date(startDate).toLocaleDateString('default', { month: 'short', day: 'numeric' })}
                       </Text>
                     </View>
                     <View style={styles.statDot} />
@@ -124,8 +129,8 @@ export default function FeaturedTripCard({
                       <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.85)" />
                       <Text style={styles.statText}>
                         {(() => {
-                          const start = new Date(trip.startDate);
-                          const end = new Date(trip.endDate);
+                          const start = new Date(startDate);
+                          const end = new Date(endDate);
                           const diffTime = Math.abs(end.getTime() - start.getTime());
                           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                           return `${diffDays} days`;
@@ -137,11 +142,12 @@ export default function FeaturedTripCard({
                   {/* Member Pile */}
                   <View style={styles.membersRow}>
                     <View style={styles.avatarPile}>
-                      {trip.members.slice(0, 3).map((member: any, index: number) => {
+                      {members.slice(0, 3).map((member: any, index: number) => {
                         const avatarUrl = member.avatar_url || null;
+                        const memberName = member.name || 'Member';
                         return (
                           <View
-                            key={member.id}
+                            key={member.id || index}
                             style={[
                               styles.avatarCircle,
                               {
@@ -156,7 +162,7 @@ export default function FeaturedTripCard({
                             ) : (
                               <View style={[styles.avatarFallback, { backgroundColor: colors.brand }]}>
                                 <Text style={styles.avatarFallbackText}>
-                                  {member.name.charAt(0).toUpperCase()}
+                                  {memberName.charAt(0).toUpperCase()}
                                 </Text>
                               </View>
                             )}
@@ -164,9 +170,9 @@ export default function FeaturedTripCard({
                         );
                       })}
                     </View>
-                    {trip.members.length > 3 && (
+                    {members.length > 3 && (
                       <Text style={styles.membersCountText}>
-                        +{trip.members.length - 3}
+                        +{members.length - 3}
                       </Text>
                     )}
                   </View>

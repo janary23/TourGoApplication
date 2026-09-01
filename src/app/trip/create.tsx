@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { TripFeatureSettings } from '../../services/mockData';
-import { createTrip } from '../../services/tripService';
+import { createTrip, previewTripByCode, type TripCodePreview } from '../../services/tripService';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useTheme } from '../../context/ThemeContext';
+import { Sheet, Field, Button as UiButton, Txt, ListGroup, ListRow, Badge, Press, Loading } from '../../components/ui/primitives';
+import { space, radius, hairline } from '../../components/ui/tokens';
 import {
   recommendDestinations,
   estimateBudget,
@@ -106,6 +108,14 @@ export default function CreateTripScreen() {
 
   // Generated Itinerary
   const [itineraryStops, setItineraryStops] = useState<GeneratedItineraryItem[]>([]);
+
+  // ── Import an itinerary by trip code ──
+  const [codeSheetOpen, setCodeSheetOpen] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [codePreview, setCodePreview] = useState<TripCodePreview | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [importedFrom, setImportedFrom] = useState<string | null>(null);
   const [isGeneratingIti, setIsGeneratingIti] = useState(false);
 
   // AI Helpers State
@@ -577,6 +587,42 @@ export default function CreateTripScreen() {
     }
   };
 
+  const handleLookupCode = async () => {
+    setCodeLoading(true);
+    setCodeError(null);
+    setCodePreview(null);
+    try {
+      const { data, error } = await previewTripByCode(codeInput);
+      if (error || !data) { setCodeError(error || 'No trip found with that code.'); return; }
+      if (data.stops.length === 0) {
+        setCodeError('That trip has no itinerary to copy yet.');
+        return;
+      }
+      setCodePreview(data);
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
+  /** Copy the looked-up itinerary into this new trip. Nothing is shared with
+   *  the original trip — this is a copy, not a join. */
+  const handleAdoptItinerary = () => {
+    if (!codePreview) return;
+    setItineraryStops(codePreview.stops.map(st => ({ ...st, isAiSuggested: false })));
+    setImportedFrom(codePreview.trip.code);
+    if ((!destination || destination === 'TBD') && codePreview.trip.destination) {
+      setDestination(codePreview.trip.destination);
+    }
+    setCodeSheetOpen(false);
+    setCodePreview(null);
+    setCodeInput('');
+  };
+
+  const clearImport = () => {
+    setItineraryStops([]);
+    setImportedFrom(null);
+  };
+
   const handleCreateFinal = async () => {
     const finalTitle = titleState.trim() || `${tripSubtype.replace('_', ' ').toUpperCase()} Trip`;
     if (!startDate || !endDate) {
@@ -617,10 +663,10 @@ export default function CreateTripScreen() {
       const enrichedStops = itineraryStops.map(stop => {
         let desc = stop.description || '';
         const metadata = [];
-        if (stop.costEstimated) metadata.push(`💰 Cost: ${stop.costEstimated}`);
-        if (stop.duration) metadata.push(`⏱️ Duration: ${stop.duration}`);
-        if (stop.clothingTip) metadata.push(`👕 Wear: ${stop.clothingTip}`);
-        if (stop.travelTip) metadata.push(`💡 Tip: ${stop.travelTip}`);
+        if (stop.costEstimated) metadata.push(`Cost: ${stop.costEstimated}`);
+        if (stop.duration) metadata.push(`Duration: ${stop.duration}`);
+        if (stop.clothingTip) metadata.push(`Wear: ${stop.clothingTip}`);
+        if (stop.travelTip) metadata.push(`Tip: ${stop.travelTip}`);
         if (metadata.length > 0) {
           desc = `${desc}\n\n${metadata.join('\n')}`;
         }
@@ -635,10 +681,10 @@ export default function CreateTripScreen() {
         features,
         undefined,
         tripType,
-        [],
         tripSubtype,
-        preloadedPolls,
-        checklistItems
+        checklistItems,
+        enrichedStops,
+        preloadedPolls
       );
       Alert.alert("Expedition Ready!", "Launching your workspace dashboard...", [
         { text: "Launch Workspace", onPress: () => router.replace(`/trip/${tripId}`) }
@@ -799,6 +845,35 @@ export default function CreateTripScreen() {
           <View style={styles.stageContainer}>
             <Text style={[styles.stageHeading, { color: colors.text }]}>What kind of trip are you planning?</Text>
             <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Select a category to set the foundation for your trip.</Text>
+
+            {/* Import an itinerary someone shared by code */}
+            {importedFrom ? (
+              <View style={[styles.codeCard, { backgroundColor: colors.card, borderColor: colors.brand }]}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.brand} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt variant="emphasis">Itinerary imported</Txt>
+                  <Txt variant="footnote" tone="muted" numberOfLines={1}>
+                    {itineraryStops.length} stops from code {importedFrom}
+                  </Txt>
+                </View>
+                <Press onPress={clearImport}>
+                  <Txt variant="caption" tone="destructive">Remove</Txt>
+                </Press>
+              </View>
+            ) : (
+              <Press onPress={() => setCodeSheetOpen(true)}>
+                <View style={[styles.codeCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <Ionicons name="key-outline" size={18} color={colors.brand} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Txt variant="emphasis">Have a trip code?</Txt>
+                    <Txt variant="footnote" tone="muted" numberOfLines={1}>
+                      Copy an itinerary someone shared with you
+                    </Txt>
+                  </View>
+                  <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+                </View>
+              </Press>
+            )}
 
             <View style={styles.gridBox}>
               {TRIP_CATEGORIES.map(cat => {
@@ -1328,6 +1403,65 @@ export default function CreateTripScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {renderStepContent()}
+
+      {/* ── Import itinerary by code ── */}
+      <Sheet
+        visible={codeSheetOpen}
+        onClose={() => { setCodeSheetOpen(false); setCodePreview(null); setCodeError(null); }}
+        title="Import an itinerary"
+        primaryAction={
+          codePreview
+            ? { label: `Use these ${codePreview.stops.length} stops`, onPress: handleAdoptItinerary }
+            : { label: 'Find trip', onPress: handleLookupCode, loading: codeLoading, disabled: !codeInput.trim() }
+        }
+      >
+        <Field
+          label="Trip code"
+          value={codeInput}
+          onChangeText={(v) => { setCodeInput(v); setCodeError(null); }}
+          placeholder="BAGUI123"
+          autoFocus
+        />
+
+        {!!codeError && (
+          <Txt variant="footnote" tone="destructive" style={{ marginTop: space.sm }}>{codeError}</Txt>
+        )}
+
+        {codeLoading && <Loading label="Looking up that code" />}
+
+        {codePreview && (
+          <View style={{ marginTop: space.xl }}>
+            <Txt variant="headline">{codePreview.trip.title}</Txt>
+            <Txt variant="subhead" tone="muted" style={{ marginTop: 2 }}>
+              {codePreview.trip.destination} · {codePreview.stops.length} stops across {codePreview.trip.dayCount} days
+            </Txt>
+
+            <View style={{ marginTop: space.lg }}>
+              <ListGroup>
+                {codePreview.stops.slice(0, 6).map((st, i) => (
+                  <ListRow
+                    key={i}
+                    title={st.title}
+                    subtitle={`Day ${st.dayIndex + 1} · ${st.time}`}
+                    showChevron={false}
+                  />
+                ))}
+                {codePreview.stops.length > 6 ? (
+                  <ListRow
+                    title={`+${codePreview.stops.length - 6} more stops`}
+                    showChevron={false}
+                  />
+                ) : null}
+              </ListGroup>
+            </View>
+
+            <Txt variant="footnote" tone="muted" style={{ marginTop: space.md }}>
+              These stops are copied into your own trip. You are not joining theirs, and
+              changes you make will not affect the original.
+            </Txt>
+          </View>
+        )}
+      </Sheet>
       </ScrollView>
 
       {/* Permissions Dialog */}
@@ -1432,6 +1566,15 @@ const styles = StyleSheet.create({
   trackerStepText: {
     fontSize: 9,
     marginTop: 4,
+  },
+  codeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+    marginBottom: space.xl,
   },
   stageContainer: {
     flex: 1,

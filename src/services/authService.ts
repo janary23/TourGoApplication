@@ -3,6 +3,7 @@
 
 import { supabase } from './supabase';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Linking from 'expo-linking';
 
 export interface UserProfile {
   id: string;
@@ -35,6 +36,89 @@ export async function signIn(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
   return { error: null };
+}
+
+// ── Google sign-in ───────────────────────────────────────────────────────────
+//
+// Requires the Google provider to be enabled in the Supabase dashboard
+// (Authentication > Providers > Google) with the redirect URL returned by
+// getOAuthRedirectUrl() added to Authentication > URL Configuration.
+//
+// Uses expo-linking rather than an in-app browser so no extra dependency is
+// needed: we open the consent screen in the system browser and catch the
+// redirect back into the app as a deep link.
+
+/** The deep link Supabase should send the user back to after Google consent. */
+export function getOAuthRedirectUrl(): string {
+  return Linking.createURL('auth/callback');
+}
+
+/**
+ * Start the Google sign-in flow. Resolves once the browser has been opened —
+ * the session itself arrives via the deep link handled by completeOAuthSignIn.
+ */
+export async function signInWithGoogle(): Promise<{ error: string | null }> {
+  const redirectTo = getOAuthRedirectUrl();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+
+  if (error) return { error: error.message };
+  if (!data?.url) {
+    return { error: 'Google sign-in is not configured for this project yet.' };
+  }
+
+  const opened = await Linking.canOpenURL(data.url).catch(() => false);
+  if (!opened) return { error: 'Could not open the Google sign-in page.' };
+
+  await Linking.openURL(data.url);
+  return { error: null };
+}
+
+/**
+ * Finish the OAuth round trip from the redirect URL.
+ *
+ * Handles both flows Supabase can use: PKCE (a `code` query param) and the
+ * implicit flow (tokens in the URL fragment). Returns handled:false for any
+ * unrelated deep link so callers can ignore it.
+ */
+export async function completeOAuthSignIn(
+  url: string
+): Promise<{ handled: boolean; error: string | null }> {
+  if (!url) return { handled: false, error: null };
+
+  try {
+    const [, fragment = ''] = url.split('#');
+    const queryString = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+
+    const fragmentParams = new URLSearchParams(fragment);
+    const queryParams = new URLSearchParams(queryString);
+
+    // OAuth provider reported a failure (user cancelled, config error, ...)
+    const oauthError = queryParams.get('error_description') || fragmentParams.get('error_description');
+    if (oauthError) return { handled: true, error: oauthError };
+
+    // PKCE flow
+    const code = queryParams.get('code');
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      return { handled: true, error: error?.message ?? null };
+    }
+
+    // Implicit flow — tokens come back in the fragment
+    const access_token = fragmentParams.get('access_token');
+    const refresh_token = fragmentParams.get('refresh_token');
+    if (access_token && refresh_token) {
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+      return { handled: true, error: error?.message ?? null };
+    }
+
+    return { handled: false, error: null };
+  } catch (err: any) {
+    return { handled: true, error: err?.message || 'Could not complete Google sign-in.' };
+  }
 }
 
 /** Sign out the current user. */

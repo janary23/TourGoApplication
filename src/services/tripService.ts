@@ -1,36 +1,48 @@
-// src/services/tripService.ts
-// Real database operations — replaces all mockService trip methods
-
 import { supabase } from './supabase';
-import { TripFeatureSettings } from './mockData'; // re-use interfaces
-import { getTemplate } from '../config/tripTemplates';
+import { TripFeatureSettings } from './mockData';
+import { GeneratedItineraryItem } from './aiService';
 
-// ── Shape types that mirror the DB rows mapped to UI-friendly format ──────────
-
-export interface DbTrip {
+export interface TripWithRole {
   id: string;
   title: string;
   destination: string;
-  start_date: string;
-  end_date: string;
-  code: string;
-  image_url: string;
-  created_by: string;
-  created_at: string;
-}
-
-export interface TripWithRole extends Omit<DbTrip, 'start_date' | 'end_date' | 'image_url' | 'created_by' | 'created_at'> {
-  role: 'organizer' | 'member';
-  // UI-friendly aliases (mapped from DB snake_case columns)
   startDate: string;
   endDate: string;
+  code: string;
   image: string;
-  members: any[];
+  role: 'organizer' | 'member';
+  trip_members?: any[];
   start_date?: string;
   end_date?: string;
   image_url?: string;
+  status?: string;
+  trip_status?: string;
   created_by?: string;
   created_at?: string;
+  itineraryItems?: any[];
+  membersList?: string[];
+}
+
+export interface Trip {
+  id: string;
+  title: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  code: string;
+  image: string;
+  role: 'organizer' | 'member';
+  status?: string;
+  trip_status?: string;
+  features: TripFeatureSettings;
+  members: any[];
+  itinerary: any[];
+  expenses: any[];
+  announcements: any[];
+  polls: any[];
+  chatMessages: any[];
+  checklist: any[];
+  documents: any[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,68 +66,90 @@ export async function getTrips(): Promise<TripWithRole[]> {
   const uid = await currentUserId();
 
   const { data, error } = await supabase
-    .from('trip_members')
+    .from('trips')
     .select(`
-      role,
-      trips (
-        id, title, destination, start_date, end_date,
-        code, image_url, created_by, created_at,
-        trip_members (
-          id,
-          user_id,
-          role,
-          checked_in,
-          profiles (id, name, avatar_url)
-        )
+      id,
+      title,
+      destination,
+      start_date,
+      end_date,
+      code,
+      image_url,
+      created_by,
+      created_at,
+      trip_members (
+        user_id,
+        role
       )
     `)
-    .eq('user_id', uid);
+    .order('created_at', { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.warn("Supabase notice in getTrips:", error.message);
+    const { data: myMemberships } = await supabase
+      .from('trip_members')
+      .select('trip_id, role')
+      .eq('user_id', uid);
 
-  return (data || []).map((row: any) => {
-    const trip = row.trips;
-    const dbMembers = trip?.trip_members || [];
-    return {
-      id: trip.id,
-      title: trip.title,
-      destination: trip.destination,
-      startDate: trip.start_date,
-      endDate: trip.end_date,
-      code: trip.code,
-      image: trip.image_url,
-      role: row.role,
-      members: dbMembers.map((m: any) => ({
-        id: m.id,
-        userId: m.profiles?.id || m.user_id,
-        name: m.profiles?.name || 'Unknown',
-        avatar_url: m.profiles?.avatar_url || '',
-        role: m.role,
-        checkedIn: m.checked_in,
-      })),
-    };
-  });
+    if (!myMemberships || myMemberships.length === 0) return [];
+
+    const tripIds = myMemberships.map(m => m.trip_id);
+    const membershipMap = new Map(myMemberships.map(m => [m.trip_id, m.role]));
+
+    const { data: fallbackData } = await supabase
+      .from('trips')
+      .select('id, title, destination, start_date, end_date, code, image_url, created_by, created_at')
+      .in('id', tripIds)
+      .order('created_at', { ascending: false });
+
+    if (!fallbackData) return [];
+
+    return fallbackData
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        destination: t.destination,
+        startDate: t.start_date || 'TBD',
+        endDate: t.end_date || 'TBD',
+        code: t.code,
+        image: t.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+        role: (membershipMap.get(t.id) as 'organizer' | 'member') || 'member',
+        trip_status: (t as any).trip_status || (t as any).status,
+        created_by: t.created_by,
+        created_at: t.created_at,
+      }));
+  }
+
+  return (data || [])
+    .filter(t => t.trip_members?.some((m: any) => m.user_id === uid))
+    .map(t => {
+      const myMembership = t.trip_members?.find((m: any) => m.user_id === uid);
+      const role: 'organizer' | 'member' = myMembership?.role || 'member';
+      return {
+        id: t.id,
+        title: t.title,
+        destination: t.destination,
+        startDate: t.start_date || 'TBD',
+        endDate: t.end_date || 'TBD',
+        code: t.code,
+        image: t.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+        role,
+        trip_status: (t as any).trip_status || (t as any).status,
+        created_by: t.created_by,
+        created_at: t.created_at,
+      };
+    });
 }
 
-/** Fetch a single trip by ID with all related data. */
-export async function getTripById(tripId: string) {
+/** Fetch a full trip with all related data (features, members, itinerary, expenses, etc.). */
+export async function getTripById(tripId: string): Promise<Trip> {
   const uid = await currentUserId();
 
-  // Get membership + role
-  const { data: memberRow } = await supabase
-    .from('trip_members')
-    .select('role')
-    .eq('trip_id', tripId)
-    .eq('user_id', uid)
-    .single();
-
-  const role: 'organizer' | 'member' = memberRow?.role || 'member';
-
-  // Fetch all nested data in parallel
+  // Run all sub-queries in parallel
   const [
     tripRes,
-    featuresRes,
     membersRes,
+    featuresRes,
     itineraryRes,
     expensesRes,
     announcementsRes,
@@ -126,71 +160,17 @@ export async function getTripById(tripId: string) {
     locationsRes,
   ] = await Promise.all([
     supabase.from('trips').select('*').eq('id', tripId).single(),
+    supabase.from('trip_members').select('id, user_id, role, checked_in, check_in_time, profiles:user_id(id, name, avatar_url, email)').eq('trip_id', tripId),
     supabase.from('trip_features').select('*').eq('trip_id', tripId).single(),
-    supabase
-      .from('trip_members')
-      .select('*, profiles(id, name, avatar_url)')
-      .eq('trip_id', tripId),
-    supabase
-      .from('itinerary_items')
-      .select('*')
-      .eq('trip_id', tripId)
-      .order('day_index')
-      .order('time_label'),
-    supabase
-      .from('expenses')
-      .select('*, profiles!expenses_paid_by_fkey(name), expense_splits(user_id, profiles(name))')
-      .eq('trip_id', tripId)
-      .order('expense_date'),
-    supabase
-      .from('announcements')
-      .select('*, profiles(name)')
-      .eq('trip_id', tripId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('polls')
-      .select('*, profiles(name), poll_options(*, poll_votes(user_id, profiles(name)))')
-      .eq('trip_id', tripId)
-      .order('created_at'),
-    supabase
-      .from('chat_messages')
-      .select('*, profiles(name, avatar_url)')
-      .eq('trip_id', tripId)
-      .order('created_at'),
-    supabase
-      .from('checklist_items')
-      .select('*, profiles(name)')
-      .eq('trip_id', tripId)
-      .order('created_at'),
-    supabase
-      .from('documents')
-      .select('*, profiles(name)')
-      .eq('trip_id', tripId)
-      .order('uploaded_at', { ascending: false }),
-    supabase
-      .from('member_locations')
-      .select('*')
-      .eq('trip_id', tripId),
+    supabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_index').order('time_label'),
+    supabase.from('expenses').select('*, expense_splits(*)').eq('trip_id', tripId).order('expense_date', { ascending: false }),
+    supabase.from('announcements').select('*, profiles:author_id(name, avatar_url)').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    supabase.from('polls').select('*, poll_options(*, poll_votes(*))').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    supabase.from('chat_messages').select('*, profiles:sender_id(name, avatar_url)').eq('trip_id', tripId).order('created_at', { ascending: true }),
+    supabase.from('checklist_items').select('*').eq('trip_id', tripId).order('created_at', { ascending: true }),
+    supabase.from('documents').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    supabase.from('member_locations').select('*').eq('trip_id', tripId),
   ]);
-
-  // Log any fetch errors
-  const errors = [
-    { source: 'trip', error: tripRes.error },
-    { source: 'features', error: featuresRes.error?.code === 'PGRST116' ? null : featuresRes.error },
-    { source: 'members', error: membersRes.error },
-    { source: 'itinerary', error: itineraryRes.error },
-    { source: 'expenses', error: expensesRes.error },
-    { source: 'announcements', error: announcementsRes.error },
-    { source: 'polls', error: pollsRes.error },
-    { source: 'chat', error: chatRes.error },
-    { source: 'checklist', error: checklistRes.error },
-    { source: 'documents', error: documentsRes.error },
-    { source: 'locations', error: locationsRes.error },
-  ].filter(item => item.error !== null);
-
-  if (errors.length > 0) {
-    console.error("Database fetch errors in getTripById:", JSON.stringify(errors, null, 2));
-  }
 
   if (tripRes.error) throw new Error(`Trip load failed: ${tripRes.error.message}`);
   if (membersRes.error) throw new Error(`Members load failed: ${membersRes.error.message}`);
@@ -217,6 +197,9 @@ export async function getTripById(tripId: string) {
 
   const locationsMap = new Map((locationsRes.data || []).map((loc: any) => [loc.user_id, loc]));
 
+  const currentMember = (membersRes.data || []).find((m: any) => m.user_id === uid);
+  const role: 'organizer' | 'member' = currentMember?.role || 'member';
+
   return {
     id: trip.id,
     title: trip.title,
@@ -226,134 +209,145 @@ export async function getTripById(tripId: string) {
     code: trip.code,
     image: trip.image_url,
     role,
+    status: trip.status || trip.trip_status,
+    trip_status: trip.trip_status || trip.status,
     features,
     members: (membersRes.data || []).map((m: any) => {
       const loc = locationsMap.get(m.user_id);
+      const prof = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
       return {
         id: m.id,
-        userId: m.profiles?.id || m.user_id,
-        name: m.profiles?.name || 'Unknown',
-        avatar_url: m.profiles?.avatar_url || '',
+        userId: prof?.id || m.user_id,
+        name: prof?.name || 'Traveler',
+        email: prof?.email || '',
+        avatar_url: prof?.avatar_url || '',
         role: m.role,
         checkedIn: m.checked_in,
         lastCheckedInTime: m.check_in_time
           ? new Date(m.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           : undefined,
-        location: loc ? { latitude: loc.latitude, longitude: loc.longitude, updatedAt: loc.updated_at } : undefined,
+        latitude: loc?.latitude,
+        longitude: loc?.longitude,
+        lastLocationUpdate: loc?.updated_at
+          ? new Date(loc.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : undefined,
       };
     }),
-    itinerary: (itineraryRes.data || []).map((i: any) => ({
-      id: i.id,
-      time: i.time_label,
-      title: i.title,
-      description: i.description,
-      location: i.location,
-      dayIndex: i.day_index,
+    itinerary: (itineraryRes.data || []).map((item: any) => ({
+      id: item.id,
+      dayIndex: item.day_index,
+      time: item.time_label,
+      title: item.title,
+      description: item.description,
+      location: item.location,
     })),
-    expenses: (expensesRes.data || []).map((e: any) => ({
-      id: e.id,
-      title: e.title,
-      amount: e.amount,
-      paidBy: e.profiles?.name || 'Unknown',
-      splitWith: (e.expense_splits || []).map((s: any) => s.profiles?.name || 'Unknown'),
-      date: e.expense_date,
+    expenses: (expensesRes.data || []).map((exp: any) => ({
+      id: exp.id,
+      title: exp.title,
+      amount: parseFloat(exp.amount),
+      paidBy: exp.paid_by,
+      splitWith: (exp.expense_splits || []).map((s: any) => s.user_id),
+      date: exp.expense_date,
     })),
-    announcements: (announcementsRes.data || []).map((a: any) => ({
-      id: a.id,
-      title: a.title,
-      content: a.content,
-      date: new Date(a.created_at).toLocaleString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      }),
-      author: a.profiles?.name || 'Unknown',
-      important: a.is_important,
+    announcements: (announcementsRes.data || []).map((ann: any) => ({
+      id: ann.id,
+      title: ann.title,
+      content: ann.content,
+      authorName: ann.profiles?.name || 'Organizer',
+      authorAvatar: ann.profiles?.avatar_url || '',
+      date: new Date(ann.created_at).toLocaleDateString(),
+      important: ann.is_important,
     })),
-    polls: (pollsRes.data || []).map((p: any) => ({
-      id: p.id,
-      question: p.question,
-      allowMultiple: p.allow_multiple,
-      creator: p.profiles?.name || 'Unknown',
-      closed: p.is_closed,
-      createdDate: new Date(p.created_at).toLocaleString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      }),
-      options: (p.poll_options || []).map((o: any) => ({
-        id: o.id,
-        text: o.text,
-        votes: (o.poll_votes || []).map((v: any) => v.profiles?.name || 'Unknown'),
-      })),
-    })),
-    chatMessages: (chatRes.data || []).map((m: any) => ({
-      id: m.id,
-      text: m.text,
-      sender: m.profiles?.name || 'Unknown',
-      senderAvatar: m.profiles?.avatar_url || '',
-      timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    polls: (pollsRes.data || []).map((poll: any) => {
+      const totalVotes = (poll.poll_options || []).reduce(
+        (sum: number, opt: any) => sum + (opt.poll_votes?.length || 0), 0
+      );
+      return {
+        id: poll.id,
+        question: poll.question,
+        allowMultiple: poll.allow_multiple,
+        options: (poll.poll_options || []).map((opt: any) => ({
+          id: opt.id,
+          text: opt.text,
+          imageUrl: opt.image_url || null,
+          votes: opt.poll_votes?.length || 0,
+          voters: (opt.poll_votes || []).map((v: any) => v.user_id),
+        })),
+        totalVotes,
+        userVoted: (poll.poll_options || []).some((opt: any) =>
+          (opt.poll_votes || []).some((v: any) => v.user_id === uid)
+        ),
+      };
+    }),
+    chatMessages: (chatRes.data || []).map((msg: any) => ({
+      id: msg.id,
+      senderId: msg.sender_id,
+      text: msg.text,
+      imageUrl: msg.image_url || null,
+      sender: msg.profiles?.name || 'Unknown',
+      senderAvatar: msg.profiles?.avatar_url || '',
+      timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       role: 'member' as const,
     })),
-    checklist: (checklistRes.data || []).map((c: any) => ({
-      id: c.id,
-      text: c.text,
-      completed: c.is_completed,
-      assignedTo: c.profiles?.name,
-      assignedToId: c.assigned_to,
-    })),
-    documents: (documentsRes.data || []).map((d: any) => ({
-      id: d.id,
-      title: d.title,
-      fileType: d.file_type,
-      fileSize: d.file_size,
-      uploadedBy: d.profiles?.name || 'Unknown',
-      uploadedDate: d.uploaded_at?.split('T')[0] || '',
+    checklist: (checklistRes.data || []).map((item: any) => {
+      const assignedToId: string | null = item.assigned_to || null;
+      let assignedToName: string | null = null;
+      if (assignedToId) {
+        const found = (membersRes.data || []).find((m: any) => m.user_id === assignedToId);
+        const prof = found ? (Array.isArray(found.profiles) ? found.profiles[0] : found.profiles) : null;
+        assignedToName = prof?.name || null;
+      }
+      return {
+        id: item.id,
+        text: item.text,
+        completed: item.is_completed,
+        assignedTo: assignedToName,      // resolved display name (null if former member)
+        assignedToId,                    // raw user ID for "mine" filter & former-member detection
+      };
+    }),
+    documents: (documentsRes.data || []).map((doc: any) => ({
+      id: doc.id,
+      title: doc.title,
+      fileType: doc.file_type,
+      fileSize: doc.file_size,
+      uploadedAt: doc.created_at,
     })),
   };
 }
 
-function getPresetChecklistItems(tripId: string, uid: string, tripType?: string, tripSubtype?: string) {
-  const base = [
-    { trip_id: tripId, text: 'Prepare packing list', is_completed: false, assigned_to: uid }
-  ];
-
-  if (!tripType || !tripSubtype) return base;
-  const template = getTemplate(tripType, tripSubtype);
-  if (template && template.presetChecklist) {
-    return [
-      ...base,
-      ...template.presetChecklist.map(text => ({
-        trip_id: tripId,
-        text,
-        is_completed: false,
-        assigned_to: uid
-      }))
-    ];
+function getPresetAnnouncement(tripId: string, authorId: string, tripType: string, tripSubtype: string, destination: string) {
+  if (tripType === 'educational') {
+    return {
+      title: 'Welcome to the Study Tour',
+      content: `Welcome everyone to our educational trip to ${destination}! Please review the schedule and stay tuned for announcements.`,
+      is_important: true,
+    };
   }
-  return base;
-}
-
-function getPresetAnnouncement(tripId: string, uid: string, tripType?: string, tripSubtype?: string, destination: string = 'destination') {
-  let title = 'Welcome to our Trip!';
-  let content = `Glad to start planning for our getaway to ${destination}. Let's make this trip memorable!`;
-
-  if (tripType && tripSubtype) {
-    const template = getTemplate(tripType, tripSubtype);
-    if (template && template.presetAnnouncement) {
-      title = template.presetAnnouncement.title;
-      content = template.presetAnnouncement.content.replace(/destination/i, destination);
-    }
+  if (tripType === 'organization') {
+    return {
+      title: 'Delegation Briefing and Kickoff',
+      content: `Welcome team to ${destination}! Let's make this summit impactful. Please keep notifications turned on.`,
+      is_important: true,
+    };
   }
-
   return {
-    trip_id: tripId,
-    title,
-    content,
-    author_id: uid,
-    is_important: true
+    title: 'Welcome to the Adventure',
+    content: `Get ready for an amazing trip to ${destination}! Check the itinerary for our scheduled stops and activities.`,
+    is_important: false,
   };
 }
 
-/** Create a new trip and set the creator as organizer. */
+function getPresetChecklistItems(tripId: string, userId: string, tripType: string, tripSubtype: string) {
+  const common = [
+    { text: 'Government ID / Student ID', is_completed: false, assigned_to: userId },
+    { text: 'Cash & Emergency Funds', is_completed: false, assigned_to: userId },
+    { text: 'Phone Charger & Power Bank', is_completed: false, assigned_to: userId },
+    { text: 'Personal Medications & First Aid', is_completed: false, assigned_to: userId },
+  ];
+  return common.map(item => ({ trip_id: tripId, ...item }));
+}
+
+/** Create a new trip with all configured features and presets. */
 export async function createTrip(
   title: string,
   destination: string,
@@ -361,11 +355,11 @@ export async function createTrip(
   endDate: string,
   features: TripFeatureSettings,
   imageUrl?: string,
-  tripType?: string,
-  itineraryStops?: any[],
-  tripSubtype?: string,
-  preloadedPolls?: { question: string; options: string[] }[],
-  customChecklist?: string[]
+  tripType: string = 'leisure',
+  tripSubtype: string = 'vacation',
+  customChecklist?: string[],
+  itineraryStops?: GeneratedItineraryItem[],
+  preloadedPolls?: Array<{ question: string; options: string[] }>
 ): Promise<string> {
   const uid = await currentUserId();
   const code = generateTripCode(destination);
@@ -374,7 +368,6 @@ export async function createTrip(
     return v.toString(16);
   });
 
-  // Insert trip using client-side generated UUID to bypass RETURNING/SELECT RLS policy check
   const { error: tripError } = await supabase
     .from('trips')
     .insert({
@@ -410,7 +403,7 @@ export async function createTrip(
     }))
     : getPresetChecklistItems(tripId, uid, tripType, tripSubtype);
 
-  // Insert trip_member FIRST — trip_features RLS policy requires the user to be a trip member
+  // Insert trip_member FIRST
   const { error: memberError } = await supabase.from('trip_members').insert({
     trip_id: tripId,
     user_id: uid,
@@ -420,7 +413,7 @@ export async function createTrip(
   });
   if (memberError) throw new Error('Failed to add you as trip organizer: ' + memberError.message);
 
-  // Insert trip_features — now the user is a member so RLS INSERT policy passes
+  // Insert trip_features
   const { error: featError } = await supabase.from('trip_features').insert({
     trip_id: tripId,
     itinerary: features.itinerary,
@@ -446,7 +439,7 @@ export async function createTrip(
     supabase.from('checklist_items').insert(checklistRows),
   ];
 
-  // Insert preloaded polls that the user specifically approved/created
+  // Insert preloaded polls
   const pollsToInsert = preloadedPolls || [];
   for (const p of pollsToInsert) {
     const pollId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -476,7 +469,7 @@ export async function createTrip(
     operations.push(supabase.from('itinerary_items').insert(dbItineraryStops));
   }
 
-  // Insert remaining data in parallel and check for errors
+  // Insert remaining data in parallel
   const results = await Promise.all(operations);
   for (const r of results) {
     if (r?.error) throw new Error('Trip setup failed: ' + r.error.message);
@@ -561,11 +554,30 @@ export async function updateTripFeatures(
   return { error: null };
 }
 
-/** Delete a trip (organizer only). */
+/** Delete a trip and its associated records. */
 export async function deleteTrip(tripId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('trips').delete().eq('id', tripId);
-  if (error) return { error: error.message };
-  return { error: null };
+  try {
+    // Delete child records first (order matters for RLS: keep trip_members until trips row is gone)
+    await supabase.from('expenses').delete().eq('trip_id', tripId);
+    await supabase.from('itinerary_items').delete().eq('trip_id', tripId);
+    await supabase.from('checklist_items').delete().eq('trip_id', tripId);
+    await supabase.from('announcements').delete().eq('trip_id', tripId);
+    await supabase.from('chat_messages').delete().eq('trip_id', tripId);
+    await supabase.from('documents').delete().eq('trip_id', tripId);
+    await supabase.from('polls').delete().eq('trip_id', tripId);
+    await supabase.from('trip_features').delete().eq('trip_id', tripId);
+
+    // Delete the trip row BEFORE trip_members so RLS can still verify organizer role
+    const { error } = await supabase.from('trips').delete().eq('id', tripId);
+    if (error) return { error: error.message };
+
+    // Now safe to remove members
+    await supabase.from('trip_members').delete().eq('trip_id', tripId);
+
+    return { error: null };
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to delete trip' };
+  }
 }
 
 // ── Itinerary ─────────────────────────────────────────────────────────────────
@@ -582,6 +594,24 @@ export async function addItineraryItem(
     trip_id: tripId, day_index: dayIndex, time_label: time,
     title, description, location: location || '',
   });
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+export async function updateItineraryItem(
+  itemId: string,
+  updates: { time_label?: string; title?: string; description?: string; location?: string; day_index?: number }
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('itinerary_items')
+    .update(updates)
+    .eq('id', itemId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+export async function deleteItineraryItem(itemId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('itinerary_items').delete().eq('id', itemId);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -611,6 +641,12 @@ export async function addExpense(
   return { error: null };
 }
 
+export async function deleteExpense(expenseId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 // ── Announcements ─────────────────────────────────────────────────────────────
 
 export async function addAnnouncement(
@@ -632,7 +668,7 @@ export async function addAnnouncement(
 export async function addPoll(
   tripId: string,
   question: string,
-  options: string[],
+  options: { text: string; imageUrl?: string | null }[],
   allowMultiple: boolean = false
 ): Promise<{ error: string | null }> {
   const uid = await currentUserId();
@@ -645,7 +681,12 @@ export async function addPoll(
 
   if (error || !poll) return { error: error?.message || 'Failed to create poll' };
 
-  const optionRows = options.map((text, idx) => ({ poll_id: poll.id, text, position: idx }));
+  const optionRows = options.map((opt, idx) => ({
+    poll_id: poll.id,
+    text: opt.text,
+    image_url: opt.imageUrl || null,
+    position: idx,
+  }));
   await supabase.from('poll_options').insert(optionRows);
 
   return { error: null };
@@ -671,15 +712,47 @@ export async function voteInPoll(optionId: string): Promise<{ error: string | nu
   return { error: null };
 }
 
+// ── Media Upload ──────────────────────────────────────────────────────────────
+
+/** Upload an image to Supabase Storage and return the public URL. */
+export async function uploadTripImage(
+  localUri: string,
+  folder: 'chat' | 'polls' = 'chat'
+): Promise<{ url: string | null; error: string | null }> {
+  try {
+    const uid = await currentUserId();
+    const ext = localUri.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `${uid}/${folder}/${Date.now()}.${ext}`;
+
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+
+    const { error: uploadError } = await supabase.storage
+      .from('trip-media')
+      .upload(fileName, blob, { contentType: `image/${ext}`, upsert: false });
+
+    if (uploadError) return { url: null, error: uploadError.message };
+
+    const { data: urlData } = supabase.storage.from('trip-media').getPublicUrl(fileName);
+    return { url: urlData.publicUrl, error: null };
+  } catch (err: any) {
+    return { url: null, error: err?.message || 'Upload failed' };
+  }
+}
+
 // ── Chat Messages ─────────────────────────────────────────────────────────────
 
 export async function sendChatMessage(
   tripId: string,
-  text: string
+  text: string,
+  imageUrl?: string | null
 ): Promise<{ error: string | null }> {
   const uid = await currentUserId();
   const { error } = await supabase.from('chat_messages').insert({
-    trip_id: tripId, sender_id: uid, text,
+    trip_id: tripId,
+    sender_id: uid,
+    text: text || '',
+    image_url: imageUrl || null,
   });
   if (error) return { error: error.message };
   return { error: null };
@@ -745,6 +818,12 @@ export async function toggleChecklistItem(itemId: string, currentValue: boolean)
   return { error: null };
 }
 
+export async function deleteChecklistItem(itemId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('checklist_items').delete().eq('id', itemId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function addDocument(
@@ -757,6 +836,12 @@ export async function addDocument(
   const { error } = await supabase.from('documents').insert({
     trip_id: tripId, title, file_type: fileType, file_size: fileSize, uploaded_by: uid,
   });
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+export async function deleteDocument(docId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('documents').delete().eq('id', docId);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -779,32 +864,6 @@ export async function toggleCheckIn(tripId: string, currentCheckedIn: boolean): 
 
 // ── Guardian Mode / Location ──────────────────────────────────────────────────
 
-// ── Deletions ────────────────────────────────────────────────────────────────
-
-export async function deleteItineraryItem(itemId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('itinerary_items').delete().eq('id', itemId);
-  if (error) return { error: error.message };
-  return { error: null };
-}
-
-export async function deleteChecklistItem(itemId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('checklist_items').delete().eq('id', itemId);
-  if (error) return { error: error.message };
-  return { error: null };
-}
-
-export async function deleteExpense(expenseId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
-  if (error) return { error: error.message };
-  return { error: null };
-}
-
-export async function deleteDocument(docId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('documents').delete().eq('id', docId);
-  if (error) return { error: error.message };
-  return { error: null };
-}
-
 export async function updateUserLocation(
   tripId: string,
   latitude: number,
@@ -818,102 +877,201 @@ export async function updateUserLocation(
   return { error: null };
 }
 
-/** Kick a member from a trip. */
+// ── Member Management ────────────────────────────────────────────────────────
+
+/** Kick / remove a member from a trip. */
 export async function kickMember(tripId: string, userId: string): Promise<{ error: string | null }> {
-  // Delete from trip_members
-  const { error: memberError } = await supabase
-    .from('trip_members')
-    .delete()
-    .eq('trip_id', tripId)
-    .eq('user_id', userId);
+  try {
+    const uid = await currentUserId();
 
-  if (memberError) return { error: memberError.message };
+    // Fetch target user profile for notification
+    const { data: targetProfile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', userId)
+      .maybeSingle();
+    const targetName = targetProfile?.name || 'A traveler';
 
-  // Clean up location
-  await supabase
-    .from('member_locations')
-    .delete()
-    .eq('trip_id', tripId)
-    .eq('user_id', userId);
+    // Delete from trip_members
+    const { error: memberError } = await supabase
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', userId);
 
-  // Unassign checklist items
-  await supabase
-    .from('checklist_items')
-    .update({ assigned_to: null })
-    .eq('trip_id', tripId)
-    .eq('assigned_to', userId);
+    if (memberError) return { error: memberError.message };
 
-  return { error: null };
+    // Remove this user's poll votes from all polls in this trip
+    const { data: tripPollOptions } = await supabase
+      .from('poll_options')
+      .select('id, polls!inner(trip_id)')
+      .eq('polls.trip_id', tripId);
+    if (tripPollOptions && tripPollOptions.length > 0) {
+      const optionIds = tripPollOptions.map((o: any) => o.id);
+      await supabase
+        .from('poll_votes')
+        .delete()
+        .eq('user_id', userId)
+        .in('option_id', optionIds);
+    }
+
+    // Clean up location
+    await supabase
+      .from('member_locations')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', userId);
+
+    // Unassign checklist items
+    await supabase
+      .from('checklist_items')
+      .update({ assigned_to: null })
+      .eq('trip_id', tripId)
+      .eq('assigned_to', userId);
+
+    // Post notification to trip feed
+    await supabase.from('announcements').insert({
+      trip_id: tripId,
+      title: 'Member Removed',
+      content: `${targetName} was removed from the trip group.`,
+      author_id: uid,
+      is_important: false,
+    });
+
+    return { error: null };
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to remove member' };
+  }
 }
 
 /** Leave a trip. Handles leadership transfer according to Messenger rules. */
 export async function leaveTrip(tripId: string): Promise<{ error: string | null }> {
-  const uid = await currentUserId();
+  try {
+    const uid = await currentUserId();
 
-  // 1. Fetch current user's membership role
-  const { data: currentMember, error: roleError } = await supabase
-    .from('trip_members')
-    .select('role')
-    .eq('trip_id', tripId)
-    .eq('user_id', uid)
-    .single();
+    // Fetch leaving user profile name
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', uid)
+      .maybeSingle();
+    const leaverName = userProfile?.name || 'A traveler';
 
-  if (roleError) return { error: roleError.message };
-
-  // 2. If organizer, check if leadership transfer is needed
-  if (currentMember?.role === 'organizer') {
-    // Get all members for this trip
-    const { data: members, error: fetchError } = await supabase
+    // 1. Fetch current user's membership role
+    const { data: currentMember, error: roleError } = await supabase
       .from('trip_members')
-      .select('user_id, role')
-      .eq('trip_id', tripId);
+      .select('role')
+      .eq('trip_id', tripId)
+      .eq('user_id', uid)
+      .maybeSingle();
 
-    if (fetchError) return { error: fetchError.message };
+    if (roleError) return { error: roleError.message };
+    if (!currentMember) return { error: null };
 
-    // Check if there are other organizers
-    const otherOrganizers = (members || []).filter(m => m.user_id !== uid && m.role === 'organizer');
+    // 2. If organizer, check if leadership transfer is needed
+    if (currentMember?.role === 'organizer') {
+      // Get all members for this trip
+      const { data: members, error: fetchError } = await supabase
+        .from('trip_members')
+        .select('user_id, role')
+        .eq('trip_id', tripId);
 
-    // If leaving user is the ONLY organizer
-    if (otherOrganizers.length === 0) {
-      const otherMembers = (members || []).filter(m => m.user_id !== uid && m.role === 'member');
-      // If there are other members, promote the first one in the list to organizer
-      if (otherMembers.length > 0) {
-        const promoteUserId = otherMembers[0].user_id;
-        const { error: promoteError } = await supabase
-          .from('trip_members')
-          .update({ role: 'organizer' })
-          .eq('trip_id', tripId)
-          .eq('user_id', promoteUserId);
+      if (!fetchError && members) {
+        // Check if there are other organizers
+        const otherOrganizers = members.filter(m => m.user_id !== uid && m.role === 'organizer');
 
-        if (promoteError) return { error: 'Failed to transfer leadership: ' + promoteError.message };
+        // If leaving user is the ONLY organizer
+        if (otherOrganizers.length === 0) {
+          const otherMembers = members.filter(m => m.user_id !== uid && m.role === 'member');
+          // If there are other members, promote ALL of them to organizers
+          if (otherMembers.length > 0) {
+            await Promise.all(
+              otherMembers.map((m) =>
+                supabase
+                  .from('trip_members')
+                  .update({ role: 'organizer' })
+                  .eq('trip_id', tripId)
+                  .eq('user_id', m.user_id)
+              )
+            );
+
+            // Post rich leadership handover notification
+            const remainingCount = otherMembers.length;
+            const notifMsg = remainingCount === 1
+              ? `${leaverName} left the group. Therefore, you are now the trip organizer with full workspace access!`
+              : `${leaverName} left the group. Therefore, you and ${remainingCount - 1} other member${remainingCount - 1 > 1 ? 's are' : ' is'} now the organizers with full workspace access!`;
+
+            await supabase.from('announcements').insert({
+              trip_id: tripId,
+              title: 'Leadership Handover',
+              content: notifMsg,
+              author_id: uid,
+              is_important: true,
+            });
+          }
+        } else {
+          // Other organizers still remain
+          await supabase.from('announcements').insert({
+            trip_id: tripId,
+            title: 'Organizer Left Group',
+            content: `${leaverName} left the group. The remaining organizers will continue leading the trip.`,
+            author_id: uid,
+            is_important: false,
+          });
+        }
       }
+    } else {
+      // Normal member left
+      await supabase.from('announcements').insert({
+        trip_id: tripId,
+        title: 'Member Left Group',
+        content: `${leaverName} has left the trip group.`,
+        author_id: uid,
+        is_important: false,
+      });
     }
+
+    // 3. Delete leaving user from members
+    const { error: leaveError } = await supabase
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', uid);
+
+    if (leaveError) return { error: leaveError.message };
+
+    // 4. Remove leaving user's poll votes from all polls in this trip
+    const { data: tripPollOptions } = await supabase
+      .from('poll_options')
+      .select('id, polls!inner(trip_id)')
+      .eq('polls.trip_id', tripId);
+    if (tripPollOptions && tripPollOptions.length > 0) {
+      const optionIds = tripPollOptions.map((o: any) => o.id);
+      await supabase
+        .from('poll_votes')
+        .delete()
+        .eq('user_id', uid)
+        .in('option_id', optionIds);
+    }
+
+    // 5. Clean up leaving user's location
+    await supabase
+      .from('member_locations')
+      .delete()
+      .eq('trip_id', tripId)
+      .eq('user_id', uid);
+
+    // 6. Unassign leaving user's checklist items
+    await supabase
+      .from('checklist_items')
+      .update({ assigned_to: null })
+      .eq('trip_id', tripId)
+      .eq('assigned_to', uid);
+
+    return { error: null };
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to leave trip' };
   }
-
-  // 3. Delete leaving user from members
-  const { error: leaveError } = await supabase
-    .from('trip_members')
-    .delete()
-    .eq('trip_id', tripId)
-    .eq('user_id', uid);
-
-  if (leaveError) return { error: leaveError.message };
-
-  // 4. Clean up leaving user's location
-  await supabase
-    .from('member_locations')
-    .delete()
-    .eq('trip_id', tripId)
-    .eq('user_id', uid);
-
-  // 5. Unassign leaving user's checklist items
-  await supabase
-    .from('checklist_items')
-    .update({ assigned_to: null })
-    .eq('trip_id', tripId)
-    .eq('assigned_to', uid);
-
-  return { error: null };
 }
 
 /** Update a member's role (e.g. promote to organizer/coordinator). */
@@ -922,27 +1080,155 @@ export async function updateMemberRole(
   userId: string,
   role: 'organizer' | 'member'
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('trip_members')
-    .update({ role })
-    .eq('trip_id', tripId)
-    .eq('user_id', userId);
+  try {
+    const uid = await currentUserId();
 
-  if (error) return { error: error.message };
-  return { error: null };
+    const { error } = await supabase
+      .from('trip_members')
+      .update({ role })
+      .eq('trip_id', tripId)
+      .eq('user_id', userId);
+
+    if (error) return { error: error.message };
+
+    // Post notification to trip feed
+    const { data: targetProfile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', userId)
+      .maybeSingle();
+    const targetName = targetProfile?.name || 'A traveler';
+
+    await supabase.from('announcements').insert({
+      trip_id: tripId,
+      title: role === 'organizer' ? 'Promoted to Organizer' : 'Role Updated',
+      content: role === 'organizer'
+        ? `${targetName} was promoted to Organizer for this trip!`
+        : `${targetName}'s role was set to Member.`,
+      author_id: uid,
+      is_important: role === 'organizer',
+    });
+
+    return { error: null };
+  } catch (err: any) {
+    return { error: err?.message || 'Failed to update member role' };
+  }
 }
 
-export async function updateItineraryItem(
-  itemId: string,
-  updates: { time_label?: string; title?: string; description?: string; location?: string; day_index?: number }
-): Promise<{ error: string | null }> {
-  const { error } = await supabase
+// ── Import an itinerary by trip code ─────────────────────────────────────────
+
+export interface TripCodePreview {
+  trip: {
+    id: string;
+    title: string;
+    destination: string;
+    code: string;
+    startDate: string | null;
+    endDate: string | null;
+    image: string;
+    dayCount: number;
+  };
+  stops: Array<{
+    dayIndex: number;
+    time: string;
+    title: string;
+    description: string;
+    location: string;
+  }>;
+}
+
+/**
+ * Look up a trip by its code and return its itinerary for preview.
+ */
+export async function previewTripByCode(
+  code: string
+): Promise<{ data: TripCodePreview | null; error: string | null }> {
+  const trimmed = code.trim();
+  if (!trimmed) return { data: null, error: 'Enter a trip code.' };
+
+  const { data: trip, error: findError } = await supabase
+    .from('trips')
+    .select('id, title, destination, code, start_date, end_date, image_url')
+    .ilike('code', trimmed)
+    .maybeSingle();
+
+  if (findError) return { data: null, error: findError.message };
+  if (!trip) return { data: null, error: 'No trip found with that code.' };
+
+  const { data: items, error: itemsError } = await supabase
     .from('itinerary_items')
-    .update(updates)
-    .eq('id', itemId);
-  if (error) return { error: error.message };
-  return { error: null };
+    .select('day_index, time_label, title, description, location')
+    .eq('trip_id', trip.id)
+    .order('day_index')
+    .order('time_label');
+
+  if (itemsError) {
+    return {
+      data: null,
+      error: 'This trip exists, but you do not have permission to view its itinerary.',
+    };
+  }
+
+  const stops = (items || []).map((i) => ({
+    dayIndex: Number(i.day_index) || 1,
+    time: i.time_label || '10:00 AM',
+    title: i.title || 'Stop',
+    description: i.description || '',
+    location: i.location || '',
+  }));
+
+  const dayCount = stops.reduce((max, s) => Math.max(max, s.dayIndex), 1);
+
+  return {
+    data: {
+      trip: {
+        id: trip.id,
+        title: trip.title,
+        destination: trip.destination,
+        code: trip.code,
+        startDate: trip.start_date,
+        endDate: trip.end_date,
+        image: trip.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+        dayCount,
+      },
+      stops,
+    },
+    error: null,
+  };
 }
 
+/**
+ * Import the itinerary stops from a previewed trip into an existing target trip.
+ */
+export async function importTripByCode(
+  code: string,
+  targetTripId: string
+): Promise<{ addedCount: number; error: string | null }> {
+  const { data: preview, error: previewError } = await previewTripByCode(code);
+  if (previewError || !preview) {
+    return { addedCount: 0, error: previewError || 'Could not load itinerary to import.' };
+  }
 
+  if (preview.stops.length === 0) {
+    return { addedCount: 0, error: 'This trip does not have any itinerary stops to import.' };
+  }
 
+  const rows = preview.stops.map((s) => ({
+    trip_id: targetTripId,
+    day_index: s.dayIndex,
+    time_label: s.time,
+    title: s.title,
+    description: s.description,
+    location: s.location,
+  }));
+
+  const { error: insertError } = await supabase
+    .from('itinerary_items')
+    .insert(rows);
+
+  if (insertError) {
+    return { addedCount: 0, error: insertError.message };
+  }
+
+  return { addedCount: rows.length, error: null };
+}

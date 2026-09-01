@@ -7,12 +7,13 @@ interface FeedItem {
   id: string;
   tripId: string;
   tripName: string;
-  type: 'announcement' | 'expense' | 'poll' | 'checklist';
+  type: 'announcement' | 'chat' | 'expense' | 'poll' | 'checklist';
   title: string;
   description: string;
   time: string;
   timestamp: number;
   important?: boolean;
+  badgeCount?: number;
 }
 
 interface ActivityItemCardProps {
@@ -45,7 +46,7 @@ export default function ActivityItemCard({
         </View>
         <View style={styles.contentContainer}>
           <View style={styles.metaRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '70%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '60%' }}>
               <Text style={[styles.tripLabel, { color: colors.textMuted }]} numberOfLines={1}>
                 {stripEmojis(item.tripName)}
               </Text>
@@ -53,7 +54,14 @@ export default function ActivityItemCard({
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
               )}
             </View>
-            <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{item.time}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {item.badgeCount && item.badgeCount > 1 ? (
+                <View style={[styles.badgeContainer, { backgroundColor: colors.brand || '#0284C7' }]}>
+                  <Text style={styles.badgeText}>{item.badgeCount} new</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.timeLabel, { color: colors.textMuted }]}>{item.time}</Text>
+            </View>
           </View>
           
           <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>
@@ -111,6 +119,19 @@ const styles = StyleSheet.create({
   timeLabel: {
     fontSize: 9.5,
     fontFamily: 'Poppins-Medium',
+  },
+  badgeContainer: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'Poppins-Bold',
+    lineHeight: 11,
   },
   titleText: {
     fontSize: 13,

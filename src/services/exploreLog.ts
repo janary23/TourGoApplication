@@ -2,7 +2,6 @@ import { storageGet, storageSet } from './storage';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'tourgo:explore-log';
-const LEGACY_KEY = 'tourgo:visited-ph';
 
 // Lightweight display metadata saved alongside a wishlisted destination id so
 // the Wishlist screen can render spots that aren't part of the offline catalog
@@ -30,146 +29,114 @@ const EMPTY: ExploreLog = {
   savedProvinces: [],
 };
 
-// Scopes the local storage key to the currently logged in user ID to prevent account leak
-async function getStorageKey(): Promise<string> {
+// Scopes the local storage key to the currently logged in user ID to prevent cross-account leakage
+async function getStorageKey(): Promise<{ key: string; userId: string | null }> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      return `${STORAGE_KEY}:${user.id}`;
+    if (user && user.id) {
+      return { key: `${STORAGE_KEY}:${user.id}`, userId: user.id };
     }
   } catch (e) {
     // fail gracefully
   }
-  return STORAGE_KEY;
+  return { key: `${STORAGE_KEY}:guest`, userId: null };
 }
 
+/**
+ * Load explore log and user's Wishlist.
+ * For authenticated users, Supabase `wishlist_items` is the single source of truth.
+ */
 export async function loadExploreLog(): Promise<ExploreLog> {
-  let localLog: ExploreLog = EMPTY;
-  const storageKey = await getStorageKey();
+  const { key: storageKey, userId } = await getStorageKey();
 
-  // 1. Load local log first (scoped to user)
+  let localLog: ExploreLog = {
+    visitedProvinces: [],
+    visitedDestinations: [],
+    savedDestinations: [],
+    savedProvinces: [],
+    savedDestinationsMeta: {},
+  };
+
+  // 1. For authenticated users, fetch Wishlist items directly from Supabase
+  if (userId) {
+    try {
+      const { data: dbWishlist, error } = await supabase
+        .from('wishlist_items')
+        .select('destination_id')
+        .eq('user_id', userId);
+
+      if (!error && dbWishlist) {
+        localLog.savedDestinations = dbWishlist.map((item: any) => item.destination_id);
+      }
+    } catch (err) {
+      console.warn('Error fetching wishlist from Supabase:', err);
+    }
+  }
+
+  // 2. Load cached local metadata/provinces scoped strictly to this user
   try {
     const raw = await storageGet(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
-      localLog = {
-        visitedProvinces: Array.isArray(parsed?.visitedProvinces) ? parsed.visitedProvinces : [],
-        visitedDestinations: Array.isArray(parsed?.visitedDestinations) ? parsed.visitedDestinations : [],
-        savedDestinations: Array.isArray(parsed?.savedDestinations) ? parsed.savedDestinations : [],
-        savedProvinces: Array.isArray(parsed?.savedProvinces) ? parsed.savedProvinces : [],
-        savedDestinationsMeta: (parsed?.savedDestinationsMeta && typeof parsed.savedDestinationsMeta === 'object')
-          ? parsed.savedDestinationsMeta
-          : undefined,
-      };
-    } else {
-      // Fallback/migration from anonymous legacy key
-      const rawLegacy = await storageGet(STORAGE_KEY);
-      if (rawLegacy) {
-        const parsed = JSON.parse(rawLegacy);
-        localLog = {
-          visitedProvinces: Array.isArray(parsed?.visitedProvinces) ? parsed.visitedProvinces : [],
-          visitedDestinations: Array.isArray(parsed?.visitedDestinations) ? parsed.visitedDestinations : [],
-          savedDestinations: Array.isArray(parsed?.savedDestinations) ? parsed.savedDestinations : [],
-          savedProvinces: Array.isArray(parsed?.savedProvinces) ? parsed.savedProvinces : [],
-          savedDestinationsMeta: (parsed?.savedDestinationsMeta && typeof parsed.savedDestinationsMeta === 'object')
-            ? parsed.savedDestinationsMeta
-            : undefined,
-        };
-      } else {
-        const legacy = await storageGet(LEGACY_KEY);
-        if (legacy) {
-          const ids: string[] = JSON.parse(legacy);
-          localLog = {
-            ...EMPTY,
-            visitedProvinces: Array.isArray(ids) ? ids : [],
-          };
-        }
+      if (!userId) {
+        // Only for guest do we take savedDestinations from storage
+        localLog.savedDestinations = Array.isArray(parsed?.savedDestinations) ? parsed.savedDestinations : [];
       }
+      localLog.savedProvinces = Array.isArray(parsed?.savedProvinces) ? parsed.savedProvinces : [];
+      localLog.savedDestinationsMeta = (parsed?.savedDestinationsMeta && typeof parsed.savedDestinationsMeta === 'object')
+        ? parsed.savedDestinationsMeta
+        : undefined;
     }
   } catch (err) {
-    console.warn('Error reading local explore log:', err);
-  }
-
-  // 2. Sync with Supabase wishlist_items if authenticated
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: dbWishlist, error } = await supabase
-        .from('wishlist_items')
-        .select('destination_id')
-        .eq('user_id', user.id);
-
-      if (!error && dbWishlist) {
-        const dbIds = dbWishlist.map((item: any) => item.destination_id);
-        
-        // Merge local and database saved destinations
-        const mergedSet = new Set([...localLog.savedDestinations, ...dbIds]);
-        const mergedSaved = Array.from(mergedSet);
-
-        // If local had items not in DB, sync them up to DB
-        const missingInDb = localLog.savedDestinations.filter(id => !dbIds.includes(id));
-        if (missingInDb.length > 0) {
-          const insertRows = missingInDb.map(id => ({
-            user_id: user.id,
-            destination_id: id
-          }));
-          await supabase.from('wishlist_items').insert(insertRows);
-        }
-
-        localLog.savedDestinations = mergedSaved;
-        await storageSet(storageKey, JSON.stringify(localLog));
-      }
-    }
-  } catch (err) {
-    // Fail silently if table doesn't exist yet or connection is offline
-    console.log('Graceful database sync fallback: table wishlist_items may not exist yet.', err);
+    console.warn('Error reading local explore log cache:', err);
   }
 
   return localLog;
 }
 
+/**
+ * Save explore log and sync wishlist_items to Supabase for the authenticated user.
+ */
 export async function saveExploreLog(log: ExploreLog): Promise<void> {
-  const storageKey = await getStorageKey();
+  const { key: storageKey, userId } = await getStorageKey();
   
-  // 1. Save locally first (scoped to user)
+  // 1. Save user-scoped cache locally
   await storageSet(storageKey, JSON.stringify(log));
 
-  // 2. Sync with Supabase if authenticated
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Get current items from database
+  // 2. Sync wishlist_items in Supabase strictly for this user
+  if (userId) {
+    try {
       const { data: dbWishlist, error } = await supabase
         .from('wishlist_items')
         .select('destination_id')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (!error && dbWishlist) {
-        const dbIds = dbWishlist.map((item: any) => item.destination_id);
-        const localIds = log.savedDestinations;
+        const dbIds: string[] = dbWishlist.map((item: any) => item.destination_id);
+        const targetIds: string[] = log.savedDestinations || [];
 
-        // Find items to insert
-        const toInsert = localIds.filter(id => !dbIds.includes(id));
+        // Insert newly wishlisted items
+        const toInsert = targetIds.filter(id => !dbIds.includes(id));
         if (toInsert.length > 0) {
           const insertRows = toInsert.map(id => ({
-            user_id: user.id,
-            destination_id: id
+            user_id: userId,
+            destination_id: id,
           }));
           await supabase.from('wishlist_items').insert(insertRows);
         }
 
-        // Find items to delete
-        const toDelete = dbIds.filter(id => !localIds.includes(id));
+        // Delete un-wishlisted items
+        const toDelete = dbIds.filter(id => !targetIds.includes(id));
         if (toDelete.length > 0) {
           await supabase
             .from('wishlist_items')
             .delete()
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .in('destination_id', toDelete);
         }
       }
+    } catch (err) {
+      console.warn('Error syncing wishlist to Supabase:', err);
     }
-  } catch (err) {
-    console.log('Graceful database save fallback: table wishlist_items may not exist yet.', err);
   }
 }

@@ -12,6 +12,8 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -144,13 +146,14 @@ const fl = StyleSheet.create({
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { signIn, signUp, session } = useAuth();
+  const { signIn, signUp, signInWithGoogle, session } = useAuth();
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ msg: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   const snackbarOpacity = useRef(new Animated.Value(0)).current;
@@ -173,6 +176,16 @@ export default function LoginScreen() {
       Animated.delay(2500),
       Animated.timing(snackbarOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start(() => setSnackbar(null));
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) Alert.alert('Google sign-in unavailable', error);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -327,6 +340,42 @@ export default function LoginScreen() {
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
+
+              {/* Divider */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
+                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>or</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
+              </View>
+
+              {/* Continue with Google */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={isGoogleLoading || isLoading}
+                onPress={handleGoogleSignIn}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  marginTop: 16,
+                  paddingVertical: 15,
+                  borderRadius: 14,
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.cardBorder,
+                  opacity: (isGoogleLoading || isLoading) ? 0.6 : 1,
+                }}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color={colors.brand} />
+                ) : (
+                  <Ionicons name="logo-google" size={17} color="#EA4335" />
+                )}
+                <Text style={{ fontSize: 14, fontFamily: 'Poppins-SemiBold', color: colors.text }}>
+                  {isGoogleLoading ? 'Opening Google...' : 'Continue with Google'}
+                </Text>
+              </TouchableOpacity>
 
               {/* Toggle Sign Up / Log In */}
               <View style={styles.authLinkRow}>

@@ -1,7 +1,13 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { toggleCheckIn as dbToggleCheckIn } from '../../services/tripService';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  ScreenHeader, Section, SectionLabel, ListGroup, ListRow, Card, Stat,
+  Button, ProgressBar, Avatar, Txt, EmptyState,
+} from '../ui/primitives';
+import { space, stateColor } from '../ui/tokens';
 
 interface TripAttendanceProps {
   trip: any;
@@ -12,161 +18,127 @@ interface TripAttendanceProps {
 }
 
 export default function TripAttendance({
-  trip,
-  colors,
-  currentUserName,
-  loadTrip,
-  onBack,
+  trip, currentUserName, loadTrip, onBack,
 }: TripAttendanceProps) {
-  const checkedInCount = trip.members.filter((m: any) => m.checkedIn).length;
-  const progressPct = trip.members.length > 0 ? Math.round((checkedInCount / trip.members.length) * 100) : 0;
-  const currentUserMember = trip.members.find((m: any) => m.name === currentUserName);
-  const isChecked = currentUserMember?.checkedIn;
+  const { isDark } = useTheme();
+  const sc = stateColor(isDark);
+  const [busy, setBusy] = useState(false);
+
+  const members = trip.members ?? [];
+  const arrived = members.filter((m: any) => m.checkedIn);
+  const pending = members.filter((m: any) => !m.checkedIn);
+  const pct = members.length > 0 ? arrived.length / members.length : 0;
+
+  const me = members.find((m: any) => m.name === currentUserName);
+  const isChecked = !!me?.checkedIn;
+
+  const handleToggle = async () => {
+    setBusy(true);
+    try {
+      await dbToggleCheckIn(trip.id, isChecked);
+      loadTrip();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renderMember = (m: any) => (
+    <ListRow
+      key={m.id}
+      title={m.name}
+      subtitle={m.checkedIn ? `Arrived · ${m.lastCheckedInTime || 'just now'}` : 'Not arrived yet'}
+      leading={<Avatar name={m.name} size={32} />}
+      showChevron={false}
+      trailing={
+        <Ionicons
+          name={m.checkedIn ? 'checkmark-circle' : 'ellipse-outline'}
+          size={19}
+          color={m.checkedIn ? sc.positive : undefined}
+        />
+      }
+    />
+  );
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 110 }]} showsVerticalScrollIndicator={false}>
-      {onBack && (
-        <TouchableOpacity style={styles.backRow} onPress={onBack} activeOpacity={0.7}>
-          <View style={[styles.backIconBox, { backgroundColor: '#14B8A620' }]}>
-            <Ionicons name="arrow-back" size={14} color="#14B8A6" />
-          </View>
-          <Text style={[styles.backText, { color: '#14B8A6' }]}>Settings</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={[styles.anchorWrapper, { marginBottom: 4 }]}>
-        <View style={[styles.anchorBar, { backgroundColor: '#14B8A6' }]} />
-        <Text style={[styles.anchorTitle, { color: '#14B8A6' }]}>arrival tracking</Text>
-      </View>
-      <Text style={[styles.pageTitle, { color: colors.text }]}>Check-in Board</Text>
-      <Text style={[styles.pageSub, { color: colors.textSecondary }]}>
-        Track who has arrived and who is en route.
-      </Text>
-
-      {/* Check-in button */}
-      <TouchableOpacity
-        style={{
-          backgroundColor: isChecked ? colors.surface : '#14B8A6',
-          borderColor: isChecked ? colors.cardBorder : '#14B8A6',
-          borderWidth: 1,
-          borderRadius: 12,
-          paddingVertical: 10,
-          alignItems: 'center',
-          marginBottom: 16,
-        }}
-        onPress={() => {
-          dbToggleCheckIn(trip.id, isChecked || false).then(() => loadTrip());
-        }}
-      >
-        <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700', color: isChecked ? colors.textSecondary : '#FFFFFF' }}>
-          {isChecked ? 'Check Out' : 'Check In Now'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Stat tiles */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-        <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#10B981' }}>{checkedInCount}</Text>
-          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Arrived</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#F59E0B' }}>{trip.members.length - checkedInCount}</Text>
-          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>En Route</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14, alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontFamily: 'Poppins-ExtraBold', color: '#14B8A6' }}>{progressPct}%</Text>
-          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.textSecondary, textTransform: 'uppercase' }}>Complete</Text>
-        </View>
+    <View style={styles.root}>
+      <View style={styles.head}>
+        <ScreenHeader
+          eyebrow={onBack ? undefined : trip.destination}
+          title="Check-in"
+          subtitle={`${arrived.length} of ${members.length} arrived`}
+          action={onBack ? { icon: 'chevron-back', onPress: onBack, label: 'Back' } : undefined}
+        />
       </View>
 
-      {/* Progress bar */}
-      <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surface, width: '100%', overflow: 'hidden', marginBottom: 16 }}>
-        <View style={{ height: '100%', width: `${progressPct}%`, backgroundColor: '#10B981', borderRadius: 4 }} />
-      </View>
-
-      {/* Traveler arrival list */}
-      <Text style={[styles.capsLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Travelers</Text>
-      <View style={{ gap: 8 }}>
-        {trip.members.map((member: any) => (
-          <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: member.checkedIn ? '#ECFDF5' : colors.surface, borderWidth: 1.5, borderColor: member.checkedIn ? '#10B981' : colors.cardBorder, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: member.checkedIn ? '#10B981' : colors.textSecondary }}>{member.name.charAt(0).toUpperCase()}</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* ── Your status — the one action on this screen ── */}
+        <Section>
+          <Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.lg }}>
+              <View style={{ flex: 1 }}>
+                <Txt variant="headline">
+                  {isChecked ? 'You have checked in' : 'You have not checked in'}
+                </Txt>
+                <Txt variant="subhead" tone="muted" style={{ marginTop: 2 }}>
+                  {isChecked
+                    ? 'The group can see you have arrived.'
+                    : 'Let the group know once you arrive.'}
+                </Txt>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>{member.name}</Text>
-              <Text style={{ fontSize: 11, color: member.checkedIn ? '#10B981' : colors.textMuted, fontFamily: 'Poppins-Medium' }}>
-                {member.checkedIn ? `arrived · ${member.lastCheckedInTime || 'just now'}` : 'not yet arrived'}
-              </Text>
-            </View>
-            <Ionicons
-              name={member.checkedIn ? 'checkmark-circle' : 'time-outline'}
-              size={20}
-              color={member.checkedIn ? '#10B981' : colors.cardBorder}
+            <Button
+              label={isChecked ? 'Check out' : 'Check in'}
+              variant={isChecked ? 'secondary' : 'primary'}
+              onPress={handleToggle}
+              loading={busy}
+              fullWidth
             />
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+          </Card>
+        </Section>
+
+        {/* ── Group progress ── */}
+        <Section>
+          <SectionLabel>Progress</SectionLabel>
+          <Card>
+            <View style={{ flexDirection: 'row', gap: space.lg, marginBottom: space.lg }}>
+              <Stat label="Arrived" value={String(arrived.length)} />
+              <Stat label="Waiting" value={String(pending.length)} />
+              <Stat label="Complete" value={`${Math.round(pct * 100)}%`} />
+            </View>
+            <ProgressBar value={pct} />
+          </Card>
+        </Section>
+
+        {/* ── Waiting on ── */}
+        {pending.length > 0 && (
+          <Section>
+            <SectionLabel>Waiting on</SectionLabel>
+            <ListGroup>{pending.map(renderMember)}</ListGroup>
+          </Section>
+        )}
+
+        {/* ── Arrived ── */}
+        {arrived.length > 0 && (
+          <Section>
+            <SectionLabel>Arrived</SectionLabel>
+            <ListGroup>{arrived.map(renderMember)}</ListGroup>
+          </Section>
+        )}
+
+        {members.length === 0 && (
+          <EmptyState
+            icon="people-outline"
+            title="No travellers yet"
+            description="Share the trip code to get your group on board."
+          />
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  backIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  anchorWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  anchorBar: {
-    width: 4,
-    height: 14,
-    borderRadius: 2,
-    marginRight: 6,
-  },
-  anchorTitle: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  pageSub: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    marginBottom: 16,
-  },
-  capsLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+  root: { flex: 1 },
+  head: { paddingHorizontal: space.xl, paddingTop: space.lg },
+  scroll: { paddingHorizontal: space.xl, paddingBottom: 120 },
 });

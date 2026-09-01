@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet, View, Text, TouchableOpacity, Modal,
-  TextInput, ScrollView, Alert, Switch, ActivityIndicator, Image,
-} from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Alert, Switch, Pressable, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { voteInPoll as dbVoteInPoll, addPoll as dbAddPoll } from '../../services/tripService';
+import { voteInPoll as dbVoteInPoll, addPoll as dbAddPoll, uploadTripImage } from '../../services/tripService';
+import * as ImagePicker from 'expo-image-picker';
 import { AI_FEATURES_ENABLED } from '../../services/aiService';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  ScreenHeader, Section, Card, EmptyState, Sheet, Field, Button, Txt,
+  Badge, IconButton, Avatar, Press,
+} from '../ui/primitives';
+import { space, radius, hairline, type as T } from '../ui/tokens';
 
 interface TripPollsProps {
   trip: any;
@@ -18,63 +21,93 @@ interface TripPollsProps {
 }
 
 export default function TripPolls({
-  trip,
-  colors,
-  isOrganizer,
-  currentUserName,
-  loadTrip,
-  onBack,
+  trip, isOrganizer, currentUserName, loadTrip, onBack,
 }: TripPollsProps) {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newPollQuestion, setNewPollQuestion] = useState('');
-  const [newPollOptions, setNewPollOptions] = useState(['', '']);
-  const [newPollMulti, setNewPollMulti] = useState(false);
-  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const { colors } = useTheme();
+
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  // Local image URIs per option index; uploaded only when the poll is created.
+  const [optionImages, setOptionImages] = useState<(string | null)[]>([null, null]);
+  const [multi, setMulti] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+
   const [votingId, setVotingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const [votersModalVisible, setVotersModalVisible] = useState(false);
-  const [selectedPollQuestion, setSelectedPollQuestion] = useState('');
-  const [selectedPollOptions, setSelectedPollOptions] = useState<any[]>([]);
+  const polls = trip.polls ?? [];
+  const voted = polls.filter((p: any) =>
+    p.userVoted || (p.options || []).some((o: any) => {
+      const voters = Array.isArray(o.voters) ? o.voters : (Array.isArray(o.votes) ? o.votes : []);
+      return voters.includes(currentUserName) || (trip?.members || []).some((m: any) => m.name === currentUserName && voters.includes(m.userId));
+    })
+  ).length;
 
-  const handleShowResults = (question: string, options: any[]) => {
-    setSelectedPollQuestion(question);
-    setSelectedPollOptions(options || []);
-    setVotersModalVisible(true);
+  const reset = () => {
+    setQuestion('');
+    setOptions(['', '']);
+    setOptionImages([null, null]);
+    setMulti(false);
   };
 
-  const getVoterAvatar = (voterName: string) => {
-    const member = trip.members?.find((m: any) => m.name === voterName);
-    return member?.avatar_url || null;
-  };
-
-  const handleSuggestOptions = async () => {
-    if (!newPollQuestion.trim()) {
-      Alert.alert('Question Required', 'Please enter a question first.');
+  const pickOptionImage = async (index: number) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Photos needed', 'Allow photo access to add images to options.');
       return;
     }
-    setAiSuggesting(true);
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    if (!res.canceled && res.assets?.[0]?.uri) {
+      setOptionImages(prev => prev.map((v, i) => (i === index ? res.assets[0].uri : v)));
+    }
+  };
+
+  const handleSuggest = async () => {
+    if (!question.trim()) return;
+    setSuggesting(true);
     try {
       const { suggestPollOptions } = await import('../../services/aiService');
-      const suggestions = await suggestPollOptions(newPollQuestion.trim());
-      setNewPollOptions(suggestions);
-    } catch (e) {
-      setNewPollOptions(['Option 1', 'Option 2', 'Option 3']);
+      const suggested = await suggestPollOptions(question.trim());
+      setOptions(suggested);
+      setOptionImages(suggested.map(() => null));
+    } catch {
+      Alert.alert('Unavailable', 'Agilito could not suggest options right now.');
     } finally {
-      setAiSuggesting(false);
+      setSuggesting(false);
     }
   };
 
-  const handleCreatePoll = async () => {
-    const validOptions = newPollOptions.filter(o => o.trim() !== '');
-    if (!newPollQuestion.trim() || validOptions.length < 2) {
-      Alert.alert('Error', 'Poll question and at least 2 options are required.');
-      return;
+  const handleCreate = async () => {
+    const valid = options.map(o => o.trim()).filter(Boolean);
+    if (!question.trim() || valid.length < 2) return;
+
+    setSaving(true);
+    try {
+      // Upload any attached images first so the poll is created with them.
+      const payload: { text: string; imageUrl?: string | null }[] = [];
+      for (let i = 0; i < options.length; i++) {
+        const text = options[i].trim();
+        if (!text) continue;
+        let imageUrl: string | null = null;
+        const local = optionImages[i];
+        if (local) {
+          const { url, error: upErr } = await uploadTripImage(local, 'polls');
+          if (upErr) { Alert.alert('Could not upload image', upErr); return; }
+          imageUrl = url;
+        }
+        payload.push({ text, imageUrl });
+      }
+
+      const { error } = await dbAddPoll(trip.id, question.trim(), payload, multi);
+      if (error) { Alert.alert('Could not create poll', error); return; }
+      reset();
+      setSheetOpen(false);
+      loadTrip();
+    } finally {
+      setSaving(false);
     }
-    const { error } = await dbAddPoll(trip.id, newPollQuestion.trim(), validOptions, newPollMulti);
-    if (error) { Alert.alert('Error', error); return; }
-    setNewPollQuestion(''); setNewPollOptions(['', '']); setNewPollMulti(false);
-    setModalVisible(false);
-    loadTrip();
   };
 
   const handleVote = async (optId: string) => {
@@ -87,894 +120,313 @@ export default function TripPolls({
     }
   };
 
-  // Computed stats
-  const totalPolls = trip.polls.length;
-  const myVoteCount = trip.polls.filter((p: any) =>
-    p.options.some((o: any) => o.votes.includes(currentUserName))
-  ).length;
-  const activePolls = trip.polls.filter((p: any) => p.isActive !== false).length;
+  const renderPoll = (poll: any) => {
+    const totalVotes = poll.totalVotes ?? (poll.options || []).reduce((n: number, o: any) => n + (typeof o.votes === 'number' ? o.votes : (o.votes?.length || 0)), 0);
+    const iVoted = poll.userVoted || (poll.options || []).some((o: any) => {
+      const voters = Array.isArray(o.voters) ? o.voters : (Array.isArray(o.votes) ? o.votes : []);
+      return voters.includes(currentUserName) || (trip?.members || []).some((m: any) => m.name === currentUserName && voters.includes(m.userId));
+    });
+    const top = Math.max(...(poll.options || []).map((o: any) => (typeof o.votes === 'number' ? o.votes : (o.votes?.length || 0))), 0);
+    const isOpen = expanded === poll.id;
 
-  return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-
-      {/* BACK + HEADER */}
-      <TouchableOpacity style={styles.backRow} onPress={onBack} activeOpacity={0.7}>
-        <View style={[styles.backIconBox, { backgroundColor: colors.brandLight }]}>
-          <Ionicons name="arrow-back" size={14} color={colors.brand} />
-        </View>
-        <Text style={[styles.backText, { color: colors.brand }]}>People Hub</Text>
-      </TouchableOpacity>
-
-      <View style={styles.headerRow}>
-        <View>
-          <View style={styles.anchorWrapper}>
-            <View style={[styles.anchorBar, { backgroundColor: colors.brand }]} />
-            <Text style={[styles.anchorTitle, { color: colors.brand }]}>group decisions</Text>
+    return (
+      <Card key={poll.id} style={{ marginBottom: space.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="headline">{poll.question}</Txt>
+            <Txt variant="footnote" tone="muted" style={{ marginTop: 2 }}>
+              {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+              {poll.allowMultiple ? ' · pick more than one' : ''}
+            </Txt>
           </View>
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Polls</Text>
+          {iVoted && <Badge label="Voted" tone="accent" />}
         </View>
-        {isOrganizer && (
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.brand }]}
-            onPress={() => setModalVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addBtnText}>New Poll</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
-
-
-      {/* POLLS LIST */}
-      {trip.polls.length === 0 ? (
-        <View style={[styles.emptyBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
-            <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No polls yet</Text>
-          <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-            Create a poll to let the group vote and make democratic decisions together.
-          </Text>
-          {isOrganizer && (
-            <TouchableOpacity
-              style={[styles.emptyBtn, { backgroundColor: colors.brand }]}
-              onPress={() => setModalVisible(true)}
-            >
-              <Text style={styles.emptyBtnText}>Create First Poll</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ) : (
-        <View style={styles.pollList}>
-          {trip.polls.map((poll: any, pollIdx: number) => {
-            const totalVotes = poll.options.reduce((sum: number, o: any) => sum + o.votes.length, 0);
-            const iVoted = poll.options.some((o: any) => o.votes.includes(currentUserName));
-            const leadOption = poll.options.reduce((best: any, o: any) =>
-              o.votes.length > (best?.votes.length ?? -1) ? o : best, null
-            );
+        <View style={{ marginTop: space.lg, gap: space.sm }}>
+          {(poll.options || []).map((opt: any) => {
+            const count = typeof opt.votes === 'number' ? opt.votes : (opt.votes?.length || 0);
+            const share = totalVotes > 0 ? count / totalVotes : 0;
+            const voters = Array.isArray(opt.voters) ? opt.voters : (Array.isArray(opt.votes) ? opt.votes : []);
+            const mine = voters.includes(currentUserName) || (trip?.members || []).some((m: any) => m.name === currentUserName && voters.includes(m.userId));
+            const leading = count > 0 && count === top;
 
             return (
-              <View
-                key={poll.id}
-                style={[styles.pollCard, {
-                  backgroundColor: colors.card,
-                  borderColor: iVoted ? colors.brand + '35' : colors.cardBorder,
-                }]}
+              <Pressable
+                key={opt.id}
+                onPress={() => handleVote(opt.id)}
+                disabled={votingId === opt.id}
+                style={({ pressed }) => [
+                  styles.option,
+                  {
+                    borderColor: mine ? colors.brand : colors.cardBorder,
+                    backgroundColor: colors.surface,
+                    opacity: pressed || votingId === opt.id ? 0.7 : 1,
+                  },
+                ]}
               >
-                {/* Poll header */}
-                <View style={styles.pollCardHeader}>
-                  <View style={[styles.pollNumBadge, { backgroundColor: colors.surface }]}>
-                    <Text style={[styles.pollNumText, { color: colors.textMuted }]}>#{pollIdx + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.pollQuestion, { color: colors.text }]}>{poll.question}</Text>
-                    <View style={styles.pollMetaRow}>
-                      <Ionicons name="person-outline" size={10} color={colors.textMuted} />
-                      <Text style={[styles.pollMeta, { color: colors.textMuted }]}>
-                        {poll.creator} · {poll.allowMultiple ? 'Multi-choice' : 'Single choice'} · {totalVotes} votes
-                      </Text>
-                    </View>
-                  </View>
-                  {iVoted && (
-                    <View style={[styles.votedBadge, { backgroundColor: colors.brandLight }]}>
-                      <Ionicons name="checkmark" size={11} color={colors.brand} />
-                      <Text style={[styles.votedBadgeText, { color: colors.brand }]}>Voted</Text>
-                    </View>
+                {/* Result fill sits behind the label — no separate bar element */}
+                <View
+                  style={[
+                    StyleSheet.absoluteFillObject,
+                    {
+                      width: `${share * 100}%`,
+                      backgroundColor: mine ? colors.brandLight : colors.cardBorder,
+                      opacity: mine ? 1 : 0.5,
+                    },
+                  ]}
+                />
+                <View style={styles.optionRow}>
+                  {!!opt.imageUrl && (
+                    <Image source={{ uri: opt.imageUrl }} style={styles.optionThumb} resizeMode="cover" />
                   )}
-                </View>
-
-                {/* Options */}
-                <View style={styles.optionsContainer}>
-                  {poll.options.map((opt: any) => {
-                    const hasVoted = opt.votes.includes(currentUserName);
-                    const pct = totalVotes > 0 ? Math.round((opt.votes.length / totalVotes) * 100) : 0;
-                    const isLeader = opt === leadOption && totalVotes > 0;
-                    const isVotingThis = votingId === opt.id;
-
-                    return (
-                      <TouchableOpacity
-                        key={opt.id}
-                        style={[
-                          styles.optRow,
-                          {
-                            borderColor: hasVoted ? colors.brand : colors.cardBorder,
-                            backgroundColor: colors.surface,
-                          }
-                        ]}
-                        onPress={() => handleVote(opt.id)}
-                        activeOpacity={0.8}
-                        disabled={isVotingThis}
-                      >
-                        {/* Progress fill */}
-                        {pct > 0 && (
-                          <View
-                            style={[
-                              styles.optProgressFill,
-                              {
-                                width: `${pct}%`,
-                                backgroundColor: hasVoted
-                                  ? colors.brand + '20'
-                                  : isLeader
-                                  ? '#10B98118'
-                                  : colors.surface,
-                              }
-                            ]}
-                          />
-                        )}
-
-                        {/* Content */}
-                        <View style={styles.optContent}>
-                          <View style={styles.optLeft}>
-                            {/* Vote indicator circle */}
-                            <View style={[
-                              styles.optIndicator,
-                              {
-                                borderColor: hasVoted ? colors.brand : colors.cardBorder,
-                                backgroundColor: hasVoted ? colors.brand : 'transparent',
-                              }
-                            ]}>
-                              {hasVoted && <Ionicons name="checkmark" size={10} color="#fff" />}
-                            </View>
-                            <Text style={[
-                              styles.optText,
-                              { color: colors.text, fontFamily: hasVoted ? 'Poppins-Bold' : 'Poppins-Medium' }
-                            ]}>
-                              {opt.text}
-                            </Text>
-                            {isLeader && (
-                              <View style={[styles.leadBadge, { backgroundColor: '#10B98118' }]}>
-                                <Ionicons name="trending-up" size={9} color="#10B981" />
-                                <Text style={styles.leadBadgeText}>Leading</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          <View style={styles.optRight}>
-                            <Text style={[styles.optPct, { color: hasVoted ? colors.brand : colors.textSecondary }]}>
-                              {pct}%
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Voting spinner */}
-                        {isVotingThis && (
-                          <View style={styles.votingSpinner}>
-                            <ActivityIndicator size="small" color={colors.brand} />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Poll footer */}
-                <View style={[styles.pollFooter, { flexDirection: 'column', gap: 8, marginTop: 12, borderTopWidth: 0.5, borderTopColor: colors.cardBorder, paddingTop: 10 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.pollFooterText, { color: colors.textMuted }]}>
-                      Tap an option to vote
-                      {poll.allowMultiple ? ' — multiple choices' : ''}
-                    </Text>
-                    <Text style={[styles.pollFooterText, { color: colors.textMuted }]}>
-                      {totalVotes} total {totalVotes === 1 ? 'vote' : 'votes'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', marginTop: 2 }}
-                    onPress={() => handleShowResults(poll.question, poll.options)}
-                    activeOpacity={0.7}
+                  <Ionicons
+                    name={mine ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={17}
+                    color={mine ? colors.brand : colors.textMuted}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[T.body, { flex: 1, color: colors.text, fontFamily: leading ? 'Poppins-SemiBold' : 'Poppins-Regular' }]}
                   >
-                    <Ionicons name="bar-chart-outline" size={13} color={colors.brand} />
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand, textDecorationLine: 'underline' }}>See Results</Text>
-                  </TouchableOpacity>
+                    {opt.text}
+                  </Text>
+                  <Text style={[T.emphasis, { color: colors.textSecondary }]}>
+                    {Math.round(share * 100)}%
+                  </Text>
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </View>
-      )}
 
-      {/* CREATE POLL MODAL */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Create Poll</Text>
-                <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
-                  Let the group vote on a decision
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
+        {totalVotes > 0 && (
+          <Press onPress={() => setExpanded(isOpen ? null : poll.id)}>
+            <View style={styles.whoRow}>
+              <Txt variant="footnote" tone="accent">
+                {isOpen ? 'Hide who voted' : 'See who voted'}
+              </Txt>
+              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={13} color={colors.brand} />
             </View>
+          </Press>
+        )}
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-
-              {/* Question */}
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>POLL QUESTION *</Text>
-                <TextInput
-                  value={newPollQuestion}
-                  onChangeText={setNewPollQuestion}
-                  placeholder="e.g. Where should we eat on Day 2?"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.input, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-
-              {/* Options */}
-              <View style={styles.fieldGroup}>
-                <View style={styles.optionsHeader}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
-                    OPTIONS * ({newPollOptions.filter(o => o.trim()).length} filled)
-                  </Text>
-                  <View style={styles.optionActions}>
-                    {AI_FEATURES_ENABLED && (
-                      <TouchableOpacity
-                        onPress={handleSuggestOptions}
-                        disabled={aiSuggesting}
-                        style={[styles.aiBtn, { backgroundColor: colors.brandLight, borderColor: colors.brand + '40' }]}
-                      >
-                        {aiSuggesting
-                          ? <ActivityIndicator size="small" color={colors.brand} />
-                          : <Ionicons name="sparkles" size={12} color={colors.brand} />
-                        }
-                        <Text style={[styles.aiBtnText, { color: colors.brand }]}>
-                          {aiSuggesting ? 'Thinking…' : 'AI Suggest'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => setNewPollOptions([...newPollOptions, ''])}
-                      style={[styles.addOptBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
-                    >
-                      <Ionicons name="add" size={14} color={colors.brand} />
-                      <Text style={[styles.addOptBtnText, { color: colors.brand }]}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.optionInputList}>
-                  {newPollOptions.map((opt, idx) => (
-                    <View key={idx} style={styles.optionInputRow}>
-                      <View style={[styles.optionNumBadge, { backgroundColor: colors.surface }]}>
-                        <Text style={[styles.optionNumText, { color: colors.textMuted }]}>{idx + 1}</Text>
+        {isOpen && (() => {
+            // Build a userId → name map from current members
+            const memberMap = new Map<string, string>(
+              (trip.members || []).map((m: any) => [m.userId || m.id, m.name])
+            );
+            const optionsWithVoters = poll.options.filter((o: any) => {
+              const voters = Array.isArray(o.voters) ? o.voters : (Array.isArray(o.votes) ? o.votes : []);
+              return voters.length > 0;
+            });
+            return (
+              <View style={{ marginTop: space.md, gap: space.md }}>
+                {optionsWithVoters.map((opt: any) => {
+                  const voters: string[] = Array.isArray(opt.voters) ? opt.voters : (Array.isArray(opt.votes) ? opt.votes : []);
+                  return (
+                    <View key={opt.id}>
+                      <Txt variant="caption" tone="muted" uppercase>{opt.text}</Txt>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>
+                        {voters.map((voterId: string) => {
+                          const name = memberMap.get(voterId) || 'Former Member';
+                          const isMissing = !memberMap.has(voterId);
+                          return (
+                            <View key={voterId} style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                              <Avatar name={name} size={22} />
+                              <Txt variant="footnote" tone={isMissing ? 'muted' : 'secondary'}>
+                                {name}
+                              </Txt>
+                            </View>
+                          );
+                        })}
                       </View>
-                      <TextInput
-                        value={opt}
-                        onChangeText={(txt) => {
-                          const next = [...newPollOptions];
-                          next[idx] = txt;
-                          setNewPollOptions(next);
-                        }}
-                        placeholder={`Option ${idx + 1}...`}
-                        placeholderTextColor={colors.textMuted}
-                        style={[styles.optionInput, {
-                          color: colors.text,
-                          borderColor: opt.trim() ? colors.brand + '60' : colors.cardBorder,
-                          backgroundColor: colors.surface,
-                        }]}
-                      />
-                      {newPollOptions.length > 2 && (
-                        <TouchableOpacity
-                          onPress={() => setNewPollOptions(newPollOptions.filter((_, i) => i !== idx))}
-                          style={[styles.removeOptBtn, { backgroundColor: '#FEE2E2' }]}
-                        >
-                          <Ionicons name="trash-outline" size={14} color="#EF4444" />
-                        </TouchableOpacity>
-                      )}
                     </View>
-                  ))}
-                </View>
+                  );
+                })}
               </View>
+            );
+          })()
+        }
+      </Card>
+    );
+  };
 
-              {/* Multi-choice toggle */}
-              <View style={[styles.toggleRow, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                <View style={[styles.toggleIconBox, { backgroundColor: colors.brandLight }]}>
-                  <Ionicons name="checkmark-done-outline" size={16} color={colors.brand} />
-                </View>
+  const validOptionCount = options.map(o => o.trim()).filter(Boolean).length;
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.head}>
+        <ScreenHeader
+          title="Polls"
+          subtitle={polls.length > 0 ? `${voted} of ${polls.length} voted on` : undefined}
+          action={
+            isOrganizer
+              ? { icon: 'add', onPress: () => setSheetOpen(true), label: 'New poll' }
+              : { icon: 'chevron-back', onPress: onBack, label: 'Back' }
+          }
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {polls.length === 0 ? (
+          <EmptyState
+            icon="bar-chart-outline"
+            title="No polls yet"
+            description={
+              isOrganizer
+                ? 'Put a decision to the group and let everyone vote.'
+                : 'Polls from your organizer will appear here.'
+            }
+            action={isOrganizer ? { label: 'Create a poll', onPress: () => setSheetOpen(true) } : undefined}
+          />
+        ) : (
+          <Section>{polls.map(renderPoll)}</Section>
+        )}
+      </ScrollView>
+
+      <Sheet
+        visible={sheetOpen}
+        onClose={() => { setSheetOpen(false); reset(); }}
+        title="New poll"
+        primaryAction={{
+          label: 'Create poll',
+          onPress: handleCreate,
+          loading: saving,
+          disabled: !question.trim() || validOptionCount < 2,
+        }}
+      >
+        <Field
+          label="Question"
+          value={question}
+          onChangeText={setQuestion}
+          placeholder="Where should we eat on day two?"
+          autoFocus
+        />
+
+        {AI_FEATURES_ENABLED && (
+          <Button
+            label="Suggest options"
+            variant="secondary"
+            loading={suggesting}
+            disabled={!question.trim()}
+            onPress={handleSuggest}
+            fullWidth
+            style={{ marginTop: space.md }}
+          />
+        )}
+
+        <View style={{ marginTop: space.xl }}>
+          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+            Options
+          </Txt>
+          <View style={{ gap: space.sm }}>
+            {options.map((opt, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.toggleLabel, { color: colors.text }]}>Allow Multiple Choices</Text>
-                  <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
-                    Travelers can select more than one option
-                  </Text>
+                  <Field
+                    value={opt}
+                    onChangeText={(v) => setOptions(prev => prev.map((o, idx) => (idx === i ? v : o)))}
+                    placeholder={`Option ${i + 1}`}
+                  />
                 </View>
-                <Switch
-                  value={newPollMulti}
-                  onValueChange={setNewPollMulti}
-                  trackColor={{ false: colors.cardBorder, true: colors.brand }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: colors.brand }]}
-                onPress={handleCreatePoll}
-              >
-                <Ionicons name="bar-chart" size={18} color="#fff" />
-                <Text style={styles.submitBtnText}>Create Poll</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* SEE RESULTS MODAL */}
-      <Modal
-        visible={votersModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setVotersModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, maxHeight: '65%' }]}>
-            <View style={[styles.modalHandle, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Poll Results</Text>
-                <Text style={[styles.modalSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                  "{selectedPollQuestion}"
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setVotersModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-              {selectedPollOptions.map((opt: any, index: number) => {
-                const votesCount = opt.votes?.length ?? 0;
-                return (
-                  <View 
-                    key={opt.id || index} 
-                    style={{ 
-                      marginBottom: 16, 
-                      paddingBottom: 12, 
-                      borderBottomWidth: index === selectedPollOptions.length - 1 ? 0 : 0.5, 
-                      borderBottomColor: colors.cardBorder 
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={{ fontFamily: 'Poppins-Bold', fontSize: 13, color: colors.text, flex: 1, marginRight: 8 }}>{opt.text}</Text>
-                      <View style={{ backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                        <Text style={{ fontFamily: 'Poppins-Bold', fontSize: 9, color: colors.brand }}>{votesCount} {votesCount === 1 ? 'vote' : 'votes'}</Text>
-                      </View>
-                    </View>
-                    
-                    {votesCount === 0 ? (
-                      <Text style={{ fontFamily: 'Poppins-Medium', fontSize: 11, color: colors.textMuted, marginLeft: 8 }}>No votes yet</Text>
+                <Press onPress={() => pickOptionImage(i)}>
+                  <View style={[styles.optionAttach, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+                    {optionImages[i] ? (
+                      <Image source={{ uri: optionImages[i] as string }} style={styles.optionAttachThumb} />
                     ) : (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 8, marginTop: 4 }}>
-                        {opt.votes.map((voter: string, vIdx: number) => (
-                          <View 
-                            key={vIdx} 
-                            style={{ 
-                              flexDirection: 'row', 
-                              alignItems: 'center', 
-                              gap: 4, 
-                              backgroundColor: colors.surface, 
-                              paddingHorizontal: 8, 
-                              paddingVertical: 4, 
-                              borderRadius: 8, 
-                              borderWidth: 0.5, 
-                              borderColor: colors.cardBorder 
-                            }}
-                          >
-                            {(() => {
-                              const avatar = getVoterAvatar(voter);
-                              return avatar ? (
-                                <Image source={{ uri: avatar }} style={{ width: 14, height: 14, borderRadius: 7 }} />
-                              ) : (
-                                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: colors.brandLight, justifyContent: 'center', alignItems: 'center' }}>
-                                  <Text style={{ fontFamily: 'Poppins-Bold', fontSize: 7, color: colors.brand }}>{voter.charAt(0).toUpperCase()}</Text>
-                                </View>
-                              );
-                            })()}
-                            <Text style={{ fontFamily: 'Poppins-Medium', fontSize: 10, color: colors.textSecondary }}>{voter}</Text>
-                          </View>
-                        ))}
-                      </View>
+                      <Ionicons name="image-outline" size={16} color={colors.textSecondary} />
                     )}
                   </View>
-                );
-              })}
-            </ScrollView>
+                </Press>
+                {options.length > 2 && (
+                  <IconButton
+                    icon="remove-circle-outline"
+                    size={34}
+                    destructive
+                    onPress={() => { setOptions(prev => prev.filter((_, idx) => idx !== i)); setOptionImages(prev => prev.filter((_, idx) => idx !== i)); }}
+                  />
+                )}
+              </View>
+            ))}
           </View>
+
+          {options.length < 6 && (
+            <Button
+              label="Add option"
+              variant="plain"
+              icon="add"
+              onPress={() => { setOptions(prev => [...prev, '']); setOptionImages(prev => [...prev, null]); }}
+              style={{ marginTop: space.sm, alignSelf: 'flex-start' }}
+            />
+          )}
         </View>
-      </Modal>
-    </ScrollView>
+
+        <View style={[styles.multiRow, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="emphasis">Allow multiple answers</Txt>
+            <Txt variant="footnote" tone="muted" style={{ marginTop: 1 }}>
+              People can pick more than one option.
+            </Txt>
+          </View>
+          <Switch
+            value={multi}
+            onValueChange={setMulti}
+            trackColor={{ false: colors.cardBorder, true: colors.brand }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      </Sheet>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 120,
-  },
-
-  /* Back */
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  backIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-
-  /* Header */
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 18,
-  },
-  anchorWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  anchorBar: { width: 4, height: 12, borderRadius: 2 },
-  anchorTitle: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  addBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-
-  /* Stats */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 2,
-  },
-  statNum: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  /* Poll list */
-  pollList: { gap: 16 },
-  pollCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-  },
-  pollCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 14,
-  },
-  pollNumBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  pollNumText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  pollQuestion: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    lineHeight: 21,
-    marginBottom: 4,
-  },
-  pollMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  pollMeta: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  votedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  votedBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-
-  /* Options */
-  optionsContainer: { gap: 8 },
-  optRow: {
-    position: 'relative',
-    borderRadius: 14,
-    borderWidth: 1.5,
+  root: { flex: 1 },
+  head: { paddingHorizontal: space.xl, paddingTop: space.lg },
+  scroll: { paddingHorizontal: space.xl, paddingBottom: 120 },
+  option: {
+    borderRadius: radius.md,
+    borderWidth: hairline,
     overflow: 'hidden',
-    minHeight: 52,
   },
-  optProgressFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 12,
-  },
-  optContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    zIndex: 2,
-  },
-  optLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  optIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  optText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  leadBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  leadBadgeText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  optRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginLeft: 8,
-  },
-  voterAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  voterAvatarText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  optPct: {
-    fontSize: 13,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-  },
-  optVoteCount: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Medium',
-  },
-  votingSpinner: {
-    position: 'absolute',
-    right: 12,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    zIndex: 3,
-  },
-  pollFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  pollFooterText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-
-  /* Empty */
-  emptyBox: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 36,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyIconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  emptyDesc: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-  emptyBtn: {
-    marginTop: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-  },
-  emptyBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    maxHeight: '88%',
-  },
-  modalHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  modalSub: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    marginTop: 2,
-  },
-  modalCloseBtn: { padding: 4 },
-  fieldGroup: { marginBottom: 18 },
-  fieldLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  input: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: 'Poppins-Medium',
-    fontSize: 14,
-  },
-  optionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  optionActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  aiBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  aiBtnText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  addOptBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  addOptBtnText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  optionInputList: { gap: 8 },
-  optionInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  optionNumBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  optionNumText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  optionInput: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontFamily: 'Poppins-Medium',
-    fontSize: 13,
-  },
-  removeOptBtn: {
+  optionThumb: {
     width: 34,
     height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: radius.sm,
   },
-  toggleRow: {
+  optionAttach: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  optionAttachThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-    marginBottom: 20,
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
   },
-  toggleIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toggleLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  toggleSub: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-    marginTop: 1,
-  },
-  submitBtn: {
+  whoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: 16,
+    gap: space.xs,
+    marginTop: space.md,
   },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
+  multiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.xl,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
   },
 });
