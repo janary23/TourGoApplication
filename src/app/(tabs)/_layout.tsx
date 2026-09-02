@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -9,11 +9,17 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  LayoutChangeEvent,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { type as T } from '../../components/ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 // One consistent easing everywhere — no springs, no overshoot, nothing snapping.
 const EASE_IN = Easing.out(Easing.cubic);
@@ -21,6 +27,9 @@ const EASE_OUT = Easing.in(Easing.cubic);
 const DURATION = 240;
 
 const LABEL_GAP = 6; // space reserved between icon and label when expanded
+// Comfortably wider than the longest label ("Activity"); the label's own width
+// is what actually caps the reveal.
+const LABEL_MAX_WIDTH = 90;
 
 // ─────────────────────────────────────────────
 // Single animated tab button
@@ -39,55 +48,46 @@ function TabButton({ label, iconName, isFocused, onPress, onLongPress }: TabButt
   const scale = useRef(new Animated.Value(1)).current;
   const pillOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const labelWidth = useRef(new Animated.Value(0)).current; // animates in px, not scale
-
-  // Measured natural width of this tab's label text, captured once via a hidden measurer
-  const [textWidth, setTextWidth] = useState<number | null>(null);
-
-  const handleMeasure = (e: LayoutChangeEvent) => {
-    if (textWidth === null) {
-      setTextWidth(e.nativeEvent.layout.width);
-    }
-  };
+  // Animates a max-width cap, not an exact width: the label's own layout
+  // decides how wide it actually is.
+  const labelReveal = useRef(new Animated.Value(isFocused ? LABEL_MAX_WIDTH : 0)).current;
 
   useEffect(() => {
-    const targetWidth = isFocused ? (textWidth ?? 0) + LABEL_GAP : 0;
-
     Animated.parallel([
       Animated.timing(pillOpacity, {
         toValue: isFocused ? 1 : 0,
         duration: DURATION,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         easing: isFocused ? EASE_IN : EASE_OUT,
       }),
-      Animated.timing(labelWidth, {
-        toValue: targetWidth,
+      Animated.timing(labelReveal, {
+        toValue: isFocused ? LABEL_MAX_WIDTH : 0,
         duration: DURATION,
-        useNativeDriver: false, // width can't use the native driver
+        useNativeDriver: false, // maxWidth cannot use the native driver
         easing: isFocused ? EASE_IN : EASE_OUT,
       }),
       Animated.timing(labelOpacity, {
         toValue: isFocused ? 1 : 0,
         duration: isFocused ? DURATION : DURATION * 0.6,
         delay: isFocused ? 60 : 0, // label fades in only once there's room for it
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         easing: isFocused ? EASE_IN : EASE_OUT,
       }),
     ]).start();
-  }, [isFocused, textWidth]);
+  }, [isFocused]);
 
   const handlePress = () => {
     Animated.sequence([
       Animated.timing(scale, {
         toValue: 0.94,
         duration: 70,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         easing: Easing.out(Easing.quad),
       }),
       Animated.timing(scale, {
         toValue: 1,
         duration: 140,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         easing: Easing.out(Easing.quad),
       }),
     ]).start();
@@ -121,8 +121,8 @@ function TabButton({ label, iconName, isFocused, onPress, onLongPress }: TabButt
             color={isFocused ? '#FFFFFF' : colors.textMuted}
           />
 
-          {/* Clipping box whose WIDTH animates, so the tab grows/shrinks smoothly instead of jumping */}
-          <Animated.View style={{ width: labelWidth, overflow: 'hidden' }}>
+          {/* Clipping box: maxWidth animates, the label sizes itself. */}
+          <Animated.View style={{ maxWidth: labelReveal, overflow: 'hidden' }}>
             <Animated.Text
               numberOfLines={1}
               style={[styles.label, { opacity: labelOpacity, paddingLeft: LABEL_GAP }]}
@@ -130,16 +130,6 @@ function TabButton({ label, iconName, isFocused, onPress, onLongPress }: TabButt
               {label}
             </Animated.Text>
           </Animated.View>
-
-          {/* Invisible measurer — renders once, off-layout, just to learn the label's natural width */}
-          {textWidth === null && (
-            <Text
-              onLayout={handleMeasure}
-              style={[styles.label, styles.measurer]}
-            >
-              {label}
-            </Text>
-          )}
         </View>
       </Animated.View>
     </TouchableOpacity>
@@ -237,12 +227,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 40,
     minWidth: 44,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   pill: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 14,
+    borderRadius: 16,
   },
   contentRow: {
     flexDirection: 'row',
@@ -251,13 +241,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#FFFFFF',
-    fontFamily: 'Poppins-SemiBold',
-    fontSize: 12,
-  },
-  measurer: {
-    position: 'absolute',
-    opacity: 0,
-    paddingLeft: 0,
+    ...T.label,
   },
 });
 
@@ -279,8 +263,7 @@ export default function TabLayout() {
           borderBottomColor: colors.headerBorder,
         } as any,
         headerTitleStyle: {
-          fontFamily: 'Poppins-SemiBold',
-          fontSize: 18,
+          ...T.title,
           color: colors.text,
         },
         headerTintColor: colors.brand,
@@ -300,7 +283,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore', headerShown: false }} />
-      <Tabs.Screen name="trips" options={{ title: 'My Trips', headerShown: false }} />
+      <Tabs.Screen name="trips" options={{ title: 'Trips', headerShown: false }} />
       <Tabs.Screen name="activity" options={{ title: 'Activity', headerShown: false }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', headerShown: false }} />
     </Tabs>

@@ -3,7 +3,8 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, Vie
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import type { PhilippinesProvince } from '../../services/philippinesMapData';
-import { GOOGLE_MAPS_API_KEY } from '../../config/env';
+import { searchPhotonPlaces } from '../../services/freePlacesService';
+import { type as T } from '../ui/tokens';
 
 interface ExploreSearchBarProps {
   provinces: PhilippinesProvince[];
@@ -34,7 +35,7 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !GOOGLE_MAPS_API_KEY) {
+    if (!open) {
       setGoogleResults([]);
       return;
     }
@@ -48,42 +49,22 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
     setIsGoogleLoading(true);
     const handler = setTimeout(async () => {
       try {
-        const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location'
-          },
-          body: JSON.stringify({
-            textQuery: trimmed,
-            regionCode: 'PH'
-          })
-        });
-        
-        const json = await response.json();
-        
-        if (json && Array.isArray(json.places)) {
-          const mapped = json.places
-            .map((item: any) => ({
-              id: item.id,
-              name: item.displayName?.text ?? 'Destination',
-              address: item.formattedAddress,
-              latitude: item.location?.latitude,
-              longitude: item.location?.longitude,
-            }))
-            .filter((item: any) => item.latitude && item.longitude);
-          setGoogleResults(mapped.slice(0, 5));
-        } else {
-          setGoogleResults([]);
-        }
+        const places = await searchPhotonPlaces(trimmed);
+        const mapped = places.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          address: item.address,
+          latitude: item.latitude,
+          longitude: item.longitude,
+        }));
+        setGoogleResults(mapped.slice(0, 5));
       } catch (error) {
-        console.error('Google Places search error:', error);
+        console.error('Free places search error:', error);
         setGoogleResults([]);
       } finally {
         setIsGoogleLoading(false);
       }
-    }, 600);
+    }, 400);
 
     return () => {
       clearTimeout(handler);
@@ -163,7 +144,7 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
                     onClose();
                   }}
                 >
-                  <View style={[styles.rowIcon, { backgroundColor: '#14B8A6' }]}>
+                  <View style={[styles.rowIcon, { backgroundColor: colors.brand }]}>
                     <Ionicons name="location" size={15} color="#FFFFFF" />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -211,8 +192,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     fontWeight: '500',
     marginLeft: 8,
     padding: 0,
@@ -229,8 +209,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   sectionLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -253,13 +232,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   rowName: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     fontWeight: '600',
   },
   rowSub: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     fontWeight: '400',
     marginTop: 1,
   },
@@ -268,8 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
+    ...T.subhead,
     fontWeight: '400',
     paddingHorizontal: 20,
     textAlign: 'center',

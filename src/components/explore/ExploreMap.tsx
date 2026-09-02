@@ -14,6 +14,7 @@ import {
   PHILIPPINES_DESTINATIONS,
 } from '../../services/philippinesMapData';
 import { PROVINCE_GEO } from '../../services/destinations';
+import { type as T } from '../ui/tokens';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -724,13 +725,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tooltipTitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
   },
   tooltipStatus: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     fontWeight: '500',
     marginTop: 2,
   },

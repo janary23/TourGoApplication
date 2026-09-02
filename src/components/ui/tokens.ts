@@ -53,17 +53,33 @@ export const type = {
     lineHeight: 36,
   } as TypeToken,
 
+  /** Large numerals and stat values — trip counts, totals, streaks. */
+  display: {
+    fontSize: 24,
+    fontFamily: 'Poppins-ExtraBold',
+    letterSpacing: -0.5,
+    lineHeight: 30,
+  } as TypeToken,
+
   /** Section-level titles and modal titles. */
   title: {
-    fontSize: 21,
+    fontSize: 20,
     fontFamily: 'Poppins-Bold',
     letterSpacing: -0.45,
     lineHeight: 27,
   } as TypeToken,
 
+  /** Card titles and sub-section headings. */
+  titleSm: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: -0.3,
+    lineHeight: 22,
+  } as TypeToken,
+
   /** Card and row headings — the workhorse emphasis style. */
   headline: {
-    fontSize: 15.5,
+    fontSize: 15,
     fontFamily: 'Poppins-SemiBold',
     letterSpacing: -0.2,
     lineHeight: 21,
@@ -71,10 +87,18 @@ export const type = {
 
   /** Default reading text. */
   body: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontFamily: 'Poppins-Regular',
     letterSpacing: -0.1,
     lineHeight: 21,
+  } as TypeToken,
+
+  /** Body text that needs weight — a value next to its label. */
+  bodyStrong: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: -0.1,
+    lineHeight: 20,
   } as TypeToken,
 
   /** Secondary text under a headline. */
@@ -115,6 +139,38 @@ export const type = {
     fontFamily: 'Poppins-Bold',
     letterSpacing: 0.7,
     lineHeight: 14,
+  } as TypeToken,
+
+  /**
+   * Micro metadata — the smallest text in the product. Ratings on a card
+   * corner, "3 photos", a date stamp.
+   *
+   * The scale originally stopped at `caption` (11pt), but the app uses 9 and
+   * 10pt in ~130 places for exactly this purpose, so those sizes existed with
+   * no token to name them and drifted across five weights. 10pt is the floor:
+   * 9pt and below is not reliably legible.
+   */
+  micro: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+    letterSpacing: 0.1,
+    lineHeight: 14,
+  } as TypeToken,
+
+  /** Micro metadata that carries emphasis — a count, a rating value, a badge. */
+  microStrong: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.2,
+    lineHeight: 14,
+  } as TypeToken,
+
+  /** Chip, tab and pill labels — denser than `emphasis`, still readable. */
+  label: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: -0.05,
+    lineHeight: 16,
   } as TypeToken,
 
   /** Numerals that need to line up — amounts, counts, times. */
@@ -158,16 +214,47 @@ export const motion = {
 } as const;
 
 // ── Semantic state ───────────────────────────────────────────────────────────
-// Deliberately muted. These are for meaning, never decoration, and only three
-// exist so screens can't drift into a palette of their own.
-export const stateColor = (isDark: boolean) => ({
-  /** Completed, confirmed, paid. */
-  positive: isDark ? '#4ADE80' : '#15803D',
-  /** Needs attention — overdue, behind, unresolved. */
-  attention: isDark ? '#FBBF24' : '#B45309',
-  /** Destructive only: delete, remove, leave. */
-  destructive: isDark ? '#FF6B6B' : '#DC2626',
-});
+// The single definition of "success"/"warning"/"danger" in the product.
+//
+// This lives here, not in ThemeContext, because tokens.ts must not import from
+// the context: half the UI layer imports tokens, and having tokens reach back
+// into ThemeContext formed an import cycle that left `radius` undefined at
+// module-evaluation time. The dependency runs one way — ThemeContext imports
+// these, never the reverse.
+
+export const semantic = {
+  light: {
+    success: '#15803D',
+    successSurface: '#ECFDF5',
+    warning: '#B45309',
+    warningSurface: '#FFFBEB',
+    danger: '#DC2626',
+    dangerSurface: '#FEF2F2',
+    saved: '#E5484D',
+  },
+  dark: {
+    success: '#4ADE80',
+    successSurface: 'rgba(74, 222, 128, 0.14)',
+    warning: '#FBBF24',
+    warningSurface: 'rgba(251, 191, 36, 0.14)',
+    danger: '#FF6B6B',
+    dangerSurface: 'rgba(255, 107, 107, 0.14)',
+    saved: '#FF6B6B',
+  },
+} as const;
+
+/** Legacy accessor kept for screens that only have `isDark` to hand. */
+export const stateColor = (isDark: boolean) => {
+  const c = isDark ? semantic.dark : semantic.light;
+  return {
+    /** Completed, confirmed, paid. */
+    positive: c.success,
+    /** Needs attention — overdue, behind, unresolved. */
+    attention: c.warning,
+    /** Destructive only: delete, remove, leave. */
+    destructive: c.danger,
+  };
+};
 
 // ── Text hygiene ─────────────────────────────────────────────────────────────
 

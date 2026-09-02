@@ -1,4 +1,4 @@
-import { GOOGLE_MAPS_API_KEY } from '../config/env';
+
 
 export interface ProvinceGeo {
   id: string;
@@ -360,15 +360,16 @@ export function formatAddress(dest: Destination): string {
 
 export async function fetchWikiImage(title: string): Promise<string | null> {
   try {
+    const wikiHeaders = { 'User-Agent': 'TourGoApp/1.0 (https://tourgo.ph; contact@tourgo.ph)' };
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(title + " Philippines")}&format=json&utf8=1`;
-    const searchRes = await fetch(searchUrl);
+    const searchRes = await fetch(searchUrl, { headers: wikiHeaders });
     const searchJson = await searchRes.json();
     const firstResult = searchJson?.query?.search?.[0];
-    
+
     if (firstResult) {
       const pageTitle = firstResult.title;
       const imgUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=600&titles=${encodeURIComponent(pageTitle)}&redirects=true`;
-      const imgRes = await fetch(imgUrl);
+      const imgRes = await fetch(imgUrl, { headers: wikiHeaders });
       const imgJson = await imgRes.json();
       const pages = imgJson?.query?.pages;
       if (pages) {
@@ -384,7 +385,7 @@ export async function fetchWikiImage(title: string): Promise<string | null> {
 
 export function getPlaceImageUrl(name: string, types: string[] = []): string {
   const normalized = name.toLowerCase();
-  
+
   // Hash function to pick a stable index from the string name
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -464,7 +465,7 @@ export function getPlaceImageUrl(name: string, types: string[] = []): string {
     ];
     return HOTEL_IMAGES[getIndex(HOTEL_IMAGES)];
   }
-  
+
   return 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=600&q=80';
 }
 
@@ -474,82 +475,56 @@ export async function fetchGooglePlacesForProvince(
   municipalityId?: string
 ): Promise<Destination[]> {
   try {
-    const query = `tourist spots in ${queryName} Philippines`;
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.location,places.photos'
-      },
-      body: JSON.stringify({
-        textQuery: query,
-        regionCode: 'PH',
-        pageSize: 20
-      })
-    });
+    const localMatches = DESTINATIONS.filter(
+      d => d.provinceId === provinceId && (!municipalityId || d.municipalityId === municipalityId)
+    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Google Places Province API returned error ${response.status} for query "${query}":`, errorText);
-      return [];
-    }
+    // Live query OpenStreetMap via Photon for spots in this province
+    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent('tourist spots in ' + queryName + ' Philippines')}&limit=12`;
+    const res = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.features)) {
+        const osmPlaces: Destination[] = data.features
+          .filter((f: any) => f.properties?.name && f.geometry?.coordinates?.length === 2)
+          .map((f: any) => {
+            const p = f.properties;
+            const [lon, lat] = f.geometry.coordinates;
+            const name = p.name;
+            const category = p.osm_value || p.osm_key || 'Attraction';
+            const addressParts = [p.name, p.street, p.city || p.district, p.state, p.country || 'Philippines'].filter(Boolean);
 
-    const json = await response.json();
-    if (json && Array.isArray(json.places)) {
-      const places: Destination[] = await Promise.all(
-        json.places.map(async (p: any) => {
-          const name = p.displayName?.text ?? 'Destination';
-          const types = p.types ?? [];
-          
-          let image = '';
-          if (p.photos && p.photos.length > 0) {
-            const photoName = p.photos[0].name;
-            image = `https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_MAPS_API_KEY}&maxWidthPx=800`;
-          } else {
-            const wikiImg = await fetchWikiImage(name);
-            image = wikiImg || getPlaceImageUrl(name, types);
+            return {
+              id: `osm-${p.osm_id}`,
+              provinceId,
+              municipalityId: municipalityId || '',
+              name,
+              latitude: lat,
+              longitude: lon,
+              tags: [category, 'Attraction', 'Must-Visit'],
+              rating: '4.7',
+              bestTime: 'Oct – May',
+              description: `A live destination in ${queryName} registered on OpenStreetMap.`,
+              image: getPlaceImageUrl(name, [category]),
+              address: addressParts.slice(1).join(', ') || `${queryName}, Philippines`,
+            };
+          });
+
+        const combined = [...localMatches];
+        for (const osm of osmPlaces) {
+          if (!combined.some(c => c.name.toLowerCase() === osm.name.toLowerCase())) {
+            combined.push(osm);
           }
-
-          const tags = types
-            .filter((t: string) => ['tourist_attraction', 'natural_feature', 'park', 'beach', 'museum', 'church', 'island', 'historical_landmark'].includes(t))
-            .map((t: string) => {
-              const map: Record<string, string> = {
-                tourist_attraction: 'Attraction',
-                natural_feature: 'Nature',
-                park: 'Park',
-                beach: 'Beach',
-                museum: 'Museum',
-                church: 'Heritage',
-                island: 'Island',
-                historical_landmark: 'Heritage',
-              };
-              return map[t] || t;
-            })
-            .slice(0, 3);
-          
-          if (tags.length === 0) tags.push('Spot');
-
-          return {
-            id: `google-${p.id}`,
-            provinceId: provinceId,
-            municipalityId: municipalityId || '',
-            name: name,
-            latitude: p.location?.latitude ?? 0,
-            longitude: p.location?.longitude ?? 0,
-            tags: tags,
-            rating: p.rating ? p.rating.toFixed(1) : '4.5',
-            bestTime: 'Oct – May',
-            description: `A highly-rated destination in ${queryName} registered on Google Maps.`,
-            image: image,
-            address: p.formattedAddress || `${queryName}, Philippines`,
-          };
-        })
-      );
-      return places.filter(p => p.latitude !== 0 && p.longitude !== 0);
+        }
+        return combined;
+      }
     }
+
+    return localMatches;
   } catch (error) {
-    console.error('Error fetching Google Places for ' + queryName, error);
+    console.error('Error fetching live places for ' + queryName, error);
+    return DESTINATIONS.filter(d => d.provinceId === provinceId);
   }
-  return [];
 }
+

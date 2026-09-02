@@ -4,10 +4,11 @@
     "slug": "tourgo-application",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./assets/images/TourGoLogo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#22C55E"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -15,7 +16,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#22C55E"
+        "backgroundColor": "#028BEB"
       },
       "package": "com.tourgo.app"
     },

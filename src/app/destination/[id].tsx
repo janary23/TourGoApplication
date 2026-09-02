@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, Image, TouchableOpacity, ScrollView, Dimensions, StatusBar, Alert } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  StatusBar,
+} from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { loadExploreLog, saveExploreLog } from '../../services/exploreLog';
+import { confirmAction } from '../../components/ui/Feedback';
+import { space, radius, hairline, type as T } from '../../components/ui/tokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -112,19 +123,14 @@ export default function DestinationDetailScreen() {
   }, [destId]);
 
   const handleStartJourney = () => {
-    Alert.alert(
-      'Start Journey',
-      `Would you like to start planning a trip to ${dest.title}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Yes, Plan now!', 
-          onPress: () => {
-            router.push('/trip/create');
-          } 
-        }
-      ]
-    );
+    confirmAction({
+        title: 'Start Journey',
+        message: `Would you like to start planning a trip to ${dest.title}?`,
+        confirmLabel: 'Yes, Plan now!',
+      }).then((ok) => {
+        if (!ok) return;
+        router.push('/trip/create');
+      });
   };
 
   return (
@@ -193,7 +199,7 @@ export default function DestinationDetailScreen() {
         <TouchableOpacity 
           activeOpacity={0.9}
           onPress={handleStartJourney}
-          style={[styles.journeyButton, { backgroundColor: '#1C1C22' }]}
+          style={[styles.journeyButton, { backgroundColor: colors.brand }]}
         >
           <Text style={styles.journeyButtonText}>Start journey</Text>
         </TouchableOpacity>
@@ -201,16 +207,16 @@ export default function DestinationDetailScreen() {
         <TouchableOpacity 
           activeOpacity={0.8}
           onPress={handleToggleSave}
-          style={[styles.bookmarkButton, { 
-            borderColor: '#1C1C22', 
-            backgroundColor: isSaved ? '#1C1C22' : 'transparent',
-            borderWidth: isSaved ? 0 : 1.5
+          style={[styles.bookmarkButton, {
+            borderColor: colors.cardBorder,
+            backgroundColor: isSaved ? colors.brandLight : colors.card,
+            borderWidth: hairline,
           }]}
         >
           <Ionicons 
             name={isSaved ? 'bookmark' : 'bookmark-outline'} 
             size={20} 
-            color={isSaved ? '#FFFFFF' : '#1C1C22'} 
+            color={isSaved ? colors.brand : colors.textSecondary} 
           />
         </TouchableOpacity>
       </View>
@@ -266,8 +272,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontSize: 26,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -284,8 +289,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
   },
   ratingCol: {
     flexDirection: 'row',
@@ -293,18 +297,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
   description: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     lineHeight: 22,
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '700',
     marginBottom: 12,
   },
@@ -348,21 +349,20 @@ const styles = StyleSheet.create({
   journeyButton: {
     flex: 1,
     height: 52,
-    borderRadius: 26,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   journeyButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    ...T.headline,
     fontWeight: '700',
   },
   bookmarkButton: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },

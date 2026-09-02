@@ -12,13 +12,21 @@ import * as Location from 'expo-location';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
-import { GOOGLE_MAPS_API_KEY } from '../../config/env';
+import { space, radius, shadow, type as T } from '../../components/ui/tokens';
+import { fetchFreePlaces } from '../../services/freePlacesService';
 import { getPlaceImageUrl, DESTINATIONS } from '../../services/destinations';
 import { loadExploreLog, saveExploreLog, type ExploreLog, type SavedSpotMeta } from '../../services/exploreLog';
 import { NATIONAL_SPOTS, FALLBACK_SPOTS, HOME_SPOTS, type SpotInfo } from '../../services/homeSpots';
 import { loadPreferences, getRecommendedSpots } from '../../services/preferences';
 import { parseSearchIntentWithAi, type AiSearchIntent } from '../../services/aiService';
 import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobalLoading } from '../../services/mascotBridge';
+import { EmptyState } from '../../components/ui/primitives';
+import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 52) / 2;
@@ -51,19 +59,19 @@ const SUBPAGE_FILTERS: { key: string; label: string }[] = [
 function mapDestinationToSpot(d: any): SpotInfo {
   const locationLabel = d.name === 'Big Lagoon' ? 'El Nido, Palawan'
     : d.name === 'Kayangan Lake' ? 'Coron, Palawan'
-    : d.name === 'White Beach' ? 'Boracay, Aklan'
-    : d.name === 'Banaue Rice Terraces' ? 'Ifugao'
-    : d.name === 'Basco Lighthouse' ? 'Batanes'
-    : d.name === 'Cloud 9 Boardwalk' ? 'Siargao, Surigao del Norte'
-    : d.name === 'Underground River' ? 'Puerto Princesa, Palawan'
-    : d.name === 'Chocolate Hills' ? 'Carmen, Bohol'
-    : d.name === 'Tarsier Sanctuary' ? 'Tagbilaran, Bohol'
-    : d.name === 'Loboc River Cruise' ? 'Loboc, Bohol'
-    : d.name === 'Sardine Run' ? 'Moalboal, Cebu'
-    : d.name === 'Whale Shark Watching' ? 'Oslob, Cebu'
-    : d.name === 'Bantayan Island' ? 'Bantayan, Cebu'
-    : d.name === 'Pinto Art Museum' ? 'Antipolo, Rizal'
-    : d.name;
+      : d.name === 'White Beach' ? 'Boracay, Aklan'
+        : d.name === 'Banaue Rice Terraces' ? 'Ifugao'
+          : d.name === 'Basco Lighthouse' ? 'Batanes'
+            : d.name === 'Cloud 9 Boardwalk' ? 'Siargao, Surigao del Norte'
+              : d.name === 'Underground River' ? 'Puerto Princesa, Palawan'
+                : d.name === 'Chocolate Hills' ? 'Carmen, Bohol'
+                  : d.name === 'Tarsier Sanctuary' ? 'Tagbilaran, Bohol'
+                    : d.name === 'Loboc River Cruise' ? 'Loboc, Bohol'
+                      : d.name === 'Sardine Run' ? 'Moalboal, Cebu'
+                        : d.name === 'Whale Shark Watching' ? 'Oslob, Cebu'
+                          : d.name === 'Bantayan Island' ? 'Bantayan, Cebu'
+                            : d.name === 'Pinto Art Museum' ? 'Antipolo, Rizal'
+                              : d.name;
 
   return {
     id: d.id,
@@ -120,6 +128,8 @@ type SectionId =
   | 'food';
 
 type SortMode = 'rating' | 'distance' | 'az';
+
+const ON_IMAGE_AMBER = '#FBBF24';
 
 const SECTION_META: Record<SectionId, { title: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap }> = {
   recommended: { title: 'Recommended For You', subtitle: 'Picked from your interests across the Philippines', icon: 'sparkles' },
@@ -191,7 +201,7 @@ const FadeImage = ({ sourceUri, style }: { sourceUri: string; style: any }) => {
         source={{ uri: sourceUri }}
         style={[style, { opacity }]}
         onLoad={() => {
-          Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+          Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: NATIVE_DRIVER }).start();
         }}
       />
     </View>
@@ -203,10 +213,10 @@ function InteractiveButton({ onPress, style, children, activeScale = 0.95, delay
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
-    Animated.spring(scale, { toValue: activeScale, useNativeDriver: true, tension: 180, friction: 12 }).start();
+    Animated.spring(scale, { toValue: activeScale, useNativeDriver: NATIVE_DRIVER, tension: 180, friction: 12 }).start();
   };
   const onPressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 180, friction: 12 }).start();
+    Animated.spring(scale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, tension: 180, friction: 12 }).start();
   };
 
   const flattened = StyleSheet.flatten(style || {});
@@ -256,8 +266,8 @@ function HomeSkeletonLoader({ colors }: { colors: any }) {
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.8, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.8, duration: 900, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 900, useNativeDriver: NATIVE_DRIVER }),
       ])
     ).start();
   }, [pulseAnim]);
@@ -266,7 +276,7 @@ function HomeSkeletonLoader({ colors }: { colors: any }) {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
       <View style={{ paddingHorizontal: 20, paddingTop: 10, gap: 20 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Animated.View style={{ height: 26, width: 90, borderRadius: 6, opacity: pulseAnim, backgroundColor: colors.surface }} />
+          <Animated.View style={{ height: 26, width: 90, borderRadius: 8, opacity: pulseAnim, backgroundColor: colors.surface }} />
           <Animated.View style={{ height: 30, width: 140, borderRadius: 15, opacity: pulseAnim, backgroundColor: colors.surface }} />
         </View>
         <Animated.View style={{ height: 38, borderRadius: 12, width: '100%', opacity: pulseAnim, backgroundColor: colors.surface }} />
@@ -277,7 +287,7 @@ function HomeSkeletonLoader({ colors }: { colors: any }) {
         </View>
         <Animated.View style={{ height: 190, borderRadius: 24, width: '100%', opacity: pulseAnim, backgroundColor: colors.surface }} />
         <View style={{ gap: 10, marginTop: 10 }}>
-          <Animated.View style={{ height: 16, width: 140, borderRadius: 6, opacity: pulseAnim, backgroundColor: colors.surface }} />
+          <Animated.View style={{ height: 16, width: 140, borderRadius: 8, opacity: pulseAnim, backgroundColor: colors.surface }} />
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {[1, 2].map((i) => (
               <Animated.View key={i} style={{ height: 120, flex: 1, borderRadius: 20, opacity: pulseAnim, backgroundColor: colors.surface }} />
@@ -372,7 +382,7 @@ export default function HomeScreen() {
     setOnMascotLeave(() => {
       setIsBirdLanded(false);
     });
-    
+
     const unsubscribe = subscribeOnboardingActive((active) => {
       setIsOnboardingActive(active);
     });
@@ -421,7 +431,7 @@ export default function HomeScreen() {
 
             // 2. Fetch spots matching the parsed intent
             const activeCat = activeCategoryFilter === 'all' ? intent.category : activeCategoryFilter;
-            
+
             let apiQuery = intent.searchQuery;
             if (activeCat !== 'all') {
               switch (activeCat) {
@@ -448,11 +458,11 @@ export default function HomeScreen() {
             // 3. AI Local filtering based on parsed budget and transport constraints
             let filtered = data;
             if (intent.budgetCategory === 'free') {
-              filtered = filtered.filter(s => 
-                s.categoryTag === 'Heritage' || 
-                s.categoryTag === 'Park' || 
-                s.categoryTag === 'Beach' || 
-                s.categoryTag === 'Nature' || 
+              filtered = filtered.filter(s =>
+                s.categoryTag === 'Heritage' ||
+                s.categoryTag === 'Park' ||
+                s.categoryTag === 'Beach' ||
+                s.categoryTag === 'Nature' ||
                 s.rating >= 4.7
               );
             }
@@ -489,7 +499,7 @@ export default function HomeScreen() {
                   break;
               }
             } else {
-              apiQuery = `tourist spots attractions landmarks to visit in ${q}`;
+              apiQuery = q;
             }
 
             const data = await fetchGooglePlaces('Philippines', apiQuery, coordsState);
@@ -648,112 +658,13 @@ export default function HomeScreen() {
     coords: { latitude: number; longitude: number }
   ): Promise<SpotInfo[]> => {
     try {
-      const isNational = cityName === 'Philippines';
-
-      const bodyPayload: any = {
-        textQuery: query,
-        regionCode: 'PH',
-        pageSize: 15
-      };
-
-      if (!isNational) {
-        bodyPayload.locationBias = {
-          circle: {
-            center: { latitude: coords.latitude, longitude: coords.longitude },
-            radius: 15000.0
-          }
-        };
-      }
-
-      const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.location,places.photos'
-        },
-        body: JSON.stringify(bodyPayload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Google Places API returned error ${response.status} for query "${query}":`, errorText);
-        return [];
-      }
-
-      const json = await response.json();
-      if (json && Array.isArray(json.places)) {
-        let places = json.places;
-
-        if (query.toLowerCase().includes('tourist') || query.toLowerCase().includes('landmark') || query.toLowerCase().includes('visit')) {
-          places = places.filter((p: any) => {
-            const types = p.types ?? [];
-            const touristTypes = [
-              'tourist_attraction', 'natural_feature', 'park', 'beach', 'museum', 'church',
-              'island', 'historical_landmark', 'amusement_park', 'zoo', 'aquarium', 'art_gallery', 'national_park',
-              'place_of_worship', 'landmark'
-            ];
-            const genericExclusions = [
-              'store', 'school', 'hospital', 'local_government_office', 'police', 'finance', 'lawyer', 'bank',
-              'doctor', 'dentist', 'accounting', 'car_repair', 'laundry'
-            ];
-            return types.some((t: string) => touristTypes.includes(t)) &&
-                   !types.some((t: string) => genericExclusions.includes(t));
-          });
-        }
-
-        return places.map((p: any) => {
-          const name = p.displayName?.text ?? 'Spot';
-          const types = p.types ?? [];
-          const lat = p.location?.latitude ?? 0;
-          const lng = p.location?.longitude ?? 0;
-
-          const dist = calculateDistance(coords.latitude, coords.longitude, lat, lng);
-          const distanceLabel = `${dist.toFixed(1)} km away`;
-
-          let image = getPlaceImageUrl(name, types);
-          if (p.photos && p.photos.length > 0) {
-            const photoName = p.photos[0].name;
-            image = `https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_MAPS_API_KEY}&maxWidthPx=600`;
-          }
-
-          const tags = types
-            .filter((t: string) => ['tourist_attraction', 'natural_feature', 'park', 'beach', 'museum', 'church', 'island', 'historical_landmark'].includes(t))
-            .map((t: string) => {
-              const map: Record<string, string> = {
-                tourist_attraction: 'Attraction', natural_feature: 'Nature', park: 'Park',
-                beach: 'Beach', museum: 'Museum', church: 'Heritage', island: 'Island', historical_landmark: 'Heritage',
-              };
-              return map[t] || t;
-            })
-            .slice(0, 2);
-          if (tags.length === 0) tags.push('Spot');
-
-          return {
-            id: `google-${p.id}`,
-            name,
-            location: p.formattedAddress || `${cityName}, Philippines`,
-            vibe: 'relaxing', season: 'year-round', budget: 'moderate',
-            distance: distanceLabel,
-            highlights: ['Real-time location data', 'Verified Google Maps Spot'],
-            description: `A highly-rated destination in ${cityName}. Address: ${p.formattedAddress || 'Local district'}.`,
-            image,
-            rating: p.rating ? parseFloat(p.rating.toFixed(1)) : 4.5,
-            reviewCount: p.userRatingCount ? `${p.userRatingCount}` : '150',
-            categoryTag: tags[0] || 'Local Gem',
-            subtitle: p.formattedAddress || 'Tourist destination',
-            latitude: lat,
-            longitude: lng,
-            days: [{ title: 'Local Visit', activities: [`Visit ${name}`, `Explore local features in ${cityName}`] }]
-          };
-        });
-      }
-      return [];
+      return await fetchFreePlaces(cityName, query, coords);
     } catch (err) {
-      console.error(`Google Places query failed for "${query}": `, err);
+      console.error(`Dynamic free places query failed for "${query}": `, err);
+      return [];
     }
-    return [];
   };
+
 
   // Weather-matched picks (unsliced — home shows a preview, the section page
   // shows everything)
@@ -770,7 +681,7 @@ export default function HomeScreen() {
       return { condition: 'Rainy Comforts', tagline: 'Cool & cozy indoor retreats in Baguio', spots: src.length > 0 ? src : FALLBACK_SPOTS };
     }
     if (norm.includes('siargao') || norm.includes('boracay') || norm.includes('palawan') || norm.includes('el nido') || norm.includes('bohol') || norm.includes('panglao')) {
-      const outdoorSpots = DESTINATIONS.filter(d => 
+      const outdoorSpots = DESTINATIONS.filter(d =>
         d.tags.some(tag => ['Beach', 'Lagoon', 'Lake', 'Trekking', 'Hiking', 'Surfing', 'River', 'Island', 'Hills', 'Nature'].includes(tag))
       ).map(mapDestinationToSpot);
       const src = dedupeSpots([...outdoorSpots, ...oSpots]);
@@ -814,35 +725,35 @@ export default function HomeScreen() {
         return localEvents;
       case 'outdoors': {
         const local = outdoorsSpots.length > 0 ? outdoorsSpots : [];
-        const staticOutdoors = DESTINATIONS.filter(d => 
+        const staticOutdoors = DESTINATIONS.filter(d =>
           d.tags.some(tag => ['Beach', 'Lagoon', 'Lake', 'Trekking', 'Hiking', 'Surfing', 'River', 'Island', 'Hills', 'Nature'].includes(tag))
         ).map(mapDestinationToSpot);
         return dedupeSpots([...local, ...staticOutdoors]);
       }
       case 'heritage': {
         const local = heritageSpots.length > 0 ? heritageSpots : [];
-        const staticHeritage = DESTINATIONS.filter(d => 
+        const staticHeritage = DESTINATIONS.filter(d =>
           d.tags.some(tag => ['Historical', 'Heritage', 'History', 'Church', 'Shrine', 'Iconic', 'National Icon'].includes(tag))
         ).map(mapDestinationToSpot);
         return dedupeSpots([...local, ...staticHeritage]);
       }
       case 'art': {
         const local = artSpots.length > 0 ? artSpots : [];
-        const staticArt = DESTINATIONS.filter(d => 
+        const staticArt = DESTINATIONS.filter(d =>
           d.tags.some(tag => ['Art', 'Museum', 'Culture', 'Gallery'].includes(tag))
         ).map(mapDestinationToSpot);
         return dedupeSpots([...local, ...staticArt]);
       }
       case 'parks': {
         const local = parksSpots.length > 0 ? parksSpots : [];
-        const staticParks = DESTINATIONS.filter(d => 
+        const staticParks = DESTINATIONS.filter(d =>
           d.tags.some(tag => ['Park', 'Amusement', 'Zoo', 'Garden', 'Aquarium', 'Falls'].includes(tag))
         ).map(mapDestinationToSpot);
         return dedupeSpots([...local, ...staticParks]);
       }
       case 'food': {
         const local = foodSpots.length > 0 ? foodSpots : [];
-        const staticFood = DESTINATIONS.filter(d => 
+        const staticFood = DESTINATIONS.filter(d =>
           d.tags.some(tag => ['Food', 'Restaurant', 'Cafe', 'Dining'].includes(tag))
         ).map(mapDestinationToSpot);
         return dedupeSpots([...local, ...staticFood]);
@@ -954,7 +865,7 @@ export default function HomeScreen() {
         <View style={{ position: 'relative', height: 110, overflow: 'hidden' }}>
           <Image source={{ uri: spot.image }} style={styles.gemImage} />
           <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={10} color="#FBBF24" style={{ marginRight: 2 }} />
+            <Ionicons name="star" size={10} color={ON_IMAGE_AMBER} style={{ marginRight: 2 }} />
             <Text style={styles.ratingBadgeText}>{spot.rating.toFixed(1)}</Text>
           </View>
         </View>
@@ -966,7 +877,7 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
       <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.gemHeartBadge}>
-        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={14} color={savedIds.includes(spot.id) ? '#EF4444' : '#FFFFFF'} />
+        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={14} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
       </TouchableOpacity>
     </View>
   );
@@ -982,7 +893,7 @@ export default function HomeScreen() {
         </View>
       </InteractiveButton>
       <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(spot.id)} style={styles.weatherHeartBadge}>
-        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? '#EF4444' : '#FFFFFF'} />
+        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
       </TouchableOpacity>
     </View>
   );
@@ -994,7 +905,7 @@ export default function HomeScreen() {
       onPress={() => setSelectedSpot(evt)}
       style={[styles.eventRowCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
     >
-      <View style={styles.eventDateBadge}>
+      <View style={[styles.eventDateBadge, { backgroundColor: colors.brand }]}>
         <Text style={styles.eventDateMonthText}>{evt.dateMonth}</Text>
         <Text style={styles.eventDateDayText}>{evt.dateDay}</Text>
       </View>
@@ -1010,12 +921,31 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  // Reusable section header — no leading icon, just title / subtitle / See All.
-  const renderSectionHeader = (id: SectionId, opts?: { titleOverride?: string; subtitleOverride?: string; rightBadge?: React.ReactNode; hideSeeAll?: boolean }) => {
+  /**
+   * Section header: title, optional subtitle, and "See All".
+   *
+   * Every call site used to pass `hideSeeAll`, which made getFullSectionData —
+   * described in this file as "the single source of truth for every See All
+   * page" — reachable only from the hero. Sections showed 6 of N spots with no
+   * way to the rest. The affordance is back, and it appears only when there is
+   * genuinely more to see, so it never lies.
+   */
+  const renderSectionHeader = (
+    id: SectionId,
+    opts?: {
+      titleOverride?: string; subtitleOverride?: string;
+      rightBadge?: React.ReactNode; hideSeeAll?: boolean;
+      /** How many items the row below is showing. */
+      shown?: number;
+    }
+  ) => {
     const meta = SECTION_META[id];
     const subtitleText = opts?.subtitleOverride ?? (id === 'trending' ? getTrendingSubtitle() : meta.subtitle);
+    const hasMore = opts?.shown != null && getFullSectionData(id).length > opts.shown;
+    const showSeeAll = !opts?.hideSeeAll && hasMore;
+
     return (
-      <View>
+      <View style={styles.sectionHeader}>
         <View style={styles.sectionHeaderRow}>
           <View style={{ flex: 1 }}>
             <View style={styles.weatherTitleRow}>
@@ -1023,16 +953,23 @@ export default function HomeScreen() {
               {opts?.rightBadge}
             </View>
           </View>
-          {!opts?.hideSeeAll && (
-            <TouchableOpacity activeOpacity={0.7} onPress={() => openSection(id)} style={styles.seeAllRow}>
-              <Text style={styles.seeAllText}>See All</Text>
-              <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+          {showSeeAll && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => openSection(id)}
+              style={styles.seeAllRow}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.seeAllText, { color: colors.brand }]}>See all</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.brand} />
             </TouchableOpacity>
           )}
         </View>
-        <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
-          {subtitleText}
-        </Text>
+        {!!subtitleText && (
+          <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
+            {subtitleText}
+          </Text>
+        )}
       </View>
     );
   };
@@ -1048,8 +985,8 @@ export default function HomeScreen() {
       <View style={{ backgroundColor: colors.background, zIndex: 10 }}>
         <View style={styles.headerRow}>
           <View style={styles.headerBrandRow}>
-            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand || '#38BDF8' }]} />
-            <Text style={[styles.appName, { color: colors.brand || '#38BDF8' }]}>TourGo</Text>
+            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
           </View>
           <View style={styles.headerRight}>
             <InteractiveButton onPress={() => setLocationPickerVisible(true)} style={[styles.headerLocationPill, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
@@ -1069,12 +1006,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Greeting replaces the old redundant "Explore the Philippines" heading */}
-        <View style={styles.greetingBlock}>
-          <Text style={[styles.greetingTitle, { color: colors.text }]}>{getGreeting()}, {firstName}</Text>
-          <Text style={[styles.greetingSubtitle, { color: colors.textSecondary }]}>Where do you want to go today?</Text>
-        </View>
-
         {/* Search — tapping goes full-screen with results across all of PH */}
         <View style={[styles.searchContainer, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
           <AguilitoHomeButton
@@ -1088,7 +1019,7 @@ export default function HomeScreen() {
             <TextInput
               value={searchInput}
               onChangeText={setSearchInput}
-              placeholder="Where to? Search the whole Philippines..."
+              placeholder="Where to?"
               placeholderTextColor={colors.textMuted}
               onSubmitEditing={handleSubmitSearch}
               returnKeyType="search"
@@ -1108,25 +1039,31 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} colors={[colors.brand]} />}
       >
+        {/* Greeting scrolls with the content rather than pinning to the header. */}
+        <View style={styles.greetingBlock}>
+          <Text style={[styles.greetingTitle, { color: colors.text }]}>{getGreeting()}, {firstName}</Text>
+        </View>
+
         {/* Quick 1-minute spontaneous day planner */}
         <InteractiveButton onPress={() => router.push('/day-plan')} style={styles.quickPlannerCard} activeScale={0.97}>
           <LinearGradient
-            colors={[colors.brand, '#0EA5E9']}
+            colors={[colors.brandFill, colors.brandFillDeep]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.quickPlannerGradient}
           >
-            <View style={styles.quickPlannerTag}>
-              <Ionicons name="flash" size={11} color="#FFFFFF" />
-              <Text style={styles.quickPlannerTagText}>1 MIN</Text>
-            </View>
-            <Text style={styles.quickPlannerTitle}>Build an Itinerary in 1 Minute</Text>
-            <Text style={styles.quickPlannerSubtitle}>Biglaang trip? Tell us where you're going today — we'll plan your whole day.</Text>
-            <View style={styles.quickPlannerCtaRow}>
-              <Text style={styles.quickPlannerCtaText}>Start planning</Text>
-              <View style={styles.quickPlannerArrow}>
-                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+            <View style={styles.quickPlannerBody}>
+              <View style={styles.quickPlannerTag}>
+                <Ionicons name="flash" size={11} color="#FFFFFF" />
+                <Text style={styles.quickPlannerTagText}>1 MIN</Text>
               </View>
+              <Text style={styles.quickPlannerTitle}>Build an itinerary in a minute</Text>
+              <Text style={styles.quickPlannerSubtitle} numberOfLines={2}>
+                Biglaang trip? Tell us where you're headed and we'll plan the day.
+              </Text>
+            </View>
+            <View style={styles.quickPlannerArrow}>
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </View>
           </LinearGradient>
         </InteractiveButton>
@@ -1151,7 +1088,7 @@ export default function HomeScreen() {
             </View>
           </InteractiveButton>
           <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(featuredLandingSpot.id)} style={styles.heroHeartContainer}>
-            <Ionicons name={savedIds.includes(featuredLandingSpot.id) ? 'heart' : 'heart-outline'} size={16} color={savedIds.includes(featuredLandingSpot.id) ? '#EF4444' : '#FFFFFF'} />
+            <Ionicons name={savedIds.includes(featuredLandingSpot.id) ? 'heart' : 'heart-outline'} size={16} color={savedIds.includes(featuredLandingSpot.id) ? colors.saved : '#FFFFFF'} />
           </TouchableOpacity>
         </View>
 
@@ -1161,12 +1098,13 @@ export default function HomeScreen() {
             titleOverride: userPrefs.length > 0 ? undefined : 'You Might Like',
             subtitleOverride: userPrefs.length > 0
               ? undefined
-              : 'Top-rated destinations across the Philippines — set your preferences to personalize this',
-            hideSeeAll: true
+              : 'Top-rated destinations across the Philippines',
+            shown: 8,
           })}
           {userPrefs.length === 0 && (
             <TouchableOpacity onPress={() => router.push('/profile')} style={styles.inlineLinkRow}>
-              <Text style={styles.inlineLinkText}>Set your preferences →</Text>
+              <Text style={[styles.inlineLinkText, { color: colors.brand }]}>Set your preferences</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.brand} />
             </TouchableOpacity>
           )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weatherScrollContainer}>
@@ -1177,7 +1115,7 @@ export default function HomeScreen() {
 
         {/* Trending Across the Philippines */}
         <View style={styles.sectionBlock}>
-          {renderSectionHeader('trending', { hideSeeAll: true })}
+          {renderSectionHeader('trending', { shown: 6 })}
           <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
             {getFullSectionData('trending').slice(0, 6).map(spot => renderGridCard(spot))}
           </View>
@@ -1191,7 +1129,7 @@ export default function HomeScreen() {
                 <Text style={[styles.weatherPillText, { color: colors.brand }]}>{todayWeather.condition}</Text>
               </View>
             ),
-            hideSeeAll: true
+            shown: 8,
           })}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.weatherScrollContainer, { marginTop: 12 }]}>
             {todayWeather.spots.slice(0, 8).map(spot => renderHorizontalCard(spot))}
@@ -1201,6 +1139,7 @@ export default function HomeScreen() {
         {/* Local Events */}
         {localEvents.length > 0 && (
           <View style={styles.sectionBlock}>
+            {/* events keeps no See All: the section page renders spot cards, not events */}
             {renderSectionHeader('events', { hideSeeAll: true })}
             <View style={[styles.eventsListContainer, { marginTop: 12 }]}>
               {localEvents.slice(0, 3).map(evt => renderEventCard(evt))}
@@ -1210,7 +1149,7 @@ export default function HomeScreen() {
 
         {/* Near You */}
         <View style={[styles.sectionBlock, { marginBottom: 0 }]}>
-          {renderSectionHeader('nearYou', { titleOverride: 'Best in your place', subtitleOverride: `Top-rated gems around ${locationName}`, hideSeeAll: true })}
+          {renderSectionHeader('nearYou', { titleOverride: 'Best in your place', subtitleOverride: `Top-rated gems around ${locationName}`, shown: 4 })}
           <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
             {getFullSectionData('nearYou').slice(0, 4).map(spot => renderGridCard(spot))}
           </View>
@@ -1256,8 +1195,8 @@ export default function HomeScreen() {
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 22, fontFamily: 'Poppins-Bold', color: colors.text }}>{headerTitle}</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textSecondary }} numberOfLines={1}>{headerSubtitle}</Text>
+              <Text style={{ ...T.display, color: colors.text }}>{headerTitle}</Text>
+              <Text style={{ ...T.label, color: colors.textSecondary }} numberOfLines={1}>{headerSubtitle}</Text>
             </View>
           </View>
 
@@ -1298,8 +1237,8 @@ export default function HomeScreen() {
                     onPress={() => setActiveCategoryFilter(f.key)}
                     style={[
                       styles.categoryChip,
-                      active 
-                        ? { backgroundColor: colors.brand } 
+                      active
+                        ? { backgroundColor: colors.brand }
                         : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder }
                     ]}
                   >
@@ -1313,13 +1252,13 @@ export default function HomeScreen() {
           </View>
 
           {isSearchActive && !searchLoading && aiIntent && (
-            <View style={{ 
-              marginHorizontal: 20, 
-              marginBottom: 12, 
-              padding: 16, 
-              backgroundColor: colors.card, 
-              borderRadius: 20, 
-              borderWidth: 1, 
+            <View style={{
+              marginHorizontal: 20,
+              marginBottom: 12,
+              padding: 16,
+              backgroundColor: colors.card,
+              borderRadius: 20,
+              borderWidth: 1,
               borderColor: colors.cardBorder,
               shadowColor: '#000000',
               shadowOffset: { width: 0, height: 4 },
@@ -1329,23 +1268,23 @@ export default function HomeScreen() {
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Ionicons name="sparkles" size={14} color={colors.brand} style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand, letterSpacing: 0.5 }}>AI EXPLORE ASSISTANT</Text>
+                <Text style={{ ...T.overline, color: colors.brand, letterSpacing: 0.5 }}>AI EXPLORE ASSISTANT</Text>
               </View>
-              <Text style={{ fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.text, lineHeight: 18 }}>
+              <Text style={{ ...T.emphasis, color: colors.text, lineHeight: 18 }}>
                 {aiIntent.reasoning}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.cardBorder }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="wallet-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 10.5, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>{aiIntent.budgetCategory.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.budgetCategory.toUpperCase()}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.cardBorder }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="car-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 10.5, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>{aiIntent.transpoMode.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.transpoMode.toUpperCase()}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.cardBorder }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="time-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 10.5, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>{aiIntent.bestTimeOfDay.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.bestTimeOfDay.toUpperCase()}</Text>
                 </View>
               </View>
             </View>
@@ -1362,26 +1301,25 @@ export default function HomeScreen() {
 
           {/* Active Tab Content / Search Results Content (Vertical Grid) */}
           <View style={styles.sectionBlock}>
-            {renderSectionHeader(isSearchActive ? 'recommended' : activeSection, { 
+            {renderSectionHeader(isSearchActive ? 'recommended' : activeSection, {
               titleOverride: isSearchActive ? 'All matching spots' : undefined,
-              hideSeeAll: true 
+              hideSeeAll: true
             })}
-            
+
             <View style={{ marginTop: 12 }}>
               {searchLoading ? (
                 <View style={{ paddingVertical: 48, alignItems: 'center', justifyContent: 'center' }}>
                   <ActivityIndicator size="large" color={colors.brand} />
-                  <Text style={{ marginTop: 12, fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.textSecondary }}>
+                  <Text style={{ marginTop: 12, ...T.emphasis, color: colors.textSecondary }}>
                     Searching destinations...
                   </Text>
                 </View>
               ) : resultsCount === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="compass-outline" size={32} color={colors.textMuted} />
-                  <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                    No spots matching "{sectionQuery}" in {isSearchActive ? 'the Philippines' : meta.title}.
-                  </Text>
-                </View>
+                <EmptyState
+                  icon="compass-outline"
+                  title="No matches"
+                  description={`Nothing matching "${sectionQuery}" in ${isSearchActive ? 'the Philippines' : meta.title}. Try a different search.`}
+                />
               ) : (
                 <View style={styles.gemsGridContainer}>
                   {results.map(spot => renderGridCard(spot))}
@@ -1429,17 +1367,17 @@ export default function HomeScreen() {
                         width: 40, height: 40, borderRadius: 20,
                         backgroundColor: savedIds.includes(selectedSpot.id) ? 'rgba(239,68,68,0.12)' : colors.surface,
                         alignItems: 'center', justifyContent: 'center', borderWidth: 1,
-                        borderColor: savedIds.includes(selectedSpot.id) ? '#EF4444' : colors.cardBorder,
+                        borderColor: savedIds.includes(selectedSpot.id) ? colors.saved : colors.cardBorder,
                       }}
                     >
-                      <Ionicons name={savedIds.includes(selectedSpot.id) ? 'heart' : 'heart-outline'} size={18} color={savedIds.includes(selectedSpot.id) ? '#EF4444' : colors.textSecondary} />
+                      <Ionicons name={savedIds.includes(selectedSpot.id) ? 'heart' : 'heart-outline'} size={18} color={savedIds.includes(selectedSpot.id) ? colors.saved : colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                    <Ionicons name="star" size={14} color="#FBBF24" />
-                    <Text style={{ fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text }}>{selectedSpot.rating.toFixed(1)}</Text>
-                    <Text style={{ fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>({selectedSpot.reviewCount || '150'} reviews)</Text>
+                    <Ionicons name="star" size={14} color={colors.warning} />
+                    <Text style={{ ...T.emphasis, color: colors.text }}>{selectedSpot.rating.toFixed(1)}</Text>
+                    <Text style={{ ...T.label, color: colors.textMuted }}>({selectedSpot.reviewCount || '150'} reviews)</Text>
                   </View>
 
                   <Text style={[styles.modalSubText, { color: colors.textSecondary, marginTop: 4 }]}>
@@ -1482,8 +1420,8 @@ export default function HomeScreen() {
                       <Text style={[styles.modalSectionHeading, { color: colors.text }]}>RECOMMENDED ITINERARY</Text>
                       {selectedSpot.days.map((day, idx) => (
                         <View key={idx} style={styles.modalDayBlock}>
-                          <Text style={{ fontFamily: 'Poppins-Bold', fontSize: 12, color: colors.text }}>Day {idx + 1}</Text>
-                          <Text style={{ fontFamily: 'Poppins-Regular', fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                          <Text style={{ ...T.label, color: colors.text }}>Day {idx + 1}</Text>
+                          <Text style={{ ...T.caption, color: colors.textSecondary, marginTop: 2 }}>
                             {typeof day === 'string' ? day : JSON.stringify(day)}
                           </Text>
                         </View>
@@ -1518,7 +1456,7 @@ export default function HomeScreen() {
               style={styles.pickerOptionRow}
             >
               <View style={styles.pickerIconContainer}>
-                <Ionicons name="navigate-circle-outline" size={20} color="#6366F1" />
+                <Ionicons name="navigate-circle-outline" size={20} color={colors.brand} />
               </View>
               <View>
                 <Text style={[styles.pickerOptionName, { color: colors.text }]}>Current GPS Location</Text>
@@ -1533,7 +1471,7 @@ export default function HomeScreen() {
                 onPress={() => { setLocationPickerVisible(false); loadLocationAndData({ latitude: loc.latitude, longitude: loc.longitude }, loc.name); }}
                 style={styles.pickerOptionRow}
               >
-                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: colors.surface || 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                   <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
                 </View>
                 <View>
@@ -1551,17 +1489,17 @@ export default function HomeScreen() {
       {/* ── AI SEARCH ASSISTANT MODAL OVERLAY ── */}
       <Modal visible={aiModalVisible} animationType="slide" transparent onRequestClose={() => setAiModalVisible(false)}>
         <TouchableOpacity style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} activeOpacity={1} onPress={() => setAiModalVisible(false)}>
-          <TouchableOpacity 
-            activeOpacity={1} 
-            style={{ 
-              width: '100%', 
-              backgroundColor: colors.background, 
-              borderTopLeftRadius: 30, 
-              borderTopRightRadius: 30, 
-              paddingHorizontal: 24, 
-              paddingTop: 12, 
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{
+              width: '100%',
+              backgroundColor: colors.background,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              paddingHorizontal: 24,
+              paddingTop: 12,
               paddingBottom: Platform.OS === 'ios' ? 44 : 28,
-              borderWidth: 1, 
+              borderWidth: 1,
               borderColor: colors.cardBorder,
               borderBottomWidth: 0,
               shadowColor: '#000000',
@@ -1579,9 +1517,9 @@ export default function HomeScreen() {
                 source={require('../../../assets/images/FloatingIcon.png')}
                 style={{ width: 32, height: 32, marginRight: 10, resizeMode: 'contain' }}
               />
-              <Text style={{ fontSize: 20, fontFamily: 'Poppins-Bold', color: colors.text }}>AI Search Assistant</Text>
+              <Text style={{ ...T.title, color: colors.text }}>AI Search Assistant</Text>
             </View>
-            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textSecondary, marginBottom: 20 }}>
+            <Text style={{ ...T.subhead, color: colors.textSecondary, marginBottom: 20 }}>
               Search destinations in the Philippines using natural language (budget, transport mode, time of day).
             </Text>
 
@@ -1592,36 +1530,35 @@ export default function HomeScreen() {
               placeholderTextColor={colors.textMuted}
               multiline
               numberOfLines={3}
-              style={{ 
-                height: 90, 
-                borderRadius: 16, 
-                borderWidth: 1, 
-                borderColor: colors.cardBorder, 
-                backgroundColor: colors.card, 
-                paddingHorizontal: 16, 
-                paddingVertical: 12, 
-                fontSize: 14, 
-                fontFamily: 'Poppins-Medium', 
-                color: colors.text, 
+              style={{
+                height: 90,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.cardBorder,
+                backgroundColor: colors.card,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                ...T.body,
+                color: colors.text,
                 textAlignVertical: 'top',
                 marginBottom: 20
               }}
             />
 
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.textMuted, marginBottom: 10, letterSpacing: 0.5 }}>TRY THESE EXAMPLES:</Text>
+              <Text style={{ ...T.overline, color: colors.textMuted, marginBottom: 10, letterSpacing: 0.5 }}>TRY THESE EXAMPLES:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {[
                   'nature spots in Pampanga by car',
                   'free historic churches in Manila',
                   'theme parks in Cebu in the afternoon'
                 ].map(ex => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     key={ex}
                     onPress={() => setAiSearchInput(ex)}
-                    style={{ backgroundColor: colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder }}
+                    style={{ backgroundColor: colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder }}
                   >
-                    <Text style={{ fontSize: 11.5, fontFamily: 'Poppins-Medium', color: colors.textSecondary }}>{ex}</Text>
+                    <Text style={{ ...T.label, color: colors.textSecondary }}>{ex}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1631,37 +1568,40 @@ export default function HomeScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => setAiModalVisible(false)}
-                style={{ 
-                  flex: 1, 
-                  height: 48, 
-                  borderRadius: 24, 
-                  backgroundColor: colors.card, 
-                  borderWidth: 1, 
-                  borderColor: colors.cardBorder, 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
+                style={{
+                  flex: 1,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.cardBorder,
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.text }}>Cancel</Text>
+                <Text style={{ ...T.bodyStrong, color: colors.text }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={handleAiSearchSubmit}
-                style={{ 
-                  flex: 1, 
-                  height: 48, 
-                  borderRadius: 24, 
-                  backgroundColor: colors.brand, 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
+                style={{
+                  flex: 1,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.brand,
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Search with AI</Text>
+                <Text style={{ ...T.bodyStrong, color: '#FFFFFF' }}>Search with AI</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ── ACTIVE 1-DAY ITINERARY FLOATING WIDGET ── */}
+      <ActiveDayPlanFloatingWidget />
     </SafeAreaView>
   );
 }
@@ -1671,87 +1611,85 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 2 },
   headerBrandRow: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
-  appName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', letterSpacing: -0.5 },
-  headerLocationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, maxWidth: 160 },
-  headerLocationText: { fontSize: 12, fontFamily: 'Poppins-Bold', maxWidth: 100 },
+  appName: { ...T.title, letterSpacing: -0.5 },
+  headerLocationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, maxWidth: 160 },
+  headerLocationText: { ...T.label, maxWidth: 100 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerAvatarBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  headerAvatarText: { fontSize: 12, fontFamily: 'Poppins-Bold' },
+  headerAvatarText: { ...T.label },
   headerAvatarImage: { width: '100%', height: '100%', resizeMode: 'cover' },
 
-  greetingBlock: { paddingHorizontal: 20, marginTop: 10, marginBottom: 20 },
-  eyebrowText: { fontSize: 10.5, fontFamily: 'Poppins-Bold', letterSpacing: 1.4 },
-  greetingTitle: { fontFamily: 'Poppins-ExtraBold', fontWeight: '800', fontSize: 30, letterSpacing: -0.7, lineHeight: 36 },
-  greetingSubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, marginTop: 2 },
+  greetingBlock: { paddingHorizontal: space.xl, marginTop: space.lg, marginBottom: space.lg },
+  eyebrowText: { ...T.microStrong, letterSpacing: 1.4 },
+  greetingTitle: T.largeTitle,
 
   searchContainer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   searchBarWrapper: {
-    flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 24, borderWidth: 1, paddingHorizontal: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 2,
+    flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: space.lg,
   },
-  searchInputText: { flex: 1, fontSize: 13.5, fontFamily: 'Poppins-Medium', height: '100%', padding: 0 },
+  searchInputText: { flex: 1, ...T.body, height: '100%', padding: 0 },
   categoryChipsContainer: { paddingVertical: 6 },
   categoryChipsScroll: { paddingHorizontal: 20, gap: 8 },
-  categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18 },
-  categoryChipText: { fontSize: 11, fontFamily: 'Poppins-SemiBold' },
+  categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  categoryChipText: { ...T.caption },
   scrollContent: { paddingBottom: 110 },
 
-  quickPlannerCard: { marginHorizontal: 20, marginBottom: 22, borderRadius: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 4 },
-  quickPlannerGradient: { padding: 18 },
-  quickPlannerTag: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 11, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 12 },
-  quickPlannerTagText: { color: '#FFFFFF', fontSize: 10, fontFamily: 'Poppins-Bold', letterSpacing: 0.9 },
-  quickPlannerTitle: { color: '#FFFFFF', fontSize: 20, fontFamily: 'Poppins-Bold', letterSpacing: -0.3 },
-  quickPlannerSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5, fontFamily: 'Poppins-Regular', lineHeight: 19, marginTop: 6 },
-  quickPlannerCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  quickPlannerCtaText: { color: '#FFFFFF', fontSize: 13, fontFamily: 'Poppins-SemiBold' },
-  quickPlannerArrow: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  quickPlannerCard: { marginHorizontal: space.xl, marginBottom: space.xl, borderRadius: radius.xl, overflow: 'hidden' },
+  quickPlannerGradient: { padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  quickPlannerBody: { flex: 1 },
+  quickPlannerTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: 3, marginBottom: space.sm },
+  quickPlannerTagText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.9 },
+  quickPlannerTitle: { color: '#FFFFFF', ...T.titleSm, letterSpacing: -0.2 },
+  quickPlannerSubtitle: { color: 'rgba(255,255,255,0.88)', ...T.footnote, lineHeight: 17, marginTop: 3 },
+  quickPlannerArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
 
-  sectionBlock: { marginTop: 26 },
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginBottom: 4 },
-  sectionTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', letterSpacing: -0.2 },
-  sectionSubtitleText: { fontSize: 11.5, fontFamily: 'Poppins-Medium', paddingHorizontal: 20, marginTop: 2, marginBottom: 4 },
-  seeAllRow: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingTop: 2 },
-  seeAllText: { fontSize: 12, fontFamily: 'Poppins-Bold', color: '#0284C7' },
-  inlineLinkRow: { paddingHorizontal: 20, marginBottom: 10, marginTop: -2 },
-  inlineLinkText: { fontSize: 11.5, fontFamily: 'Poppins-Bold', color: '#0284C7' },
+  sectionBlock: { marginTop: space.xxl },
+  sectionHeader: { marginBottom: space.md },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.xl, gap: space.md },
+  sectionTitle: { ...T.title, fontSize: 18 },
+  // Supporting copy, not a second heading: regular weight, muted, one line of air.
+  sectionSubtitleText: { ...T.subhead, paddingHorizontal: space.xl, marginTop: space.xxs },
+  seeAllRow: { flexDirection: 'row', alignItems: 'center', gap: 1 },
+  seeAllText: { ...T.emphasis, fontSize: 12 },
+  inlineLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: space.xl, marginTop: space.sm, marginBottom: space.md },
+  inlineLinkText: { ...T.label },
 
   heroCardContainer: {
-    marginHorizontal: 20, height: 200, borderRadius: 26, overflow: 'hidden', position: 'relative',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 5,
+    marginHorizontal: space.xl, height: 200, borderRadius: radius.xl, overflow: 'hidden', position: 'relative',
   },
   heroCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   heroCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '85%' },
   heroHeartContainer: { position: 'absolute', top: 14, right: 14, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center', padding: 6 },
   heroTopRow: { position: 'absolute', top: 14, left: 14, right: 60 },
-  heroStatPill: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
-  heroStatPillText: { color: '#FFFFFF', fontSize: 10, fontFamily: 'Poppins-Bold' },
+  heroStatPill: { alignSelf: 'flex-start', backgroundColor: 'rgba(0,0,0,0.42)', borderRadius: radius.sm, paddingHorizontal: space.sm + 2, paddingVertical: 5 },
+  heroStatPillText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.2 },
   heroTextContainer: { position: 'absolute', bottom: 18, left: 18, right: 18 },
-  heroTitleText: { color: '#FFFFFF', fontSize: 22, fontFamily: 'Poppins-Bold' },
-  heroSubtitleText: { color: '#E0E7FF', fontSize: 12, fontFamily: 'Poppins-Medium', marginTop: 2 },
-  heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
-  heroCtaText: { fontSize: 11.5, fontFamily: 'Poppins-Bold', color: '#0F172A' },
+  heroTitleText: { color: '#FFFFFF', ...T.display },
+  heroSubtitleText: { color: '#E0E7FF', ...T.label, marginTop: 2 },
+  heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, backgroundColor: '#FFFFFF', alignSelf: 'flex-start', borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm - 1, marginTop: space.md },
+  heroCtaText: { ...T.label, color: '#0F172A' },
 
   categoryTilesScroll: { paddingHorizontal: 20, gap: 12, paddingBottom: 4 },
   categoryTileCard: { width: 150, height: 170, borderRadius: 20, padding: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 8, elevation: 1 },
-  categoryTileImage: { width: '100%', height: 85, borderRadius: 14, resizeMode: 'cover' },
+  categoryTileImage: { width: '100%', height: 85, borderRadius: 16, resizeMode: 'cover' },
   categoryTileTextContainer: { marginTop: 8, paddingHorizontal: 4 },
-  categoryTileLabel: { fontSize: 13, fontFamily: 'Poppins-Bold' },
-  categoryTileSub: { fontSize: 9.5, fontFamily: 'Poppins-Medium', marginTop: 2, lineHeight: 12 },
+  categoryTileLabel: { ...T.emphasis },
+  categoryTileSub: { ...T.micro, marginTop: 2, lineHeight: 12 },
 
   gemsGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12 },
   gemCard: { height: 175, borderRadius: 20, overflow: 'hidden', position: 'relative', marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
-  gemHeartBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 18, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center', padding: 4, zIndex: 10 },
+  gemHeartBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center', padding: 4, zIndex: 10 },
   gemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  ratingBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, zIndex: 10 },
-  ratingBadgeText: { color: '#FFFFFF', fontSize: 9.5, fontFamily: 'Poppins-Bold' },
+  ratingBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, zIndex: 10 },
+  ratingBadgeText: { color: '#FFFFFF', ...T.microStrong },
   gemTextContainer: { paddingHorizontal: 12, paddingVertical: 10, flex: 1, justifyContent: 'center' },
-  gemTitle: { fontSize: 12.5, fontFamily: 'Poppins-Bold' },
-  gemSubText: { fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 1 },
+  gemTitle: { ...T.label },
+  gemSubText: { ...T.micro, marginTop: 1 },
 
   backButtonContainer: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  backButtonText: { fontSize: 13, fontFamily: 'Poppins-Bold' },
+  backButtonText: { ...T.emphasis },
   curatedTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  curatedTopBarTitle: { flex: 1, fontSize: 16, fontFamily: 'Poppins-Bold', textAlign: 'center', paddingHorizontal: 8 },
+  curatedTopBarTitle: { flex: 1, ...T.titleSm, textAlign: 'center', paddingHorizontal: 8 },
 
   // Section detail banner — echoes the tapped row's image/title so the page
   // feels like that row expanded, not a separate destination.
@@ -1760,73 +1698,73 @@ const styles = StyleSheet.create({
   sectionBannerTopRow: { position: 'absolute', top: 10, left: 16 },
   bannerCircleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
   sectionBannerTextWrap: { position: 'absolute', left: 20, right: 20, bottom: 34 },
-  sectionBannerTitle: { color: '#FFFFFF', fontSize: 21, fontFamily: 'Poppins-Bold' },
-  sectionBannerSubtitle: { color: '#E5E7EB', fontSize: 11.5, fontFamily: 'Poppins-Medium', marginTop: 3 },
+  sectionBannerTitle: { color: '#FFFFFF', ...T.title },
+  sectionBannerSubtitle: { color: '#E5E7EB', ...T.label, marginTop: 3 },
   sectionFloatingSearchWrap: { paddingHorizontal: 20, marginTop: -22, marginBottom: 6, zIndex: 5 },
   sectionFloatingSearch: { shadowOpacity: 0.1, shadowRadius: 14, elevation: 4 },
 
   sectionResultsHeaderRow: { paddingHorizontal: 20, marginTop: 6, marginBottom: 4 },
-  resultsCountText: { fontSize: 11.5, fontFamily: 'Poppins-Medium' },
+  resultsCountText: { ...T.label },
   sortChipsScroll: { paddingHorizontal: 20, gap: 8, paddingBottom: 14 },
   sortChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1 },
-  sortChipText: { fontSize: 11, fontFamily: 'Poppins-Bold' },
+  sortChipText: { ...T.overline },
 
   suggestionsWrap: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 },
-  suggestionsLabel: { fontSize: 10, fontFamily: 'Poppins-Bold', letterSpacing: 1, marginBottom: 8 },
+  suggestionsLabel: { ...T.microStrong, letterSpacing: 1, marginBottom: 8 },
   suggestionsChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   suggestionChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  suggestionChipText: { fontSize: 11.5, fontFamily: 'Poppins-SemiBold' },
+  suggestionChipText: { ...T.label },
 
   eventsListContainer: { paddingHorizontal: 20, gap: 10 },
   eventRowCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, padding: 10, height: 80 },
-  eventDateBadge: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#0284C7', alignItems: 'center', justifyContent: 'center' },
-  eventDateMonthText: { color: '#E0F2FE', fontSize: 9, fontFamily: 'Poppins-Bold' },
-  eventDateDayText: { color: '#FFFFFF', fontSize: 16, fontFamily: 'Poppins-ExtraBold', lineHeight: 18 },
+  eventDateBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  eventDateMonthText: { color: '#E0F2FE', ...T.microStrong },
+  eventDateDayText: { color: '#FFFFFF', ...T.titleSm, lineHeight: 18 },
   eventInfoMiddle: { flex: 1, marginHorizontal: 12, gap: 1 },
-  eventNameText: { fontSize: 12.5, fontFamily: 'Poppins-Bold' },
-  eventDateDetailsText: { fontSize: 10, fontFamily: 'Poppins-Medium' },
-  eventSubDetailsText: { fontSize: 9.5, fontFamily: 'Poppins-Medium' },
+  eventNameText: { ...T.label },
+  eventDateDetailsText: { ...T.micro },
+  eventSubDetailsText: { ...T.micro },
   eventBookmarkContainer: { padding: 6, marginRight: 6 },
   eventThumbImage: { width: 54, height: 54, borderRadius: 12, resizeMode: 'cover' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(23, 23, 23, 0.45)', justifyContent: 'flex-end' },
   modalContentCard: { width: '100%', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderBottomWidth: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 60 },
   notchHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-  modalImage: { width: '100%', height: 160, borderRadius: 14, marginBottom: 12 },
+  modalImage: { width: '100%', height: 160, borderRadius: 16, marginBottom: 12 },
   modalCloseButton: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   modalBody: { gap: 8 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  modalTitle: { fontSize: 20, fontFamily: 'Poppins-Bold' },
-  modalSubText: { fontSize: 11.5, fontFamily: 'Poppins-Medium' },
+  modalTitle: { ...T.title },
+  modalSubText: { ...T.label },
   modalTagsStrip: { flexDirection: 'row', gap: 8, marginTop: 4 },
   modalTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  modalTagText: { fontSize: 9, fontFamily: 'Poppins-Bold' },
-  modalDescription: { fontSize: 12.5, fontFamily: 'Poppins-Medium', lineHeight: 19, marginVertical: 6 },
-  modalSectionHeading: { fontSize: 10.5, fontFamily: 'Poppins-Bold', letterSpacing: 1, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 4, marginTop: 8 },
+  modalTagText: { ...T.microStrong },
+  modalDescription: { ...T.label, lineHeight: 19, marginVertical: 6 },
+  modalSectionHeading: { ...T.microStrong, letterSpacing: 1, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 4, marginTop: 8 },
   modalBulletList: { gap: 6, marginTop: 6 },
   modalBulletRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modalBulletText: { fontSize: 12, fontFamily: 'Poppins-Medium' },
+  modalBulletText: { ...T.label },
   modalDayBlock: { marginTop: 12 },
 
   locationPickerCard: { width: '85%', borderRadius: 20, borderWidth: 1, padding: 20, alignSelf: 'center', marginTop: 'auto', marginBottom: 'auto', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 5 },
-  pickerTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', marginBottom: 12, textAlign: 'center' },
+  pickerTitle: { ...T.titleSm, marginBottom: 12, textAlign: 'center' },
   pickerIconContainer: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  pickerOptionName: { fontSize: 13, fontFamily: 'Poppins-Bold' },
-  pickerOptionSub: { fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 1 },
+  pickerOptionName: { ...T.emphasis },
+  pickerOptionSub: { ...T.micro, marginTop: 1 },
   pickerOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
 
   emptyContainer: { width: '100%', paddingVertical: 60, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  emptySubtitle: { fontSize: 13, fontFamily: 'Poppins-Medium', textAlign: 'center', paddingHorizontal: 30 },
+  emptySubtitle: { ...T.emphasis, textAlign: 'center', paddingHorizontal: 30 },
 
   weatherTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   weatherPillBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  weatherPillText: { fontSize: 9.5, fontFamily: 'Poppins-Bold' },
+  weatherPillText: { ...T.microStrong },
   weatherScrollContainer: { paddingHorizontal: 20, gap: 12, paddingBottom: 4 },
   weatherCard: { width: 160, height: 110, borderRadius: 20, overflow: 'hidden', position: 'relative', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 6, elevation: 1 },
   weatherCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   weatherCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },
   weatherHeartBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 12, padding: 4, zIndex: 10 },
   weatherTextContainer: { position: 'absolute', bottom: 10, left: 10, right: 10 },
-  weatherCardTitle: { color: '#FFFFFF', fontSize: 11.5, fontFamily: 'Poppins-Bold' },
-  weatherCardSub: { color: '#E5E7EB', fontSize: 9, fontFamily: 'Poppins-Medium', marginTop: 1 },
+  weatherCardTitle: { color: '#FFFFFF', ...T.label },
+  weatherCardSub: { color: '#E5E7EB', ...T.micro, marginTop: 1 },
 });

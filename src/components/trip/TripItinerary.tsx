@@ -37,11 +37,14 @@ import {
   type WishlistSuggestion
 } from '../../services/wishlistSuggestions';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button,
-  Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section,
-} from '../ui/primitives';
+import { Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button, Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section, InlineEmpty } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor, shadow } from '../ui/tokens';
+import { confirmAction, notify } from '../ui/Feedback';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 // Enable layout animation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -184,7 +187,7 @@ export default function TripItinerary({
     if (copilotModalVisible) {
       Animated.spring(slideAnim, {
         toValue: 0,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         speed: 12,
         bounciness: 2,
       }).start();
@@ -192,7 +195,7 @@ export default function TripItinerary({
       Animated.timing(slideAnim, {
         toValue: SCREEN_H,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }).start();
     }
   }, [copilotModalVisible]);
@@ -408,7 +411,7 @@ export default function TripItinerary({
           spot.locationLabel || spot.name
         );
         if (error) {
-          Alert.alert('Could not add stop', error);
+          notify(error, 'error');
           return;
         }
         setLastAddedPlace(spot.name);
@@ -419,14 +422,11 @@ export default function TripItinerary({
     };
 
     if (warn) {
-      Alert.alert(
-        'Already on this day',
-        `${spot.name} — ${warn}. Add it anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Add anyway', onPress: doAdd },
-        ]
-      );
+      confirmAction({
+        title: 'Already on this day',
+        message: `${spot.name} — ${warn}. Add it anyway?`,
+        confirmLabel: 'Add anyway',
+      }).then(ok => { if (ok) doAdd(); });
       return;
     }
     await doAdd();
@@ -501,23 +501,20 @@ export default function TripItinerary({
         setAiSuggestions(prev => prev.filter(p => !selectedSuggestions.includes(p.title)));
         setSelectedSuggestions([]);
         loadTrip();
-        Alert.alert("Success", `${toAdd.length} stops added to Day ${activeDay + 1}!`);
+        notify(`${toAdd.length} stops added to Day ${activeDay + 1}!`, 'success');
       } catch (e) {
-        Alert.alert("Error", "Could not complete batch addition.");
+        notify("Could not complete batch addition.", 'error');
       } finally {
         setIsAiLoading(false);
       }
     };
 
     if (duplicatesList.length > 0) {
-      Alert.alert(
-        "Duplicate Activities Detected",
-        `The following selected stops appear to be duplicates:\n\n${duplicatesList.join('\n')}\n\nDo you want to add them anyway?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Add Anyway", onPress: performBatchAdd }
-        ]
-      );
+      confirmAction({
+        title: 'Duplicate activities detected',
+        message: `The following selected stops appear to be duplicates:\n\n${duplicatesList.join('\n')}\n\nDo you want to add them anyway?`,
+        confirmLabel: 'Add anyway',
+      }).then(ok => { if (ok) performBatchAdd(); });
     } else {
       await performBatchAdd();
     }
@@ -544,7 +541,7 @@ export default function TripItinerary({
 
       setAiSuggestions(suggestions);
     } catch (e) {
-      Alert.alert('AI Offline', 'Could not retrieve AI recommendations. Check network.');
+      notify('AI Offline. Could not retrieve AI recommendations. Check network.', 'error');
     } finally {
       setIsAiLoading(false);
     }
@@ -559,14 +556,11 @@ export default function TripItinerary({
     );
 
     if (isDup) {
-      Alert.alert(
-        'Duplicate Activity',
-        `"${cleanTitle}" already exists on Day ${activeDay + 1}. Add it anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Keep Both', onPress: async () => await performAdd(s) }
-        ]
-      );
+      confirmAction({
+        title: 'Duplicate activity',
+        message: `"${cleanTitle}" already exists on Day ${activeDay + 1}. Add it anyway?`,
+        confirmLabel: 'Keep both',
+      }).then(async ok => { if (ok) await performAdd(s); });
     } else {
       await performAdd(s);
     }
@@ -583,7 +577,7 @@ export default function TripItinerary({
       s.location
     );
     if (error) {
-      Alert.alert('Error', error);
+      notify(error, 'error');
       return;
     }
     setLastAddedPlace(s.title);
@@ -652,7 +646,7 @@ export default function TripItinerary({
 
   const handleSaveEdit = async () => {
     if (!editTitle.trim() || !editTime.trim()) {
-      Alert.alert('Required Info', 'Title and Time are required.');
+      notify('Required Info. Title and Time are required.', 'error');
       return;
     }
 
@@ -670,7 +664,7 @@ export default function TripItinerary({
     });
 
     if (error) {
-      Alert.alert('Error', error);
+      notify(error, 'error');
       return;
     }
 
@@ -679,18 +673,17 @@ export default function TripItinerary({
   };
 
   const handleRemoveActivity = async (itemId: string) => {
-    Alert.alert('Remove Activity Stop', 'Do you want to permanently delete this stop?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await dbDeleteItineraryItem(itemId);
-          setEditModalVisible(false);
-          loadTrip();
-        }
-      }
-    ]);
+    confirmAction({
+        title: 'Remove Activity Stop',
+        message: 'Do you want to permanently delete this stop?',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }).then(async (ok) => {
+        if (!ok) return;
+        await dbDeleteItineraryItem(itemId);
+        setEditModalVisible(false);
+        loadTrip();
+      });
   };
 
   // Custom Stop Modal actions
@@ -706,7 +699,7 @@ export default function TripItinerary({
 
   const handleSaveCustom = async () => {
     if (!customTitle.trim() || !customTime.trim()) {
-      Alert.alert('Required Info', 'Title and Time are required.');
+      notify('Required Info. Title and Time are required.', 'error');
       return;
     }
 
@@ -721,7 +714,7 @@ export default function TripItinerary({
     );
 
     if (error) {
-      Alert.alert('Error', error);
+      notify(error, 'error');
       return;
     }
 
@@ -734,12 +727,12 @@ export default function TripItinerary({
     const options = ["Yes, let's do it!", "No, skip this one"];
     const { error } = await dbAddPoll(trip.id, question, options.map(text => ({ text })), false);
     if (error) {
-      Alert.alert('Error', error);
+      notify(error, 'error');
       return;
     }
     setRejectedSuggestions(prev => [...prev, s.title]);
     setAiSuggestions(prev => prev.filter(p => p.title !== s.title));
-    Alert.alert('Poll Created!', `Group poll created for "${s.title}".`);
+    notify(`Group poll created for "${s.title}".`, 'success');
   };
 
   // Slide Sheet close helper
@@ -747,7 +740,7 @@ export default function TripItinerary({
     Animated.timing(slideAnim, {
       toValue: SCREEN_H,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
     }).start(() => setCopilotModalVisible(false));
   };
 
@@ -855,16 +848,9 @@ export default function TripItinerary({
 
               {dayActivities.length === 0 ? (
                 isOrganizer ? (
-                  <Press onPress={handleOpenCustomAdd}>
-                    <View style={[styles.dayEmpty, { borderColor: colors.cardBorder }]}>
-                      <Ionicons name="add" size={15} color={colors.textMuted} />
-                      <Txt variant="subhead" tone="muted">Add the first stop</Txt>
-                    </View>
-                  </Press>
+                  <InlineEmpty icon="add" label="Add the first stop" onPress={handleOpenCustomAdd} />
                 ) : (
-                  <View style={[styles.dayEmpty, { borderColor: colors.cardBorder }]}>
-                    <Txt variant="subhead" tone="muted">Nothing planned yet</Txt>
-                  </View>
+                  <InlineEmpty icon="calendar-outline" label="Nothing planned yet" />
                 )
               ) : (
                 dayActivities.map((act: any, idx: number) => {
@@ -1031,7 +1017,7 @@ export default function TripItinerary({
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
             {/* Mascot message speech bubble */}
             <View style={[styles.sheetBubble, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-              <Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: 'Poppins-Medium', lineHeight: 18 }}>
+              <Text style={[T.label, { color: colors.textSecondary }]}>
                 {getContextMessage()}
               </Text>
             </View>
@@ -1057,7 +1043,7 @@ export default function TripItinerary({
                           setLastAddedPlace('');
                         }}
                       >
-                        <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: activeDay === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
+                        <Text style={{ ...T.overline, color: activeDay === d ? '#FFFFFF' : colors.text }}>Day {d + 1}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -1109,7 +1095,7 @@ export default function TripItinerary({
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <Ionicons name="heart" size={11} color={colors.brand} />
-                          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                          <Text style={{ ...T.microStrong, color: colors.brand }}>
                             Day {activeDay + 1}
                           </Text>
                         </View>
@@ -1136,7 +1122,7 @@ export default function TripItinerary({
                                 onPress={() => handleAddWishlistStop(spot)}
                                 style={{
                                   width: 150,
-                                  borderRadius: 14,
+                                  borderRadius: 16,
                                   overflow: 'hidden',
                                   backgroundColor: colors.surface,
                                   borderWidth: 1,
@@ -1154,7 +1140,7 @@ export default function TripItinerary({
                                 <View style={{ padding: 10 }}>
                                   <Text
                                     numberOfLines={1}
-                                    style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.text }}
+                                    style={{ ...T.label, color: colors.text }}
                                   >
                                     {spot.name}
                                   </Text>
@@ -1177,7 +1163,7 @@ export default function TripItinerary({
                                           size={13}
                                           color={colors.brand}
                                         />
-                                        <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                                        <Text style={{ ...T.microStrong, color: colors.brand }}>
                                           {alreadyWarned ? 'Already added' : 'Add to day'}
                                         </Text>
                                       </>
@@ -1191,7 +1177,7 @@ export default function TripItinerary({
                                     backgroundColor: 'rgba(0,0,0,0.6)',
                                     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8,
                                   }}>
-                                    <Text style={{ fontSize: 8, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>
+                                    <Text style={{ ...T.microStrong, color: '#FFFFFF' }}>
                                       NEARBY
                                     </Text>
                                   </View>
@@ -1227,7 +1213,7 @@ export default function TripItinerary({
                           }}
                         >
                           <Ionicons name={opt.icon as any} size={12} color={isSelected ? colors.brand : colors.textSecondary} />
-                          <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: isSelected ? colors.brand : colors.text }}>{opt.label}</Text>
+                          <Text style={{ ...T.microStrong, color: isSelected ? colors.brand : colors.text }}>{opt.label}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -1253,7 +1239,7 @@ export default function TripItinerary({
                   {isAiLoading ? (
                     <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
                       <ActivityIndicator size="small" color={colors.brand} />
-                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 14, fontFamily: 'Poppins-Medium' }}>
+                      <Text style={[T.caption, { color: colors.textSecondary, marginTop: space.lg - 2 }]}>
                         Agilito co-pilot is matching spots and transit routing...
                       </Text>
                     </View>
@@ -1364,13 +1350,12 @@ export default function TripItinerary({
               {copilotTab === 'warnings' && (
                 <View>
                   {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).length === 0 ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-                      <Ionicons name="checkmark-circle" size={42} color={sc.positive} />
-                      <Text style={{ fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text, marginTop: 8 }}>Schedule Flowing Nicely</Text>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
-                        Agilito confirms that daily pacing and transit guidelines are fully optimized.
-                      </Text>
-                    </View>
+                    <EmptyState
+                      tone="positive"
+                      icon="checkmark-circle"
+                      title="Schedule flowing nicely"
+                      description="Agilito found no pacing or transit problems on this itinerary."
+                    />
                   ) : (
                     <View style={{ gap: 10 }}>
                       {warnings.filter(w => !acknowledgedWarnings.includes(w.id)).map((warn) => (
@@ -1378,7 +1363,7 @@ export default function TripItinerary({
                           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
                             <Ionicons name="warning-outline" size={16} color={sc.attention} style={{ marginTop: 1 }} />
                             <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: colors.text }}>{warn.title}</Text>
+                              <Text style={{ ...T.label, color: colors.text }}>{warn.title}</Text>
                               <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2, lineHeight: 15 }}>{warn.message}</Text>
                             </View>
                           </View>
@@ -1387,21 +1372,21 @@ export default function TripItinerary({
                               style={[styles.sheetWarnMiniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
                               onPress={() => handleResolveWarning(warn, 'ignore')}
                             >
-                              <Text style={{ fontSize: 10, color: colors.textSecondary, fontFamily: 'Poppins-Bold' }}>Keep</Text>
+                              <Text style={[T.microStrong, { color: colors.textSecondary }]}>Keep</Text>
                             </TouchableOpacity>
                             {warn.type === 'duplicate' ? (
                               <TouchableOpacity 
                                 style={[styles.sheetWarnMiniBtn, { backgroundColor: sc.destructive }]}
                                 onPress={() => handleResolveWarning(warn, 'delete')}
                               >
-                                <Text style={{ fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Delete One</Text>
+                                <Text style={[T.microStrong, { color: '#FFFFFF' }]}>Delete One</Text>
                               </TouchableOpacity>
                             ) : (
                               <TouchableOpacity 
                                 style={[styles.sheetWarnMiniBtn, { backgroundColor: colors.brand }]}
                                 onPress={() => handleResolveWarning(warn, 'fix')}
                               >
-                                <Text style={{ fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Resolve</Text>
+                                <Text style={[T.microStrong, { color: '#FFFFFF' }]}>Resolve</Text>
                               </TouchableOpacity>
                             )}
                           </View>
@@ -1628,8 +1613,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetSectionLabel: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     textTransform: 'uppercase',
     marginBottom: 8,
     marginTop: 14,
@@ -1642,24 +1626,22 @@ const styles = StyleSheet.create({
   },
   sheetInput: {
     height: 40,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1.5,
     paddingHorizontal: 12,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     flex: 1,
   },
   sheetActionBtn: {
     height: 40,
     paddingHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetActionText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
   },
   sheetVibeChip: {
     flexDirection: 'row',
@@ -1672,15 +1654,14 @@ const styles = StyleSheet.create({
   },
   sheetLargeBtn: {
     height: 40,
-    borderRadius: 10,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   sheetLargeBtnText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
   },
   suggestionsGrid: {
     flexDirection: 'row',
@@ -1723,8 +1704,7 @@ const styles = StyleSheet.create({
   },
   iosTimeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
   },
   iosSelectionCircle: {
     position: 'absolute',
@@ -1743,7 +1723,7 @@ const styles = StyleSheet.create({
     top: 30,
     right: 10,
     backgroundColor: 'rgba(245, 158, 11, 0.95)',
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 2,
     flexDirection: 'row',
@@ -1752,33 +1732,29 @@ const styles = StyleSheet.create({
   },
   cardWarningText: {
     color: '#FFFFFF',
-    fontSize: 7.5,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
   },
   iosCategoryPill: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(34, 197, 94, 0.88)',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 7,
     paddingVertical: 2.5,
     marginBottom: 4,
   },
   iosCategoryText: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   iosCardTitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.label,
     color: '#FFFFFF',
     letterSpacing: -0.2,
     lineHeight: 15,
   },
   iosCardMeta: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     color: 'rgba(255, 255, 255, 0.75)',
     marginTop: 2,
     marginBottom: 6,
@@ -1804,13 +1780,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iosAddBtnText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     color: '#FFFFFF',
   },
   sheetWarnCard: {
     borderWidth: 1.5,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
     borderLeftWidth: 4,
     
@@ -1843,12 +1818,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherCityName: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.titleSm,
   },
   weatherMainCondText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
   },
   checkStrip: {
     flexDirection: 'row',
@@ -1877,13 +1850,11 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
   },
   railTime: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     letterSpacing: -0.2,
   },
   railAmpm: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     marginTop: -1,
   },
   trackCol: {
@@ -1894,7 +1865,7 @@ const styles = StyleSheet.create({
   railDot: {
     width: 13,
     height: 13,
-    borderRadius: 7,
+    borderRadius: 8,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1941,13 +1912,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chipTxt: {
-    fontSize: 9.5,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.microStrong,
     letterSpacing: 0.2,
   },
   stopDesc: {
-    fontSize: 11.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     lineHeight: 15,
     marginTop: 5,
   },
@@ -1958,12 +1927,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   durationTxt: {
-    fontSize: 10.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   gapTxt: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   readOnlyNote: {
     flexDirection: 'row',
@@ -1974,16 +1941,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: hairline,
     marginBottom: space.xl,
-  },
-  dayEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-    paddingVertical: space.xl,
-    borderRadius: radius.lg,
-    borderWidth: hairline,
-    borderStyle: 'dashed',
   },
   dayPicker: {
     flexDirection: 'row',

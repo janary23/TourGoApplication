@@ -18,3 +18,11 @@ export async function storageSet(key: string, value: string): Promise<void> {
     // ignore persistence failures
   }
 }
+
+export async function storageRemove(key: string): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {
+    // ignore persistence failures
+  }
+}

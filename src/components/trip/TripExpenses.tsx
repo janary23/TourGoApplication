@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, ScrollView, Alert, Pressable } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { addExpense as dbAddExpense, deleteExpense as dbDeleteExpense } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
@@ -8,6 +8,7 @@ import {
   Button, EmptyState, Sheet, Field, Txt, Badge, Avatar, IconButton, Stat, Press,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
+import { notify, confirmAction } from '../ui/Feedback';
 
 interface TripExpensesProps {
   trip: any;
@@ -137,7 +138,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
     try {
       const ids = splitWith.length === members.length ? [] : splitWith;
       const { error } = await dbAddExpense(trip.id, title.trim(), amt, paidBy, ids);
-      if (error) { Alert.alert('Could not add expense', error); return; }
+      if (error) { notify(error, 'error'); return; }
       reset();
       setSheetOpen(false);
       loadTrip();
@@ -149,21 +150,20 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
   const confirmDelete = (exp: any) => {
     if (isViewOnly) return;
     if (exp.paidBy !== currentUserName) {
-      Alert.alert('Not your expense', `Only ${exp.paidBy} can remove this entry.`);
+      notify(`Only ${exp.paidBy} can remove this entry.`, 'info');
       return;
     }
-    Alert.alert('Remove expense?', `"${exp.title}" will be removed for everyone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await dbDeleteExpense(exp.id);
-          if (error) Alert.alert('Could not remove', error);
-          else loadTrip();
-        },
-      },
-    ]);
+    confirmAction({
+        title: 'Remove expense?',
+        message: `"${exp.title}" will be removed for everyone.`,
+        confirmLabel: 'Remove',
+        destructive: true,
+      }).then(async (ok) => {
+        if (!ok) return;
+        const { error } = await dbDeleteExpense(exp.id);
+        if (error) notify(error, 'error');
+        else loadTrip();
+      });
   };
 
   const canSave = !isViewOnly && !!title.trim() && parseFloat(amount) > 0 && !!paidBy;
@@ -258,7 +258,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
             <Section>
               <SectionLabel>Entries</SectionLabel>
               {filtered.length === 0 ? (
-                <EmptyState icon="funnel-outline" title="Nothing here" description="No expenses match this filter." />
+                <EmptyState icon="funnel-outline" title="No matches" description="No expenses match this filter." />
               ) : (
                 <ListGroup>
                   {filtered.map((exp: any) => {

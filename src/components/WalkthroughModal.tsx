@@ -10,6 +10,12 @@ import { PREFERENCE_TOPICS, savePreferences } from '../services/preferences';
 import { storageSet } from '../services/storage';
 import { useTheme } from '../context/ThemeContext';
 import { setOnboardingActive } from '../services/mascotBridge';
+import { type as T } from './ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 const ONBOARDING_KEY = 'tourgo.onboarding.completed.v1';
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -27,14 +33,14 @@ const MIN_SELECT = 1;
 
 // Trip features shown on the "everything inside one trip" step — names + icons only.
 const TRIP_FEATURES = [
-  { icon: 'calendar-outline', color: '#38BDF8', title: 'Itinerary' },
-  { icon: 'checkbox-outline', color: '#22C55E', title: 'Checklists' },
-  { icon: 'stats-chart-outline', color: '#8B5CF6', title: 'Polls' },
-  { icon: 'wallet-outline', color: '#F59E0B', title: 'Bills & Expenses' },
-  { icon: 'folder-open-outline', color: '#6366F1', title: 'Documents' },
-  { icon: 'people-outline', color: '#EC4899', title: 'Members' },
-  { icon: 'chatbubbles-outline', color: '#14B8A6', title: 'Trip Chat' },
-  { icon: 'shield-checkmark-outline', color: '#F97316', title: 'Safety & Tracking' },
+  { icon: 'calendar-outline', title: 'Itinerary' },
+  { icon: 'checkbox-outline', title: 'Checklists' },
+  { icon: 'stats-chart-outline', title: 'Polls' },
+  { icon: 'wallet-outline', title: 'Bills & Expenses' },
+  { icon: 'folder-open-outline', title: 'Documents' },
+  { icon: 'people-outline', title: 'Members' },
+  { icon: 'chatbubbles-outline', title: 'Trip Chat' },
+  { icon: 'shield-checkmark-outline', title: 'Safety & Tracking' },
 ];
 
 // Premium custom Confetti Particle (config captured once so pieces never mutate)
@@ -71,20 +77,20 @@ function ConfettiParticle({ colors }: { colors: any }) {
         duration: c.fall,
         delay: c.delay,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(spin, {
         toValue: c.spin,
         duration: 1600 + Math.random() * 900,
         delay: c.delay,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(drift, {
         toValue: c.drift,
         duration: c.fall,
         delay: c.delay,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
     ]).start();
   }, []);
@@ -182,10 +188,10 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
 
     // Start each entrance animation independently so a hiccup in one can never leave a slide invisible.
     const anims = [
-      () => Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      () => Animated.spring(bubbleScale, { toValue: 1, friction: 8, tension: 45, useNativeDriver: true }),
-      () => Animated.timing(contentAnim, { toValue: 1, duration: 360, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      () => Animated.timing(listProgress, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      () => Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: NATIVE_DRIVER }),
+      () => Animated.spring(bubbleScale, { toValue: 1, friction: 8, tension: 45, useNativeDriver: NATIVE_DRIVER }),
+      () => Animated.timing(contentAnim, { toValue: 1, duration: 360, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE_DRIVER }),
+      () => Animated.timing(listProgress, { toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
     ];
     anims.forEach((make) => {
       try {
@@ -197,7 +203,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
     if (currentStep >= 4 && currentStep <= 8) {
       ringScale.setValue(0.82);
       try {
-        Animated.spring(ringScale, { toValue: 1, friction: 7, tension: 90, useNativeDriver: true }).start();
+        Animated.spring(ringScale, { toValue: 1, friction: 7, tension: 90, useNativeDriver: NATIVE_DRIVER }).start();
       } catch {}
     }
   }, [visible, currentStep]);
@@ -211,13 +217,13 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
           toValue: 1,
           duration: 1300,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(mascotFloat, {
           toValue: 0,
           duration: 1300,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ])
     );
@@ -236,7 +242,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
         toValue: 1,
         friction: 5,
         tension: 130,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }).start();
       flyTimeoutRef.current = setTimeout(() => {
         startFlyHome();
@@ -279,13 +285,13 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
           toValue: 1,
           duration: 170,
           easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(flapValue, {
           toValue: 0,
           duration: 170,
           easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ])
     );
@@ -314,7 +320,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
       toValue: 0,
       duration: 650,
       easing: Easing.inOut(Easing.quad),
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
     }).start();
 
     const nestX = 44;
@@ -331,19 +337,19 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
         toValue: nestX,
         duration: 1900,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(flyY, {
         toValue: nestY,
         duration: 1900,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(flightProgress, {
         toValue: 1,
         duration: 1900,
         easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
     ]).start(({ finished }) => {
       if (!finished) return;
@@ -352,13 +358,13 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
         toValue: 0.34,
         duration: 260,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }).start();
       setTimeout(() => {
         Animated.timing(flyOpacity, {
           toValue: 0,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }).start(({ finished: f2 }) => {
           if (f2) finishOnboarding();
         });
@@ -776,8 +782,8 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                             { opacity: rowStagger(idx, TRIP_FEATURES.length).opacity, transform: [{ translateY: rowStagger(idx, TRIP_FEATURES.length).translateY }] },
                           ]}
                         >
-                          <View style={[styles.pagesIconBox, { backgroundColor: feature.color + '1A' }]}>
-                            <Ionicons name={feature.icon as any} size={19} color={feature.color} />
+                          <View style={[styles.pagesIconBox, { backgroundColor: colors.brandLight }]}>
+                            <Ionicons name={feature.icon as any} size={19} color={colors.brand} />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.pagesRowTitle, { color: colors.text }]}>{feature.title}</Text>
@@ -998,16 +1004,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backTxt: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.headline,
     marginLeft: 2,
   },
   skipBtn: {
     padding: 8,
   },
   skipTxt: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.headline,
   },
   scrollArea: {
     flex: 1,
@@ -1065,13 +1069,12 @@ const styles = StyleSheet.create({
   pagesIconBox: {
     width: 40,
     height: 40,
-    borderRadius: 13,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pagesRowTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
   },
   // Center Greeting Layout (Step 2)
   centerMascotContainer: {
@@ -1081,15 +1084,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   centerTitle: {
-    fontSize: 26,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     letterSpacing: -0.6,
     textAlign: 'center',
     marginBottom: 4,
   },
   centerSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -1142,18 +1143,15 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   tourSpeakerName: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    ...T.headline,
   },
   tapHint: {
-    fontSize: 13.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     textAlign: 'center',
     letterSpacing: 0.2,
   },
   bubbleBody: {
-    fontSize: 15.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     lineHeight: 22,
     textAlign: 'center',
   },
@@ -1185,15 +1183,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   prefTitle: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginBottom: 6,
   },
   prefSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     lineHeight: 19,
     textAlign: 'center',
     marginBottom: 24,
@@ -1220,19 +1216,17 @@ const styles = StyleSheet.create({
   topicIcon: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   topicLabel: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     marginBottom: 2,
   },
   topicDescText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     lineHeight: 15,
   },
   checkCircle: {
@@ -1256,11 +1250,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 15,
-    borderRadius: 18,
+    borderRadius: 20,
   },
   doneTxt: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
   },
   // Success Glow and celebration styles
   successGlow: {
@@ -1271,8 +1264,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   successTitle: {
-    fontSize: 26,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -1285,8 +1277,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   successDesc: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Medium',
+    ...T.body,
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 12,
@@ -1317,7 +1308,6 @@ const styles = StyleSheet.create({
     bottom: 110,
     textAlign: 'center',
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.headline,
   },
 });

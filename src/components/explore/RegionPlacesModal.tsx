@@ -11,12 +11,18 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { ThemeColors } from '../../context/ThemeContext';
-import { GOOGLE_MAPS_API_KEY } from '../../config/env';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - 48) / 2;
@@ -58,7 +64,7 @@ async function fetchWikiImage(title: string): Promise<string | null> {
     const searchRes = await fetch(searchUrl);
     const searchJson = await searchRes.json();
     const firstResult = searchJson?.query?.search?.[0];
-    
+
     if (firstResult) {
       const pageTitle = firstResult.title;
       // 2. Fetch page image for that title
@@ -80,7 +86,7 @@ async function fetchWikiImage(title: string): Promise<string | null> {
 
 function getPlaceImageUrl(name: string, types: string[] = []): string {
   const normalized = name.toLowerCase();
-  
+
   if (normalized.includes('batad') || normalized.includes('banaue') || normalized.includes('rice terraces')) {
     return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=600&q=80';
   }
@@ -102,7 +108,7 @@ function getPlaceImageUrl(name: string, types: string[] = []): string {
   if (normalized.includes('mines view') || normalized.includes('baguio') || normalized.includes('burnham') || normalized.includes('mountain') || normalized.includes('peak') || normalized.includes('pulag')) {
     return 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80';
   }
-  
+
   let categoryKeyword = 'scenery';
   if (types.includes('beach') || types.includes('natural_feature') || types.includes('island')) {
     categoryKeyword = 'beach';
@@ -111,7 +117,7 @@ function getPlaceImageUrl(name: string, types: string[] = []): string {
   } else if (types.includes('historical_landmark') || types.includes('museum') || types.includes('church') || types.includes('place_of_worship')) {
     categoryKeyword = 'architecture';
   }
-  
+
   return `https://loremflickr.com/600/400/philippines,${categoryKeyword}/all`;
 }
 
@@ -155,10 +161,10 @@ const PlaceCard: React.FC<{ item: GooglePlace; colors: ThemeColors; isDark: bool
     <Animated.View style={[placeCardStyles.card, { transform: [{ scale }] }]}>
       <Pressable
         onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 30, bounciness: 2 }).start()
+          Animated.spring(scale, { toValue: 0.96, useNativeDriver: NATIVE_DRIVER, speed: 30, bounciness: 2 }).start()
         }
         onPressOut={() =>
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start()
+          Animated.spring(scale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, speed: 20, bounciness: 6 }).start()
         }
         onPress={handlePress}
         style={{ flex: 1 }}
@@ -216,7 +222,7 @@ const placeCardStyles = StyleSheet.create({
   card: {
     width: CARD_W,
     height: 190,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 12,
     backgroundColor: '#1A1A1A',
@@ -237,21 +243,19 @@ const placeCardStyles = StyleSheet.create({
   categoryPill: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(34,197,94,0.88)',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 3,
     marginBottom: 6,
   },
   categoryText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   name: {
-    fontSize: 13,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.emphasis,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.2,
@@ -264,8 +268,7 @@ const placeCardStyles = StyleSheet.create({
     gap: 3,
   },
   rating: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.8)',
   },
@@ -299,7 +302,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
     if (visible && region) {
       Animated.spring(slideAnim, {
         toValue: 0,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
         speed: 14,
         bounciness: 3,
       }).start();
@@ -308,7 +311,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
       Animated.timing(slideAnim, {
         toValue: 700,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }).start();
     }
   }, [visible, region]);
@@ -319,55 +322,47 @@ export const RegionPlacesModal: React.FC<Props> = ({
     setPlaces([]);
     try {
       const query = REGION_QUERIES[r] ?? `tourist spots in ${r} Philippines`;
-      
-      const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types'
-        },
-        body: JSON.stringify({
-          textQuery: query
-        })
-      });
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=15`;
+      const response = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Google Places Region API returned error ${response.status} for query "${query}":`, errorText);
-        setError(`Failed to fetch places: Google API returned status ${response.status}`);
+        setError('Could not connect to places service. Please check your connection.');
         setIsLoading(false);
         return;
       }
 
       const json = await response.json();
-      
-      if (json && Array.isArray(json.places) && json.places.length > 0) {
-        // Parallel wiki image fetch for all places
-        const mapped: GooglePlace[] = await Promise.all(
-          json.places.slice(0, 20).map(async (p: any) => {
-            const name = p.displayName?.text ?? 'Destination';
-            const types = p.types ?? [];
-            const wikiImg = await fetchWikiImage(name);
-            const finalImg = wikiImg || getPlaceImageUrl(name, types);
 
-            return {
-              place_id: p.id,
-              name: name,
-              rating: p.rating,
-              user_ratings_total: p.userRatingCount,
-              formatted_address: p.formattedAddress,
-              types: types,
-              imageUrl: finalImg
-            };
-          })
+      if (json && Array.isArray(json.features) && json.features.length > 0) {
+        const mapped: GooglePlace[] = await Promise.all(
+          json.features
+            .filter((f: any) => f.properties?.name)
+            .slice(0, 15)
+            .map(async (f: any) => {
+              const p = f.properties;
+              const name = p.name;
+              const types = [p.osm_value || p.osm_key || 'attraction'];
+              const addressParts = [p.name, p.street, p.city || p.district, p.state, p.country || 'Philippines'].filter(Boolean);
+              const wikiImg = await fetchWikiImage(name);
+              const finalImg = wikiImg || getPlaceImageUrl(name, types);
+
+              return {
+                place_id: `osm-${p.osm_id}`,
+                name: name,
+                rating: 4.7,
+                user_ratings_total: 500,
+                formatted_address: addressParts.slice(1).join(', ') || `${r}, Philippines`,
+                types: types,
+                imageUrl: finalImg
+              };
+            })
         );
         setPlaces(mapped);
       } else {
         setError('No destinations found. Try a different region.');
       }
     } catch (e) {
-      console.error(e);
+      console.error('Live region places fetch error:', e);
       setError('Failed to load places. Check your connection.');
     } finally {
       setIsLoading(false);
@@ -378,7 +373,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
     Animated.timing(slideAnim, {
       toValue: 700,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
     }).start(() => onClose());
   };
 
@@ -487,25 +482,21 @@ const modalStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.title,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   headerSub: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     marginTop: 2,
   },
   countBadge: {
-    backgroundColor: '#22C55E',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   countText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -517,12 +508,10 @@ const modalStyles = StyleSheet.create({
     padding: 40,
   },
   loadingText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    ...T.body,
   },
   errorText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    ...T.headline,
     fontWeight: '700',
     textAlign: 'center',
   },

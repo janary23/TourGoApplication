@@ -1,6 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, Image, Animated } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, Image, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface CalendarWidgetProps {
   trips: any[];
@@ -25,7 +31,7 @@ export default function CalendarWidget({
   const onPressIn = () => {
     Animated.spring(scale, {
       toValue: 0.96,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -34,7 +40,7 @@ export default function CalendarWidget({
   const onPressOut = () => {
     Animated.spring(scale, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -429,14 +435,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   widgetLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     letterSpacing: 0.2,
   },
   // Hero stat — the one place a heavier weight earns its keep
   todayText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.headline,
     marginTop: 4,
     marginBottom: 2,
   },
@@ -453,12 +457,10 @@ const styles = StyleSheet.create({
     minWidth: 26,
   },
   miniDayName: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   miniDayNum: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     marginTop: 1,
   },
   miniTripDot: {
@@ -479,8 +481,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   miniRangeCaptionText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.microStrong,
     flexShrink: 1,
   },
   modalBackdrop: {
@@ -506,8 +507,7 @@ const styles = StyleSheet.create({
   },
   // Modal title, section-heading scale
   expandedTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.title,
     letterSpacing: -0.2,
   },
   calendarNavHeader: {
@@ -526,8 +526,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calendarMonthTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.headline,
   },
   weekdayRow: {
     flexDirection: 'row',
@@ -537,8 +536,7 @@ const styles = StyleSheet.create({
   weekdayLabel: {
     width: 40,
     textAlign: 'center',
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
   },
   daysGridContainer: {
     flexDirection: 'row',
@@ -562,16 +560,14 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   dayCellText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
   },
   monthTripsSection: {
     marginTop: 20,
     gap: 10,
   },
   monthTripsLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     letterSpacing: 1.0,
     textTransform: 'uppercase',
   },
@@ -589,12 +585,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   monthTripDest: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
   },
   monthTripDates: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     marginTop: 1,
   },
   detailsContainer: {
@@ -603,8 +597,7 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   detailsDateHeader: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     marginBottom: 10,
     letterSpacing: 0.2,
   },
@@ -626,18 +619,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tripDetailDest: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.microStrong,
     letterSpacing: 0.2,
   },
   tripDetailTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     marginTop: 1,
     marginBottom: 1,
   },
   tripDetailDates: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
   },
 });

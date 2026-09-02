@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, RefreshControl, ActivityIndicator, Animated } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, RefreshControl, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,13 @@ import { useTheme } from '../../context/ThemeContext';
 import { getTrips } from '../../services/tripService';
 import { supabase } from '../../services/supabase';
 import ActivityItemCard from '../../components/activity/ActivityItemCard';
+import { EmptyState } from '../../components/ui/primitives';
+import { space, radius, type as T } from '../../components/ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface FeedItem {
   id: string;
@@ -42,12 +49,12 @@ function ActivitySkeletonLoader({ colors }: { colors: any }) {
         Animated.timing(pulseAnim, {
           toValue: 0.9,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(pulseAnim, {
           toValue: 0.4,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ])
     );
@@ -59,8 +66,8 @@ function ActivitySkeletonLoader({ colors }: { colors: any }) {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }}>
       {/* Title skeleton */}
       <View style={{ marginTop: 10, marginBottom: 20 }}>
-        <Animated.View style={{ height: 28, width: 190, borderRadius: 10, backgroundColor: colors.surface, opacity: pulseAnim, marginBottom: 8 }} />
-        <Animated.View style={{ height: 14, width: 260, borderRadius: 6, backgroundColor: colors.surface, opacity: pulseAnim }} />
+        <Animated.View style={{ height: 28, width: 190, borderRadius: 12, backgroundColor: colors.surface, opacity: pulseAnim, marginBottom: 8 }} />
+        <Animated.View style={{ height: 14, width: 260, borderRadius: 8, backgroundColor: colors.surface, opacity: pulseAnim }} />
       </View>
 
       {/* Card skeletons */}
@@ -73,7 +80,7 @@ function ActivitySkeletonLoader({ colors }: { colors: any }) {
             backgroundColor: colors.card,
             borderColor: colors.cardBorder,
             borderWidth: 1,
-            borderRadius: 18,
+            borderRadius: 20,
             padding: 14,
             marginBottom: 12,
             gap: 12,
@@ -97,7 +104,7 @@ function ActivitySkeletonLoader({ colors }: { colors: any }) {
                 style={{
                   width: '48%',
                   height: 14,
-                  borderRadius: 6,
+                  borderRadius: 8,
                   backgroundColor: colors.surface,
                   opacity: pulseAnim,
                 }}
@@ -471,22 +478,22 @@ export default function ActivityScreen() {
     if (item.type === 'announcement') {
       const lowerTitle = (item.title || '').toLowerCase();
       if (lowerTitle.includes('leadership') || lowerTitle.includes('handover') || lowerTitle.includes('promoted')) {
-        return { name: 'ribbon', color: '#F59E0B' };
+        return { name: 'ribbon', color: colors.warning };
       }
       if (lowerTitle.includes('left') || lowerTitle.includes('departure') || lowerTitle.includes('removed')) {
-        return { name: 'exit-outline', color: '#EF4444' };
+        return { name: 'exit-outline', color: colors.danger };
       }
       if (lowerTitle.includes('joined') || lowerTitle.includes('welcome')) {
-        return { name: 'person-add', color: '#38BDF8' };
+        return { name: 'person-add', color: colors.brand };
       }
-      return { name: 'megaphone', color: colors.brand || '#38BDF8' };
+      return { name: 'megaphone', color: colors.brand };
     }
     switch (item.type) {
-      case 'chat': return { name: 'chatbubbles', color: '#0EA5E9' };
-      case 'expense': return { name: 'wallet', color: '#22C55E' };
-      case 'poll': return { name: 'bar-chart', color: colors.brand || '#38BDF8' };
-      case 'checklist': return { name: 'checkmark-circle', color: '#10B981' };
-      default: return { name: 'notifications', color: colors.brand || '#38BDF8' };
+      case 'chat': return { name: 'chatbubbles', color: colors.brand };
+      case 'expense': return { name: 'wallet', color: colors.success };
+      case 'poll': return { name: 'bar-chart', color: colors.brand };
+      case 'checklist': return { name: 'checkmark-circle', color: colors.success };
+      default: return { name: 'notifications', color: colors.brand };
     }
   };
 
@@ -495,35 +502,11 @@ export default function ActivityScreen() {
       {/* Branded App Header Row (Borderless & Minimalist) */}
       <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
         <View style={styles.headerBrandContainer}>
-          <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand || '#38BDF8' }]} />
-          <Text style={[styles.appName, { color: colors.brand || '#38BDF8' }]}>
+          <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+          <Text style={[styles.appName, { color: colors.brand }]}>
             TourGo
           </Text>
         </View>
-      </View>
-
-      {/* Horizontal Scroll Filter Chips (Capsules) */}
-      <View style={styles.categoryChipsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
-          {FILTERS.map(f => {
-            const active = activeFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                activeOpacity={0.8}
-                onPress={() => setActiveFilter(f.key)}
-                style={[
-                  styles.categoryChip,
-                  active ? { backgroundColor: colors.brand || '#0284C7' } : { backgroundColor: colors.cardBorder || 'rgba(255,255,255,0.08)' }
-                ]}
-              >
-                <Text style={[styles.categoryChipText, active ? { color: '#FFFFFF' } : { color: colors.textSecondary }]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </View>
 
       {isLoading && activities.length === 0 ? (
@@ -535,9 +518,35 @@ export default function ActivityScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
         >
           {/* Title Section */}
-          <View style={{ marginTop: 10, marginBottom: 20 }}>
-            <Text style={{ fontSize: 30, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Notifications</Text>
-            <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Recent updates across all your group trips.</Text>
+          <View style={{ marginTop: space.sm, marginBottom: space.lg }}>
+            <Text style={[T.largeTitle, { color: colors.text }]}>Activity</Text>
+            <Text style={[T.subhead, { color: colors.textMuted, marginTop: space.xxs }]}>
+              Recent updates across all your group trips.
+            </Text>
+          </View>
+
+          {/* Horizontal Scroll Filter Chips (Capsules) */}
+          <View style={styles.categoryChipsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
+              {FILTERS.map(f => {
+                    const active = activeFilter === f.key;
+                    return (
+                      <TouchableOpacity
+                        key={f.key}
+                        activeOpacity={0.8}
+                        onPress={() => setActiveFilter(f.key)}
+                        style={[
+                              styles.categoryChip,
+                              active ? { backgroundColor: colors.brand } : { backgroundColor: colors.cardBorder }
+                        ]}
+                      >
+                        <Text style={[styles.categoryChipText, active ? { color: '#FFFFFF' } : { color: colors.textSecondary }]}>
+                              {f.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+              })}
+            </ScrollView>
           </View>
 
           {filteredActivities.length > 0 ? (
@@ -554,12 +563,20 @@ export default function ActivityScreen() {
               );
             })
           ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="notifications-off-outline" size={32} color={colors.textMuted} style={{ marginBottom: 10 }} />
-              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                {activeFilter === 'all' ? 'No recent activity' : `No ${activeFilter} updates`}
-              </Text>
-            </View>
+            activeFilter === 'all' ? (
+              <EmptyState
+                icon="notifications-off-outline"
+                title="No activity yet"
+                description="Updates from your group trips will show up here."
+              />
+            ) : (
+              /* Filtered to nothing is a different state from nothing existing. */
+              <EmptyState
+                icon="funnel-outline"
+                title="No matches"
+                description={`No ${activeFilter} updates yet. Try another filter.`}
+              />
+            )
           )}
         </ScrollView>
       )}
@@ -587,8 +604,7 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   appName: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.title,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -602,28 +618,15 @@ const styles = StyleSheet.create({
   categoryChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 14,
+    borderRadius: 16,
   },
   categoryChipText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.caption,
   },
   scrollContent: { padding: 20, paddingBottom: 110 },
   subtitle: {
-    fontSize: 12.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     marginBottom: 20,
     paddingHorizontal: 2,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 20,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-    textAlign: 'center',
   },
 });

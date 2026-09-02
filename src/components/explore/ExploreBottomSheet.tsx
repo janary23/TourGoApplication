@@ -1,7 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 export type SheetState = 'collapsed' | 'partial' | 'full';
 
@@ -54,7 +60,7 @@ export const ExploreBottomSheet: React.FC<ExploreBottomSheetProps> = ({
     const target = heights[nextState];
     Animated.spring(translateY, {
       toValue: target,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       bounciness: 3,
       speed: 15,
     }).start();
@@ -253,13 +259,11 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   peekTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     fontWeight: '700',
   },
   peekSubtitle: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     fontWeight: '500',
     marginTop: 1,
   },

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { StyleSheet, View, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -7,6 +7,7 @@ import {
   Avatar, Badge, EmptyState, Txt,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
+import { chooseAction } from '../ui/Feedback';
 
 interface TripMembersProps {
   trip: any;
@@ -57,29 +58,23 @@ export default function TripMembers({
   }), [filtered]);
 
   const manage = (m: any) => {
-    if (Platform.OS === 'web') {
-      const isCurrentlyOrganizer = m.role === 'organizer';
-      const promptText = isCurrentlyOrganizer
-        ? `Manage ${m.name}:\nType 'remove' to remove them from this trip.`
-        : `Manage ${m.name}:\nType 'promote' to make them Organizer, or 'remove' to remove from trip.`;
-      const action = window.prompt(promptText, '');
-      if (action?.toLowerCase() === 'promote' && onPromoteMember && !isCurrentlyOrganizer) {
-        onPromoteMember(m);
-      } else if (action?.toLowerCase() === 'remove' && onRemoveMember) {
-        onRemoveMember(m);
-      }
-      return;
-    }
-
-    const options: any[] = [];
+    // This used to fork by platform: a native alert on device, and on web a
+    // window.prompt that asked the user to *type* the word "promote". Both are
+    // gone — one sheet, built from the actions this member actually allows.
+    const actions: { label: string; destructive?: boolean; run: () => void }[] = [];
     if (onPromoteMember && m.role !== 'organizer') {
-      options.push({ text: 'Make organizer', onPress: () => onPromoteMember(m) });
+      actions.push({ label: 'Make organizer', run: () => onPromoteMember(m) });
     }
     if (onRemoveMember) {
-      options.push({ text: 'Remove from trip', style: 'destructive', onPress: () => onRemoveMember(m) });
+      actions.push({ label: 'Remove from trip', destructive: true, run: () => onRemoveMember(m) });
     }
-    options.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert(m.name, 'Choose an action for this member:', options);
+    if (!actions.length) return;
+
+    chooseAction({
+      title: m.name,
+      message: 'Choose an action for this member.',
+      options: actions.map(({ label, destructive }) => ({ label, destructive })),
+    }).then(i => { if (i >= 0) actions[i].run(); });
   };
 
   return (
@@ -134,11 +129,22 @@ export default function TripMembers({
 
         <Section>
           {ordered.length === 0 ? (
-            <EmptyState
-              icon="people-outline"
-              title="No one here"
-              description={search ? `No members match “${search}”.` : 'Share the trip code to invite your group.'}
-            />
+            /* Two distinct states, as everywhere else: a filtered list with no
+               matches is not the same thing as a trip with no members. Saying
+               "No members yet" while the group is simply filtered out is wrong. */
+            search || filter !== 'all' ? (
+              <EmptyState
+                icon="funnel-outline"
+                title="No matches"
+                description={search ? `No members match “${search}”.` : 'No members match this filter.'}
+              />
+            ) : (
+              <EmptyState
+                icon="people-outline"
+                title="No members yet"
+                description="Share the trip code to invite your group."
+              />
+            )
           ) : (
             <>
               <SectionLabel>

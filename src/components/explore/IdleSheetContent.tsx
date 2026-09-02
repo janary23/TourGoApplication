@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../context/ThemeContext';
 import { PHILIPPINES_PROVINCES } from '../../services/philippinesMapData';
+import { type as T } from '../ui/tokens';
 
 const TOTAL_PROVINCES = 82;
 
@@ -370,22 +371,18 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   dashboardLabel: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
+    ...T.title,
     fontWeight: '700',
     letterSpacing: -0.3,
     marginBottom: 6,
   },
   dashboardStats: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
+    ...T.subhead,
     lineHeight: 18,
     marginBottom: 14,
   },
   highlightText: {
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '800',
-    fontSize: 16,
+    ...T.titleSm,
   },
   boldText: {
     fontFamily: 'Poppins-SemiBold',
@@ -423,8 +420,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   filterPillText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     fontWeight: '600',
   },
   // Search bar
@@ -440,8 +436,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     padding: 0,
   },
   // Card Grid Layout
@@ -490,11 +485,10 @@ const styles = StyleSheet.create({
     left: 8,
     paddingHorizontal: 6,
     paddingVertical: 2.5,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   floatingRegionText: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -525,8 +519,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.4)',
   },
   waxSealText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.microStrong,
     fontWeight: '900',
     color: '#D97706', // Amber gold stamp letter
   },
@@ -536,8 +529,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardTitleText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     fontWeight: '700',
   },
   cardMeta: {
@@ -546,8 +538,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardMemoryText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     fontStyle: 'italic',
   },
   cardDateRow: {
@@ -557,17 +548,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   cardDateText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
   },
   cardLockText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
     fontStyle: 'italic',
   },
   cardExploreText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
   emptyWrap: {
@@ -575,8 +563,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
+    ...T.subhead,
     textAlign: 'center',
   },
 });

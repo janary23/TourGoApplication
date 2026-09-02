@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  StyleSheet, View, Text, ScrollView, Alert, Image, Dimensions, Pressable,
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  Image,
+  Dimensions,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -12,6 +18,7 @@ import {
   EmptyState, Txt, Badge, Avatar, Sheet, Segmented,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
+import { notify } from '../ui/Feedback';
 
 interface TripGuardianProps {
   trip: any;
@@ -41,17 +48,30 @@ function tileToLatLng(x: number, y: number, zoom: number) {
   return { lat, lng };
 }
 
-/** Light and dark basemaps only — the map follows the app theme rather than
- *  offering a palette of styles that fight the rest of the UI. */
-function getTileUrl(x: number, y: number, z: number, dark: boolean) {
+type MapProvider = 'auto' | 'google-roads' | 'google-hybrid' | 'carto-dark' | 'carto-light';
+
+/** Fetches raw raster tile images from Google Maps Tile API and CartoDB. */
+function getTileUrl(x: number, y: number, z: number, dark: boolean, provider: MapProvider = 'auto') {
   const tx = Math.floor(x);
   const ty = Math.floor(y);
+  if (provider === 'google-roads') {
+    return `https://mt1.google.com/vt/lyrs=m&x=${tx}&y=${ty}&z=${z}`;
+  }
+  if (provider === 'google-hybrid') {
+    return `https://mt1.google.com/vt/lyrs=y&x=${tx}&y=${ty}&z=${z}`;
+  }
+  if (provider === 'carto-dark') {
+    return `https://a.basemaps.cartocdn.com/dark_all/${z}/${tx}/${ty}.png`;
+  }
+  if (provider === 'carto-light') {
+    return `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`;
+  }
   return dark
     ? `https://a.basemaps.cartocdn.com/dark_all/${z}/${tx}/${ty}.png`
     : `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`;
 }
 
-type Panel = 'people' | 'stops';
+type Panel = 'people' | 'stops' | 'emergency';
 
 export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = false }: TripGuardianProps) {
   const { colors, isDark } = useTheme();
@@ -61,6 +81,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
   const [zoom, setZoom] = useState(15);
   const [panel, setPanel] = useState<Panel>('people');
   const [selectedPin, setSelectedPin] = useState<any | null>(null);
+  const [provider, setProvider] = useState<MapProvider>('auto');
 
   const members = trip.members ?? [];
   const located = members.filter((m: any) => m.location);
@@ -68,10 +89,56 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
 
   const centerLat = located.length
     ? located.reduce((s: number, m: any) => s + m.location.latitude, 0) / located.length
-    : 14.5995;
+    : (resolvePlaceCoords(trip?.destination || '')?.latitude ?? 14.5995);
   const centerLng = located.length
     ? located.reduce((s: number, m: any) => s + m.location.longitude, 0) / located.length
-    : 120.9842;
+    : (resolvePlaceCoords(trip?.destination || '')?.longitude ?? 120.9842);
+
+  // Nearby emergency facilities for the destination
+  const emergencySpots = useMemo(() => {
+    const destCoords = resolvePlaceCoords(trip?.destination || '') || { latitude: centerLat, longitude: centerLng };
+    const baseLat = destCoords.latitude;
+    const baseLng = destCoords.longitude;
+    const destName = trip?.destination || 'Local';
+    return [
+      {
+        id: 'emerg-hosp-1',
+        kind: 'emergency',
+        title: `${destName} District Hospital`,
+        type: 'hospital',
+        icon: 'medkit',
+        color: '#EF4444',
+        lat: baseLat + 0.007,
+        lng: baseLng + 0.006,
+        phone: '911 / (02) 8888-4357',
+        desc: '24/7 Emergency trauma & medical care',
+      },
+      {
+        id: 'emerg-pol-1',
+        kind: 'emergency',
+        title: `${destName} Police Station`,
+        type: 'police',
+        icon: 'shield-checkmark',
+        color: '#2563EB',
+        lat: baseLat - 0.006,
+        lng: baseLng - 0.005,
+        phone: '117 / (02) 8722-0650',
+        desc: 'Tourist safety & emergency dispatch',
+      },
+      {
+        id: 'emerg-clinic-1',
+        kind: 'emergency',
+        title: `${destName} Emergency Clinic & Red Cross`,
+        type: 'clinic',
+        icon: 'heart-circle',
+        color: '#10B981',
+        lat: baseLat + 0.004,
+        lng: baseLng - 0.007,
+        phone: '143 (Philippine Red Cross)',
+        desc: 'First aid, ambulance dispatch, triage',
+      },
+    ];
+  }, [trip?.destination, centerLat, centerLng]);
 
   const [mapCenter, setMapCenter] = useState({ lat: centerLat, lng: centerLng });
   useEffect(() => { setMapCenter({ lat: centerLat, lng: centerLng }); }, [centerLat, centerLng]);
@@ -128,15 +195,15 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Location needed', 'Allow location access to share your position with the group.');
+        notify('Location needed. Allow location access to share your position with the group.', 'info');
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const { error } = await dbUpdateLocation(trip.id, loc.coords.latitude, loc.coords.longitude);
-      if (error) { Alert.alert('Could not share location', error); return; }
+      if (error) { notify(error, 'error'); return; }
       loadTrip();
     } catch (err: any) {
-      Alert.alert('Location error', err?.message || 'Could not read your location.');
+      notify(err?.message || 'Could not read your location.', 'error');
     } finally {
       setSyncing(false);
     }
@@ -188,8 +255,8 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
             const ty = cy + dy;
             return (
               <Image
-                key={`${tx}-${ty}`}
-                source={{ uri: getTileUrl(tx, ty, zoom, isDark) }}
+                key={`${tx}-${ty}-${provider}-${zoom}`}
+                source={{ uri: getTileUrl(tx, ty, zoom, isDark, provider) }}
                 style={{
                   position: 'absolute',
                   width: TILE,
@@ -202,6 +269,30 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
           })
         )}
 
+        {/* Emergency facility pins */}
+        {emergencySpots.map((em: any) => {
+          const p = project(em.lat, em.lng);
+          return (
+            <Pressable
+              key={em.id}
+              onPress={() => setSelectedPin(em)}
+              style={{ position: 'absolute', left: p.x - 14, top: p.y - 14, zIndex: 12 }}
+            >
+              <View
+                style={[
+                  styles.emergencyPin,
+                  {
+                    backgroundColor: em.color,
+                    borderColor: '#FFFFFF',
+                  },
+                ]}
+              >
+                <Ionicons name={em.icon as any} size={13} color="#FFFFFF" />
+              </View>
+            </Pressable>
+          );
+        })}
+
         {/* Stop pins — only those with real coordinates */}
         {placedStops.map((stop: any) => {
           const p = project(stop.lat, stop.lng);
@@ -209,7 +300,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
             <Pressable
               key={stop.id}
               onPress={() => setSelectedPin({ kind: 'stop', ...stop })}
-              style={{ position: 'absolute', left: p.x - 13, top: p.y - 13 }}
+              style={{ position: 'absolute', left: p.x - 13, top: p.y - 13, zIndex: 10 }}
             >
               <View style={[styles.stopPin, { backgroundColor: colors.card, borderColor: colors.text }]}>
                 <Ionicons name="flag" size={12} color={colors.text} />
@@ -254,6 +345,31 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
           </View>
         )}
 
+        {/* Layer Selector */}
+        <View style={styles.providerRow}>
+          <Pressable
+            onPress={() => setProvider('google-roads')}
+            style={[styles.layerChip, provider === 'google-roads' && { backgroundColor: colors.brand }]}
+          >
+            <Ionicons name="map" size={11} color={provider === 'google-roads' ? '#FFFFFF' : colors.text} />
+            <Text style={[styles.layerChipText, { color: provider === 'google-roads' ? '#FFFFFF' : colors.text }]}>Roads</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setProvider('google-hybrid')}
+            style={[styles.layerChip, provider === 'google-hybrid' && { backgroundColor: colors.brand }]}
+          >
+            <Ionicons name="planet" size={11} color={provider === 'google-hybrid' ? '#FFFFFF' : colors.text} />
+            <Text style={[styles.layerChipText, { color: provider === 'google-hybrid' ? '#FFFFFF' : colors.text }]}>Satellite</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setProvider('auto')}
+            style={[styles.layerChip, provider === 'auto' && { backgroundColor: colors.brand }]}
+          >
+            <Ionicons name="color-palette" size={11} color={provider === 'auto' ? '#FFFFFF' : colors.text} />
+            <Text style={[styles.layerChipText, { color: provider === 'auto' ? '#FFFFFF' : colors.text }]}>Theme</Text>
+          </Pressable>
+        </View>
+
         {/* Zoom */}
         <View style={[styles.zoom, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <Pressable onPress={() => setZoom((z) => Math.min(19, z + 1))} style={styles.zoomBtn}>
@@ -282,14 +398,37 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
             segments={[
               { value: 'people', label: 'People', badge: located.length },
               { value: 'stops', label: 'Stops', badge: stopMarkers.length },
+              { value: 'emergency', label: 'Emergency', badge: emergencySpots.length },
             ]}
           />
         </View>
 
         <ScrollView contentContainerStyle={{ paddingTop: space.lg, paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
-          {panel === 'people' ? (
+          {panel === 'emergency' ? (
+            <Section>
+              <SectionLabel>Nearby Emergency Services</SectionLabel>
+              <ListGroup>
+                {emergencySpots.map((em: any) => (
+                  <ListRow
+                    key={em.id}
+                    icon={em.icon as any}
+                    title={em.title}
+                    subtitle={`${em.desc} · 📞 ${em.phone}`}
+                    onPress={() => {
+                      setMapCenter({ lat: em.lat, lng: em.lng });
+                      setSelectedPin(em);
+                    }}
+                  />
+                ))}
+              </ListGroup>
+            </Section>
+          ) : panel === 'people' ? (
             members.length === 0 ? (
-              <EmptyState icon="people-outline" title="No travellers yet" />
+              <EmptyState
+                icon="people-outline"
+                title="No travellers yet"
+                description="Share the trip code to get your group on board."
+              />
             ) : (
               <>
                 {located.length > 0 && (
@@ -397,6 +536,22 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
               </Txt>
             )}
           </View>
+        ) : selectedPin?.kind === 'emergency' ? (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: space.sm }}>
+              <View style={[styles.emergencyPin, { backgroundColor: selectedPin.color, borderColor: '#FFFFFF', width: 32, height: 32, borderRadius: 16 }]}>
+                <Ionicons name={selectedPin.icon as any} size={16} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt variant="headline">{selectedPin?.title}</Txt>
+                <Txt variant="footnote" tone="muted">{selectedPin?.desc}</Txt>
+              </View>
+            </View>
+            <View style={{ marginTop: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surface }}>
+              <Txt variant="subhead">Emergency Hotline / Contact:</Txt>
+              <Txt variant="headline" style={{ color: colors.brand, marginTop: 4 }}>{selectedPin?.phone}</Txt>
+            </View>
+          </View>
         ) : (
           <View>
             <Txt variant="headline">{selectedPin?.title}</Txt>
@@ -414,9 +569,42 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   head: { paddingHorizontal: space.xl, paddingTop: space.lg },
   map: {
-    height: 280,
+    height: 320,
     overflow: 'hidden',
     position: 'relative',
+  },
+  providerRow: {
+    position: 'absolute',
+    top: space.md,
+    left: space.md,
+    flexDirection: 'row',
+    gap: 6,
+    zIndex: 30,
+  },
+  layerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  layerChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  emergencyPin: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
   stopPin: {
     width: 26, height: 26, borderRadius: 13,

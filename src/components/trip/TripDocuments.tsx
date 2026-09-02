@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { addDocument as dbAddDocument, deleteDocument as dbDeleteDocument } from '../../services/tripService';
 import { AI_FEATURES_ENABLED } from '../../services/aiService';
@@ -9,6 +9,7 @@ import {
   Sheet, Field, Segmented, Txt, IconButton, Card, Button,
 } from '../ui/primitives';
 import { space } from '../ui/tokens';
+import { notify, confirmAction } from '../ui/Feedback';
 
 interface TripDocumentsProps {
   trip: any;
@@ -60,7 +61,7 @@ export default function TripDocuments({
     setSaving(true);
     try {
       const { error } = await dbAddDocument(trip.id, finalTitle, docType, size);
-      if (error) { Alert.alert('Could not add document', error); return; }
+      if (error) { notify(error, 'error'); return; }
       setTitle('');
       setSheetOpen(false);
       loadTrip();
@@ -70,18 +71,17 @@ export default function TripDocuments({
   };
 
   const confirmDelete = (doc: any) => {
-    Alert.alert('Remove document?', `"${doc.title}" will be removed from this trip.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await dbDeleteDocument(doc.id);
-          if (error) Alert.alert('Could not remove', error);
-          else loadTrip();
-        },
-      },
-    ]);
+    confirmAction({
+        title: 'Remove document?',
+        message: `"${doc.title}" will be removed from this trip.`,
+        confirmLabel: 'Remove',
+        destructive: true,
+      }).then(async (ok) => {
+        if (!ok) return;
+        const { error } = await dbDeleteDocument(doc.id);
+        if (error) notify(error, 'error');
+        else loadTrip();
+      });
   };
 
   const handleScan = async () => {
@@ -91,7 +91,7 @@ export default function TripDocuments({
       setScanResults(await extractDocumentDetails(documents.map((d: any) => d.title)));
     } catch {
       setScanResults([]);
-      Alert.alert('Scan unavailable', 'Agilito could not read these documents right now.');
+      notify('Scan unavailable. Agilito could not read these documents right now.', 'error');
     } finally {
       setScanning(false);
     }

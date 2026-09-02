@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../ui/Button';
+import { type as T } from '../ui/tokens';
 
 interface ProfileInfoCardProps {
   colors: any;
@@ -151,18 +152,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   label: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
     marginBottom: 6,
   },
   input: {
     height: 42,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
   },
   btnRow: {
     flexDirection: 'row',
@@ -178,14 +177,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   userName: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
+    ...T.title,
     fontWeight: '700',
     marginBottom: 2,
   },
   userEmail: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     marginBottom: 10,
   },
   locationContainer: {
@@ -194,8 +191,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   userLocation: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     fontWeight: '600',
     marginLeft: 4,
   },

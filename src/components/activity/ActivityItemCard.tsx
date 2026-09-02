@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../ui/Card';
+import { type as T } from '../ui/tokens';
 
 interface FeedItem {
   id: string;
@@ -41,7 +42,7 @@ export default function ActivityItemCard({
       style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
     >
       <View style={styles.rowLayout}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.surface || 'rgba(0,0,0,0.03)' }]}>
+        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
           <Ionicons name={icon.name as any} size={15} color={icon.color} />
         </View>
         <View style={styles.contentContainer}>
@@ -51,12 +52,12 @@ export default function ActivityItemCard({
                 {stripEmojis(item.tripName)}
               </Text>
               {item.important && (
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger }} />
               )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {item.badgeCount && item.badgeCount > 1 ? (
-                <View style={[styles.badgeContainer, { backgroundColor: colors.brand || '#0284C7' }]}>
+                <View style={[styles.badgeContainer, { backgroundColor: colors.brand }]}>
                   <Text style={styles.badgeText}>{item.badgeCount} new</Text>
                 </View>
               ) : null}
@@ -80,7 +81,7 @@ export default function ActivityItemCard({
 const styles = StyleSheet.create({
   activityCard: {
     padding: 12,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     marginBottom: 10,
     shadowColor: '#000',
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 34,
     height: 34,
-    borderRadius: 9,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,
@@ -112,13 +113,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tripLabel: {
-    fontSize: 9.5,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     textTransform: 'uppercase',
   },
   timeLabel: {
-    fontSize: 9.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   badgeContainer: {
     paddingHorizontal: 6,
@@ -129,17 +128,14 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     lineHeight: 11,
   },
   titleText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
   descText: {
-    fontSize: 11.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     lineHeight: 15,
   },
 });

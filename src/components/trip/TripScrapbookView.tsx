@@ -7,7 +7,6 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -15,10 +14,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { shareToFacebook, shareTrip, shareTripCardImage, saveTripCardImage } from '../../services/tripShare';
 import TripShareCard, { SHARE_CARD_WIDTH } from './TripShareCard';
-import { Sheet, Button, Txt, Press } from '../ui/primitives';
+import { Sheet, Button, Txt, Press, InlineEmpty } from '../ui/primitives';
 import { deleteTrip } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
-import { space, radius, hairline, stripEmoji } from '../ui/tokens';
+import { space, radius, hairline, type as T, stripEmoji } from '../ui/tokens';
+import { notify, confirmAction } from '../ui/Feedback';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 280;
@@ -91,27 +91,22 @@ export default function TripScrapbookView({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteTrip = () => {
-    Alert.alert(
-      'Delete Trip',
-      `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            const { error } = await deleteTrip(trip.id);
-            if (error) {
-              setIsDeleting(false);
-              Alert.alert('Error', error);
-            } else {
-              router.replace('/(tabs)/trips');
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+        title: 'Delete Trip',
+        message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      }).then(async (ok) => {
+        if (!ok) return;
+        setIsDeleting(true);
+        const { error } = await deleteTrip(trip.id);
+        if (error) {
+          setIsDeleting(false);
+          notify(error, 'error');
+        } else {
+          router.replace('/(tabs)/trips');
+        }
+      });
   };
 
   // ── Share ──
@@ -126,7 +121,7 @@ export default function TripScrapbookView({
     setSharingImage(true);
     try {
       const { error } = await shareTripCardImage(shareCardRef, trip);
-      if (error) Alert.alert('Share', error);
+      if (error) notify(error, 'error');
     } finally {
       setSharingImage(false);
     }
@@ -136,8 +131,8 @@ export default function TripScrapbookView({
     setSavingImage(true);
     try {
       const { saved, error } = await saveTripCardImage(shareCardRef);
-      if (error) Alert.alert('Save', error);
-      else if (saved) Alert.alert('Saved', 'Trip card saved to your photos.');
+      if (error) notify(error, 'error');
+      else if (saved) notify('Saved. Trip card saved to your photos.', 'success');
     } finally {
       setSavingImage(false);
     }
@@ -146,13 +141,13 @@ export default function TripScrapbookView({
   // Existing Facebook path, preserved.
   const handleFacebookShare = async () => {
     const { error } = await shareToFacebook(trip);
-    if (error) Alert.alert('Facebook Share', error);
+    if (error) notify(error, 'error');
   };
 
   // Existing text share, preserved as the "no image" fallback.
   const handleGeneralShare = async () => {
     const { error } = await shareTrip(trip);
-    if (error) Alert.alert('Share Trip', error);
+    if (error) notify(error, 'error');
   };
 
   const coverImage = trip.image && trip.image.trim() !== ''
@@ -220,21 +215,21 @@ export default function TripScrapbookView({
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: '#10B981' }]}>{itinerary.length}</Text>
+          <Text style={[styles.statValue, { color: colors.success }]}>{itinerary.length}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>
             {itinerary.length === 1 ? 'Stop Visited' : 'Stops Visited'}
           </Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: '#F59E0B' }]}>{members.length || 1}</Text>
+          <Text style={[styles.statValue, { color: colors.warning }]}>{members.length || 1}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Travelers</Text>
         </View>
         {totalSpend > 0 && (
           <>
             <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#EC4899' }]}>
+              <Text style={[styles.statValue, { color: colors.brand }]}>
                 ₱{Math.round(totalSpend).toLocaleString()}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textMuted }]}>Spent</Text>
@@ -295,12 +290,7 @@ export default function TripScrapbookView({
         </View>
 
         {sortedDays.length === 0 ? (
-          <View style={[styles.emptyBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <Ionicons name="compass-outline" size={24} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              No specific itinerary stops recorded for this memory.
-            </Text>
-          </View>
+          <InlineEmpty icon="compass-outline" label="No itinerary stops recorded for this memory." />
         ) : (
           sortedDays.map((dayIdx) => {
             const stops = itineraryByDay[dayIdx];
@@ -445,17 +435,17 @@ export default function TripScrapbookView({
       {/* ═══ 8. MANAGE / DELETE TRIP ═══ */}
       <View style={[styles.section, { marginTop: space.sm }]}>
         <TouchableOpacity
-          style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: '#EF4444' }]}
+          style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}
           onPress={handleDeleteTrip}
           disabled={isDeleting}
           activeOpacity={0.8}
         >
           {isDeleting ? (
-            <ActivityIndicator size="small" color="#EF4444" />
+            <ActivityIndicator size="small" color={colors.danger} />
           ) : (
             <>
-              <Ionicons name="trash-outline" size={16} color="#EF4444" />
-              <Text style={styles.deleteButtonText}>Delete Trip Memory</Text>
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Text style={[styles.deleteButtonText, { color: colors.danger }]}>Delete Trip Memory</Text>
             </>
           )}
         </TouchableOpacity>
@@ -551,33 +541,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   stampBadgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     letterSpacing: 0.8,
   },
   heroContent: {
     gap: 3,
   },
   heroDestination: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 1.2,
   },
   heroTitle: {
-    fontSize: 24,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.display,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
   heroDateRange: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 2,
   },
@@ -604,7 +590,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 16,
     shadowColor: '#1877F2',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -613,13 +599,12 @@ const styles = StyleSheet.create({
   },
   facebookButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
   systemShareButton: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -632,7 +617,7 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     marginBottom: space.lg,
     padding: space.md,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -642,13 +627,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statValue: {
-    fontSize: 17,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '800',
   },
   statLabel: {
-    fontSize: 9.5,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginTop: 2,
@@ -670,13 +653,11 @@ const styles = StyleSheet.create({
     marginBottom: space.md,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     letterSpacing: 0.2,
   },
   sectionCount: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
   },
 
   // Crew
@@ -708,8 +689,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   crewInitial: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
   },
   organizerBadge: {
     position: 'absolute',
@@ -723,13 +703,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   crewName: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.caption,
     textAlign: 'center',
   },
   crewRole: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
     marginTop: 1,
   },
 
@@ -750,13 +728,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dayBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.microStrong,
     letterSpacing: 0.6,
   },
   dayStopCount: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
   },
   timelineList: {
     paddingLeft: 4,
@@ -784,7 +760,7 @@ const styles = StyleSheet.create({
   stopCard: {
     flex: 1,
     padding: space.md,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   stopCardHeader: {
@@ -799,44 +775,28 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   timeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   locationText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.microStrong,
     flex: 1,
   },
   stopTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     marginBottom: 2,
   },
   stopDescription: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     lineHeight: 16,
-  },
-  emptyBox: {
-    padding: space.lg,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    gap: 6,
-  },
-  emptyText: {
-    fontSize: 11.5,
-    fontFamily: 'Poppins-Regular',
-    textAlign: 'center',
   },
 
   // Expenses
   expensesCard: {
     padding: space.lg,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
   },
   expensesTopRow: {
@@ -845,13 +805,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expensesLabel: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     letterSpacing: 0.8,
   },
   expensesTotal: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.display,
     fontWeight: '800',
     marginTop: 2,
   },
@@ -861,8 +819,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   expensesCountText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   expenseDivider: {
     height: 1,
@@ -875,16 +832,13 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   expenseTitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
   },
   expensePaidBy: {
-    fontSize: 9.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
   },
   expenseAmount: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
   },
 
   // Polls
@@ -895,8 +849,7 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   pollQuestion: {
-    fontSize: 12.5,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     marginBottom: space.sm,
   },
   pollOptionsList: {
@@ -908,15 +861,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   pollOptionText: {
-    fontSize: 11.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
   },
   pollVoteCount: {
-    fontSize: 10.5,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
   },
 
   // Delete Button
@@ -931,9 +882,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deleteButtonText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
 
   // Footer
@@ -944,8 +893,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerTagline: {
-    fontSize: 10.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
     fontStyle: 'italic',
   },
 });

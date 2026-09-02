@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import type { ExploreLayer } from './ExploreMap';
+import { type as T } from '../ui/tokens';
 
 interface ExploreFilterPillsProps {
   layer: ExploreLayer;
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 19,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -104,8 +105,7 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   label: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     fontWeight: '600',
   },
   badge: {
@@ -118,8 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
 });

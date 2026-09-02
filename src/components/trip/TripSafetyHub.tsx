@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  StyleSheet, View, Text, ScrollView, Alert, Image, Modal, Animated, Easing, Pressable,
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  Image,
+  Modal,
+  Animated,
+  Easing,
+  Pressable,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -12,11 +21,18 @@ import {
 import TripGuardian from './TripGuardian';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '../../context/ThemeContext';
+import { fetchLiveTripForecast, type RealTripForecast } from '../../services/weatherService';
 import {
   ScreenHeader, Section, SectionLabel, ListGroup, ListRow, Segmented,
   Button, EmptyState, Txt, Badge, Avatar, IconButton, Sheet, ProgressBar, Press,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
+import { notify, confirmAction } from '../ui/Feedback';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface TripSafetyHubProps {
   trip: any;
@@ -84,6 +100,15 @@ export default function TripSafetyHub({
   const [nudging, setNudging] = useState(false);
   const [polling, setPolling] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [liveWeather, setLiveWeather] = useState<RealTripForecast | null>(null);
+
+  useEffect(() => {
+    if (trip?.destination) {
+      fetchLiveTripForecast(trip.destination, trip.startDate, trip.endDate)
+        .then((res) => setLiveWeather(res))
+        .catch(() => {});
+    }
+  }, [trip?.destination, trip?.startDate, trip?.endDate]);
 
   const [permission, requestPermission] = useCameraPermissions();
   const laser = useRef(new Animated.Value(0)).current;
@@ -131,7 +156,7 @@ export default function TripSafetyHub({
     // Keep the trip-level check-in in sync for the member marking themselves.
     if (me && memberId === me.id) {
       const { error } = await dbToggleCheckIn(trip.id, false);
-      if (error) Alert.alert('Could not check in', error);
+      if (error) notify(error, 'error');
       else loadTrip();
     }
   };
@@ -157,8 +182,8 @@ export default function TripSafetyHub({
     laser.setValue(0);
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(laser, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(laser, { toValue: 0, duration: 1500, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(laser, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(laser, { toValue: 0, duration: 1500, easing: Easing.linear, useNativeDriver: NATIVE_DRIVER }),
       ])
     );
     loop.start();
@@ -169,7 +194,7 @@ export default function TripSafetyHub({
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) {
-        Alert.alert('Camera needed', 'Allow camera access to scan the arrival code.');
+        notify('Camera needed. Allow camera access to scan the arrival code.', 'info');
         return;
       }
     }
@@ -209,8 +234,8 @@ export default function TripSafetyHub({
           ' Please check in when you arrive.',
         true,
       );
-      if (error) Alert.alert('Could not post', error);
-      else Alert.alert('Posted', 'The group has been notified in Announcements.');
+      if (error) notify(error, 'error');
+      else notify('Posted. The group has been notified in Announcements.', 'info');
     } finally {
       setNudging(false);
     }
@@ -227,26 +252,21 @@ export default function TripSafetyHub({
     const question = `We're waiting on ${names} at ${current.title}. What should we do?`;
     const options = ['Wait 15 more minutes', 'Wait 30 more minutes', 'Move on to the next stop'];
 
-    Alert.alert(
-      'Ask the group?',
-      `${question}\n\n· ${options.join('\n· ')}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Create poll',
-          onPress: async () => {
-            setPolling(true);
-            try {
-              const { error } = await dbAddPoll(trip.id, question, options.map(text => ({ text })), false);
-              if (error) Alert.alert('Could not create poll', error);
-              else Alert.alert('Poll created', 'The group can vote in Decisions.');
-            } finally {
-              setPolling(false);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+        title: 'Ask the group?',
+        message: `${question}\n\n· ${options.join('\n· ')}`,
+        confirmLabel: 'Create poll',
+      }).then(async (ok) => {
+        if (!ok) return;
+        setPolling(true);
+        try {
+          const { error } = await dbAddPoll(trip.id, question, options.map(text => ({ text })), false);
+          if (error) notify(error, 'error');
+          else notify('Poll created. The group can vote in Decisions.', 'success');
+        } finally {
+          setPolling(false);
+        }
+      });
   };
 
   // ── Roll call ──
@@ -255,7 +275,7 @@ export default function TripSafetyHub({
       return (
         <EmptyState
           icon="location-outline"
-          title="No stops to check into"
+          title="No stops yet"
           description="Add stops to the itinerary and the group can confirm arrival at each one."
         />
       );
@@ -268,6 +288,82 @@ export default function TripSafetyHub({
 
     return (
       <>
+        {/* ── Safety Radar Banner ── */}
+        <Section>
+          <Pressable
+            onPress={() => setTab('tracking')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: space.md,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: colors.brand,
+              backgroundColor: colors.card,
+              marginBottom: space.sm,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[T.label, { color: colors.text, fontWeight: '700' }]}>Safety Radar & Emergency Map</Text>
+                <Text style={[T.micro, { color: colors.textSecondary }]}>Google roads, satellite hybrid & nearby hospitals</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+          </Pressable>
+        </Section>
+
+        {/* ── Real-time Weather & Safety Advisory ── */}
+        {liveWeather && liveWeather.status === 'available' && (
+          <Section>
+            <View
+              style={{
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: colors.cardBorder,
+                backgroundColor: colors.card,
+                padding: space.md,
+                marginBottom: space.sm,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="partly-sunny" size={15} color={colors.brand} />
+                  <Text style={[T.microStrong, { color: colors.brand, letterSpacing: 0.8 }]}>LIVE DESTINATION WEATHER</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                  <Ionicons name="pulse" size={11} color="#10B981" />
+                  <Text style={[T.micro, { color: '#10B981', fontWeight: '700' }]}>OPEN-METEO LIVE</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name={liveWeather.currentIcon} size={28} color={colors.brand} />
+                  <View>
+                    <Text style={[T.title, { color: colors.text }]}>{liveWeather.currentTemp}°C</Text>
+                    <Text style={[T.caption, { color: colors.textSecondary }]}>{liveWeather.currentCondition} · {liveWeather.destinationName}</Text>
+                  </View>
+                </View>
+
+                <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={[T.micro, { color: colors.textMuted }]}>Humidity: {liveWeather.currentHumidity}%</Text>
+                  <Text style={[T.micro, { color: colors.textMuted }]}>Wind: {liveWeather.currentWindKph} km/h</Text>
+                </View>
+              </View>
+
+              <View style={{ marginTop: 10, padding: 8, borderRadius: 8, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.brand} />
+                <Text style={[T.micro, { color: colors.textSecondary, flex: 1 }]}>{liveWeather.advice}</Text>
+              </View>
+            </View>
+          </Section>
+        )}
+
         {/* ── Current stop ── */}
         <Section>
           <View style={[styles.stopCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -503,7 +599,7 @@ export default function TripSafetyHub({
           onChange={setTab}
           segments={[
             { value: 'safety', label: 'Roll call' },
-            { value: 'tracking', label: 'Live location' },
+            { value: 'tracking', label: 'Safety Radar' },
           ]}
         />
       </View>

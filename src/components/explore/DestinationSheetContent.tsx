@@ -5,6 +5,7 @@ import type { ThemeColors } from '../../context/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { formatAddress, getDestinationsForProvince } from '../../services/destinations';
 import type { Destination } from '../../services/destinations';
+import { type as T } from '../ui/tokens';
 
 interface DestinationSheetContentProps {
   dest: Destination;
@@ -88,12 +89,12 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
               styles.actionPill,
               {
                 backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                borderColor: '#10B981',
+                borderColor: colors.success,
               },
             ]}
           >
-            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-            <Text style={[styles.actionText, { color: '#10B981' }]}>Visited in Trip</Text>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Text style={[styles.actionText, { color: colors.success }]}>Visited in Trip</Text>
           </View>
         )}
         <TouchableOpacity
@@ -151,14 +152,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   name: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.title,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   context: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     fontWeight: '400',
     marginTop: 1,
   },
@@ -167,8 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ratingText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -186,13 +184,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   tagText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.caption,
     fontWeight: '600',
   },
   description: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
+    ...T.subhead,
     fontWeight: '400',
     lineHeight: 19,
     marginTop: 12,
@@ -206,19 +202,16 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     flex: 1,
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     fontWeight: '500',
     marginLeft: 10,
   },
   infoValue: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
     fontWeight: '600',
   },
   label: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -238,8 +231,7 @@ const styles = StyleSheet.create({
   },
   nearbyName: {
     flex: 1,
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     fontWeight: '600',
   },
   ratingWrap: {
@@ -247,8 +239,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nearbyRating: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -267,8 +258,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   actionText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
     fontWeight: '600',
     marginLeft: 6,
   },

@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../context/ThemeContext';
 import { Button } from '../../components/ui/Button';
+import { type as T } from '../ui/tokens';
 
 interface GooglePlaceSheetContentProps {
   place: {
@@ -37,7 +38,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={18} color="#14B8A6" />
+            <Ionicons name="location-outline" size={18} color={colors.brand} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Coordinates</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>
@@ -47,7 +48,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
           </View>
 
           <View style={[styles.infoRow, { borderBottomWidth: 0, marginTop: 12 }]}>
-            <Ionicons name="earth" size={18} color="#14B8A6" />
+            <Ionicons name="earth" size={18} color={colors.brand} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Country / Region</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>Philippines</Text>
@@ -57,7 +58,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
 
         <Card variant="sky" style={styles.tipCard}>
           <View style={styles.tipLayout}>
-            <Ionicons name="sparkles" size={20} color="#38BDF8" style={{ marginRight: 10 }} />
+            <Ionicons name="sparkles" size={20} color={colors.brand} style={{ marginRight: 10 }} />
             <Text style={styles.tipText}>
               You found this spot using Google Places! Tap "Plan a Trip" to coordinate a journey here with your group.
             </Text>
@@ -110,14 +111,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   name: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.title,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   context: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     fontWeight: '400',
     marginTop: 2,
   },
@@ -129,15 +128,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   infoLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   infoValue: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     fontWeight: '600',
     marginTop: 2,
   },
@@ -147,8 +144,6 @@ const styles = StyleSheet.create({
   viewBtn: {
     width: '100%',
     paddingVertical: 12,
-    backgroundColor: '#22C55E',
-    borderColor: '#22C55E',
   },
   tipCardLayout: {
     borderRadius: 16,
@@ -167,8 +162,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     flex: 1,
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     color: '#0369A1',
     lineHeight: 18,
   },

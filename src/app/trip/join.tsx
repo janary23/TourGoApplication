@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,9 @@ import { joinTrip } from '../../services/tripService';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useTheme } from '../../context/ThemeContext';
+import { notify } from '../../components/ui/Feedback';
+import { type as T } from '../../components/ui/tokens';
+import { NavBar } from '../../components/ui/primitives';
 
 export default function JoinTripScreen() {
   const router = useRouter();
@@ -16,7 +19,7 @@ export default function JoinTripScreen() {
 
   const handleJoin = async () => {
     if (!code.trim()) {
-      Alert.alert("Code Required", "Please enter a valid trip code.");
+      notify('Code Required. Please enter a valid trip code.', 'error');
       return;
     }
 
@@ -24,17 +27,13 @@ export default function JoinTripScreen() {
     try {
       const result = await joinTrip(code.trim());
       if ('error' in result) {
-        Alert.alert("Failed to Join", result.error);
+        notify(result.error, 'error');
       } else {
-        Alert.alert("Joined Successfully!", "You are now a member of this trip.", [
-          {
-            text: "Open Trip Dashboard",
-            onPress: () => router.replace(`/trip/${result.tripId}`)
-          }
-        ]);
+        notify('You have joined the trip.', 'success');
+        router.replace(`/trip/${result.tripId}`);
       }
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "Something went wrong. Please try again.");
+      notify(e?.message || "Something went wrong. Please try again.", 'error');
     } finally {
       setLoading(false);
     }
@@ -43,23 +42,16 @@ export default function JoinTripScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       {/* Custom Sleek Header Bar */}
-      <View style={[styles.customHeader, { borderBottomColor: colors.cardBorder }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.customBackBtn}>
-          <Ionicons name="chevron-back" size={24} color={colors.brand} />
-          <Text style={[styles.customBackText, { color: colors.brand }]}>Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.customHeaderTitle, { color: colors.text }]}>Join a Trip</Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <NavBar onBack={() => router.back()} backLabel="Back" title="Join a trip" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.explainerContainer}>
           <View style={[styles.iconCircle, { backgroundColor: colors.brandLight }]}>
             <Ionicons name="people" size={28} color={colors.brand} />
           </View>
-          <Text style={[styles.title, { color: colors.text }]}>Join a Planning Group</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Join a trip</Text>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            Enter the custom code shared by your trip organizer to instantly join the trip as a Member.
+            Enter the code your organizer shared to join their trip.
           </Text>
         </View>
 
@@ -78,10 +70,10 @@ export default function JoinTripScreen() {
             />
           </View>
           <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Trip codes are case-insensitive and can be obtained from the trip details header of the organizer's app.
+            Codes are not case-sensitive.
           </Text>
-          <Button title="Join Group Trip" onPress={handleJoin} variant="primary" loading={loading}
-            style={styles.btn} icon={<Ionicons name="arrow-forward" size={18} color="#FFFFFF" />} />
+          <Button title="Join trip" onPress={handleJoin} variant="primary" loading={loading}
+            style={styles.btn} />
         </Card>
 
         <View style={[styles.infoBox, { backgroundColor: colors.brandLight, borderRadius: 16, padding: 16 }]}>
@@ -126,9 +118,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
-    color: '#1A1A1A',
+    ...T.display, fontWeight: '800',
     marginBottom: 8,
   },
   subtitle: {
@@ -143,8 +133,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   label: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold', fontWeight: '700',
+    ...T.label, fontWeight: '700',
     color: '#757575',
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -154,7 +143,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#ECECEC',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     backgroundColor: '#F9F9F9',
   },
@@ -164,9 +153,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: 12,
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold', fontWeight: '700',
-    color: '#1A1A1A',
+    ...T.titleSm, fontWeight: '700',
     letterSpacing: 1.5,
   },
   hint: {
@@ -189,8 +176,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
   infoTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold', fontWeight: '700',
+    ...T.bodyStrong, fontWeight: '700',
     color: '#004D40',
     marginBottom: 6,
   },
@@ -203,29 +189,5 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontFamily: 'Poppins-Bold', fontWeight: '700',
-  },
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  customBackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 60,
-  },
-  customBackText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    marginLeft: 2,
-  },
-  customHeaderTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });

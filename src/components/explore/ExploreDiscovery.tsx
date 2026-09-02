@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +17,13 @@ import type { ThemeColors } from '../../context/ThemeContext';
 import type { RegionFilter } from './IdleSheetContent';
 import { DESTINATIONS } from '../../services/destinations';
 import { PHILIPPINES_PROVINCES } from '../../services/philippinesMapData';
+import { type as T, space, radius } from '../ui/tokens';
+import { InlineEmpty } from '../ui/primitives';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -68,9 +76,9 @@ const CategoryChip: React.FC<{
 }> = ({ item, isSelected, onPress, colors, isDark }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const handlePressIn = () =>
-    Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
+    Animated.spring(scale, { toValue: 0.93, useNativeDriver: NATIVE_DRIVER, speed: 30, bounciness: 4 }).start();
   const handlePressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+    Animated.spring(scale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, speed: 20, bounciness: 8 }).start();
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -113,8 +121,7 @@ const chipStyles = StyleSheet.create({
   },
   icon: { fontSize: 14 },
   label: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
     fontWeight: '600',
   },
 });
@@ -194,7 +201,7 @@ const TravelFeedPost: React.FC<{
       <View style={[postStyles.actionRow, { borderTopColor: colors.cardBorder }]}>
         <TouchableOpacity
           onPress={onToggleSaved}
-          style={[postStyles.actionBtn, isSaved && postStyles.savedActionBtn]}
+          style={[postStyles.actionBtn, isSaved && { backgroundColor: colors.brand }]}
           activeOpacity={0.8}
         >
           <Ionicons
@@ -257,23 +264,20 @@ const postStyles = StyleSheet.create({
     gap: 8,
   },
   authorName: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
   },
   badge: {
     paddingVertical: 2,
     paddingHorizontal: 6,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   badgeText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '800',
   },
   timeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     marginTop: 1,
   },
   imageWrapper: {
@@ -301,8 +305,7 @@ const postStyles = StyleSheet.create({
   },
   spotTagText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
   ratingBadge: {
@@ -319,22 +322,19 @@ const postStyles = StyleSheet.create({
   },
   ratingText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
   body: {
     padding: 16,
   },
   spotTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.titleSm,
     fontWeight: '800',
     marginBottom: 6,
   },
   caption: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     lineHeight: 18,
   },
   tagsWrapper: {
@@ -344,8 +344,7 @@ const postStyles = StyleSheet.create({
     marginTop: 10,
   },
   tag: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
   },
   actionRow: {
@@ -355,20 +354,17 @@ const postStyles = StyleSheet.create({
     padding: 12,
     borderTopWidth: 1,
   },
+  savedActionBtn: {},
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  savedActionBtn: {
-    backgroundColor: '#38BDF8',
+    gap: space.xs + 2,
+    paddingVertical: space.sm - 2,
+    paddingHorizontal: space.md,
+    borderRadius: radius.md,
   },
   actionBtnText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
   },
   planBtn: {
@@ -381,8 +377,7 @@ const postStyles = StyleSheet.create({
   },
   planBtnText: {
     color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
   },
 });
@@ -430,9 +425,9 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
 
   const mapBtnScale = useRef(new Animated.Value(1)).current;
   const handleMapPressIn = () =>
-    Animated.spring(mapBtnScale, { toValue: 0.96, useNativeDriver: true, speed: 30, bounciness: 2 }).start();
+    Animated.spring(mapBtnScale, { toValue: 0.96, useNativeDriver: NATIVE_DRIVER, speed: 30, bounciness: 2 }).start();
   const handleMapPressOut = () =>
-    Animated.spring(mapBtnScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+    Animated.spring(mapBtnScale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, speed: 20, bounciness: 6 }).start();
 
   return (
     <ScrollView
@@ -444,7 +439,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
       <View style={styles.heroSection}>
         <Text style={[styles.heroHeadline, { color: colors.text }]}>
           Where will you{'\n'}
-          <Text style={styles.heroAccent}>go next?</Text>
+          <Text style={[styles.heroAccent, { color: colors.brand }]}>go next?</Text>
         </Text>
         <Text style={[styles.heroSub, { color: colors.textMuted }]}>
           Discover the Philippines, one destination at a time.
@@ -512,9 +507,9 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
             />
           ))
         ) : (
-          <Text style={{ textAlign: 'center', width: '100%', marginVertical: 32, fontFamily: 'Poppins-Regular', fontSize: 14, color: colors.textMuted }}>
-            No popular diaries matching this category yet.
-          </Text>
+          <View style={{ width: '100%', marginVertical: space.xl }}>
+            <InlineEmpty icon="book-outline" label="No diaries in this category yet." />
+          </View>
         )}
       </View>
 
@@ -528,7 +523,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
           style={{ borderRadius: 20, overflow: 'hidden' }}
         >
           <LinearGradient
-            colors={['#0EA5E9', '#38BDF8', '#7DD3FC']}
+            colors={[colors.brandPressed, colors.brand, colors.brandLight]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.mapBannerGradient}
@@ -543,7 +538,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
               </View>
             </View>
             <View style={styles.mapBannerArrow}>
-              <Ionicons name="arrow-forward" size={18} color="#16A34A" />
+              <Ionicons name="arrow-forward" size={18} color={colors.success} />
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -570,19 +565,16 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   heroHeadline: {
-    fontSize: 30,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.largeTitle,
     fontWeight: '800',
     letterSpacing: -0.8,
     lineHeight: 36,
     marginBottom: 6,
   },
   heroAccent: {
-    color: '#38BDF8',
   },
   heroSub: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    ...T.body,
     fontWeight: '400',
     marginTop: 4,
   },
@@ -597,8 +589,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   searchPlaceholder: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     marginLeft: 10,
     flex: 1,
   },
@@ -614,8 +605,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
@@ -646,21 +636,19 @@ const styles = StyleSheet.create({
   mapBannerIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapBannerTitle: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '700',
   },
   mapBannerSub: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     marginTop: 2,
   },
   mapBannerArrow: {

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PREFERENCE_TOPICS, savePreferences } from '../services/preferences';
+import { type as T } from './ui/tokens';
 
 interface Props {
   visible: boolean;
@@ -36,7 +37,7 @@ export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
           showsVerticalScrollIndicator={false}
         >
           {/* Top accent + mascot */}
-          <View style={[styles.header, { backgroundColor: (colors.brand || '#38BDF8') + '14' }]}>
+          <View style={[styles.header, { backgroundColor: (colors.brand) + '14' }]}>
             <Image
               source={require('../../assets/images/EagleMascotS5.png')}
               style={styles.mascot}
@@ -170,13 +171,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   eyebrow: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
     letterSpacing: 0.5,
   },
   title: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 24,
@@ -184,8 +183,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   subtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 28,
@@ -201,7 +199,7 @@ const styles = StyleSheet.create({
   },
   topicCard: {
     width: '47%',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     padding: 16,
     position: 'relative',
@@ -209,19 +207,17 @@ const styles = StyleSheet.create({
   topicIcon: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
   },
   topicLabel: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    ...T.headline,
     fontWeight: '700',
   },
   topicDesc: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     lineHeight: 15,
     marginTop: 4,
   },
@@ -242,8 +238,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   counter: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -257,8 +252,7 @@ const styles = StyleSheet.create({
   },
   doneTxt: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
+    ...T.headline,
     fontWeight: '700',
   },
 });

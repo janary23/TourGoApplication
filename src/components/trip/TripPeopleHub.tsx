@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Alert, Platform, Modal, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, Modal, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   leaveTrip as dbLeaveTrip,
@@ -7,12 +7,14 @@ import {
   updateMemberRole as dbUpdateMemberRole,
 } from '../../services/tripService';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import TripChat from './TripChat';
 import TripPolls from './TripPolls';
 import TripAnnouncements from './TripAnnouncements';
 import TripMembers from './TripMembers';
 import { Segmented } from '../ui/primitives';
-import { space, radius } from '../ui/tokens';
+import { space, radius, type as T } from '../ui/tokens';
+import { confirmAction, notify } from '../ui/Feedback';
 
 type PeopleView = 'hub' | 'chat' | 'polls' | 'announcements' | 'members';
 type Tab = 'chat' | 'polls' | 'announcements' | 'members';
@@ -28,7 +30,11 @@ interface TripPeopleHubProps {
   onNavigateTo: (view: PeopleView) => void;
 }
 
-/** Cross-platform confirm with explicit button labels. */
+/**
+ * Kept as a thin wrapper so the call sites below read unchanged, but it now
+ * routes to the app's own dialog. Previously this branched to `window.confirm`
+ * on web and a native alert elsewhere — two more looks for the same question.
+ */
 function confirm(
   title: string,
   message: string,
@@ -36,20 +42,15 @@ function confirm(
   confirmButtonText: string = 'Confirm',
   destructive = false
 ) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
-    return;
-  }
-  Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: confirmButtonText, style: destructive ? 'destructive' : 'default', onPress: onConfirm },
-  ]);
+  confirmAction({ title, message, confirmLabel: confirmButtonText, destructive })
+    .then(ok => { if (ok) onConfirm(); });
 }
 
 export default function TripPeopleHub({
   trip, currentUserName, isOrganizer, isViewOnly = false, loadTrip, peopleView, onNavigateTo,
 }: TripPeopleHubProps) {
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
   const [isLeaving, setIsLeaving] = useState(false);
 
@@ -88,13 +89,13 @@ export default function TripPeopleHub({
           const { error } = await dbLeaveTrip(trip.id);
           if (error) {
             setIsLeaving(false);
-            Platform.OS === 'web' ? window.alert(error) : Alert.alert('Could not leave', error);
+            notify(error, 'error');
             return;
           }
           router.replace('/(tabs)/trips');
         } catch (err: any) {
           setIsLeaving(false);
-          Alert.alert('Could not leave', err?.message || 'Something went wrong');
+          notify(err?.message || 'Something went wrong', 'error');
         }
       },
       'Leave Trip',
@@ -108,7 +109,7 @@ export default function TripPeopleHub({
       `${member.name} will lose access to this trip.`,
       async () => {
         const { error } = await dbKickMember(trip.id, member.userId);
-        if (error) Alert.alert('Could not remove', error);
+        if (error) notify(error, 'error');
         else loadTrip();
       },
       'Remove',
@@ -122,7 +123,7 @@ export default function TripPeopleHub({
       `${member.name} will be able to manage this trip.`,
       async () => {
         const { error } = await dbUpdateMemberRole(trip.id, member.userId, 'organizer');
-        if (error) Alert.alert('Could not update', error);
+        if (error) notify(error, 'error');
         else loadTrip();
       },
       'Make Organizer',
@@ -190,9 +191,9 @@ export default function TripPeopleHub({
       {isLeaving && (
         <Modal transparent animationType="fade" visible={isLeaving}>
           <View style={styles.leavingOverlay}>
-            <View style={styles.leavingBox}>
-              <ActivityIndicator size="large" color="#0284C7" />
-              <Text style={styles.leavingText}>Leaving trip workspace...</Text>
+            <View style={[styles.leavingBox, { backgroundColor: colors.card }]}>
+              <ActivityIndicator size="large" color={colors.brand} />
+              <Text style={[styles.leavingText, { color: colors.text }]}>Leaving trip workspace…</Text>
             </View>
           </View>
         </Modal>
@@ -214,7 +215,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   leavingBox: {
-    backgroundColor: '#FFFFFF',
     borderRadius: radius.lg,
     padding: space.xl,
     alignItems: 'center',
@@ -227,8 +227,6 @@ const styles = StyleSheet.create({
     minWidth: 220,
   },
   leavingText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    color: '#1E293B',
+    ...T.body,
   },
 });

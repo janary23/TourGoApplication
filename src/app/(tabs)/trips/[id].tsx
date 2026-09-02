@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, TextInput, ScrollView, Alert, Share, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  ScrollView,
+  Share,
+  ActivityIndicator,
+} from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,8 +34,9 @@ import TripMembers from '../../../components/trip/TripMembers';
 import TripExpenses from '../../../components/trip/TripExpenses';
 import TripMoreHub from '../../../components/trip/TripMoreHub';
 import TripSafetyHub from '../../../components/trip/TripSafetyHub';
-import { Sheet, Field, Button, Txt } from '../../../components/ui/primitives';
-import { space } from '../../../components/ui/tokens';
+import { Sheet, Field, Button, Txt, NavBar } from '../../../components/ui/primitives';
+import { space, type as T } from '../../../components/ui/tokens';
+import { notify, confirmAction } from '../../../components/ui/Feedback';
 
 type Section = 'overview' | 'plan' | 'people' | 'money' | 'more';
 type PeopleView = 'hub' | 'chat' | 'polls' | 'announcements' | 'members';
@@ -86,7 +97,7 @@ export default function TripHomeScreen() {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="large" color="#38BDF8" />
+        <ActivityIndicator size="large" color={colors.brand} />
         <Text style={{ marginTop: 12, color: colors.textSecondary, fontFamily: 'Poppins-Regular' }}>Loading trip...</Text>
       </SafeAreaView>
     );
@@ -120,11 +131,11 @@ export default function TripHomeScreen() {
 
   const handleSaveEdit = async () => {
     if (!editTitle.trim() || !editDestination.trim() || !editStartDate || !editEndDate) {
-      Alert.alert('Missing Fields', 'Please fill in all fields.');
+      notify('Please fill in all fields.', 'error');
       return;
     }
     if (new Date(editStartDate) > new Date(editEndDate)) {
-      Alert.alert('Invalid Dates', 'End date must be on or after the start date.');
+      notify('Invalid Dates. End date must be on or after the start date.', 'error');
       return;
     }
     const { error } = await dbUpdateTrip(trip.id, {
@@ -133,29 +144,24 @@ export default function TripHomeScreen() {
       startDate: editStartDate,
       endDate: editEndDate,
     });
-    if (error) { Alert.alert('Error', error); return; }
+    if (error) { notify(error, 'error'); return; }
     setEditModalVisible(false);
-    Alert.alert('Saved!', 'Trip details have been updated.');
+    notify('Saved! Trip details have been updated.', 'success');
     loadTrip();
   };
 
   const handleDeleteTrip = () => {
-    Alert.alert(
-      'Delete Trip',
-      `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setEditModalVisible(false);
-            await dbDeleteTrip(trip.id);
-            router.back();
-          },
-        },
-      ]
-    );
+    confirmAction({
+        title: 'Delete Trip',
+        message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      }).then(async (ok) => {
+        if (!ok) return;
+        setEditModalVisible(false);
+        await dbDeleteTrip(trip.id);
+        router.back();
+      });
   };
 
   const getTripPhase = (): { phase: 'before' | 'during' | 'after'; label: string; icon: string } => {
@@ -177,7 +183,7 @@ export default function TripHomeScreen() {
         message: `Join our group trip "${trip.title}" on TourGo! Use access code: ${trip.code}`,
       });
     } catch (err: any) {
-      Alert.alert('Error sharing', err.message);
+      notify(err.message, 'error');
     }
   };
 
@@ -282,29 +288,15 @@ export default function TripHomeScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Sticky Trip Context Header — always know which trip you're in */}
-      <View style={[styles.customHeader, { backgroundColor: colors.card, borderBottomColor: colors.cardBorder }]}>
-        <View style={styles.headerTopRow}>
-          <TouchableOpacity onPress={handleHeaderBack} style={styles.headerBackBtn}>
-            <Ionicons name="chevron-back" size={24} color={colors.brand} />
-            <Text style={[styles.headerBackText, { color: colors.brand }]}>{headerBackLabel}</Text>
-          </TouchableOpacity>
-          <View style={styles.headerTitleBox}>
-            <Text style={[styles.headerDestText, { color: colors.textSecondary }]} numberOfLines={1}>
-              {trip.destination}
-            </Text>
-            <Text style={[styles.headerTitleText, { color: colors.text }]} numberOfLines={1}>
-              {trip.title}
-            </Text>
-          </View>
-          {isOrganizer ? (
-            <TouchableOpacity style={styles.headerSettingsBtn} onPress={openEditModal}>
-              <Ionicons name="create-outline" size={22} color={colors.brand} />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 24 }} />
-          )}
-        </View>
-      </View>
+      <NavBar
+        onBack={handleHeaderBack}
+        backLabel={headerBackLabel}
+        eyebrow={trip.destination}
+        title={trip.title}
+        actions={isOrganizer
+          ? [{ icon: 'create-outline', onPress: openEditModal, accessibilityLabel: 'Edit trip' }]
+          : []}
+      />
 
       {/* Room content */}
       <View style={{ flex: 1 }}>{content}</View>
@@ -381,53 +373,6 @@ export default function TripHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  customHeader: {
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    height: 52,
-  },
-  headerBackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    width: 100,
-  },
-  headerBackText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-  },
-  headerTitleBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerDestText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  headerTitleText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    marginTop: 1,
-  },
-  headerSettingsBtn: {
-    padding: 6,
-    alignItems: 'flex-end',
-    width: 100,
   },
 
   // Organizer edit modal styles

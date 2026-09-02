@@ -15,6 +15,14 @@ import { subscribeOnboardingActive } from '../../../services/mascotBridge';
 import FeaturedTripCard from '../../../components/trips/FeaturedTripCard';
 import OtherTripCard from '../../../components/trips/OtherTripCard';
 import CalendarWidget from '../../../components/home/CalendarWidget';
+import { space, radius, type as T } from '../../../components/ui/tokens';
+import { EmptyState } from '../../../components/ui/primitives';
+import { fetchLiveTripForecast, type RealTripForecast } from '../../../services/weatherService';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 if (Platform.OS === 'android' && (UIManager as any).setLayoutAnimationEnabledExperimentalAndroid) {
   (UIManager as any).setLayoutAnimationEnabledExperimentalAndroid(true);
@@ -271,9 +279,18 @@ const buildTravelNote = (forecast: TripForecast): string | null => {
 };
 
 // Small, honest adapter that keeps the home-screen "Weather & Prep" widget's
-// existing contract (temp / icon / condition / advice) working off the new
-// trip-scoped forecast instead of the old fixed-window generator.
-const getWeatherAdvice = (trip: TripWithRole | null) => {
+// existing contract (temp / icon / condition / advice) working off the live
+// meteorological weather data when available.
+const getWeatherAdvice = (trip: TripWithRole | null, live?: RealTripForecast | null) => {
+  if (live && live.status === 'available') {
+    return {
+      temp: `${live.currentTemp}°`,
+      icon: live.currentIcon,
+      condition: live.currentCondition,
+      advice: live.advice,
+    };
+  }
+
   const forecast = generateTripForecast(trip);
   const today = forecast.days.find((d) => d.isToday) || forecast.days[0];
 
@@ -302,7 +319,7 @@ function FadeInUp({ delay = 0, duration = 420, children, style }: { delay?: numb
       toValue: 1,
       duration,
       delay,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
     }).start();
   }, []);
 
@@ -326,10 +343,10 @@ function InteractiveButton({ onPress, style, children, activeScale = 0.94 }: any
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
-    Animated.spring(scale, { toValue: activeScale, useNativeDriver: true, tension: 180, friction: 12 }).start();
+    Animated.spring(scale, { toValue: activeScale, useNativeDriver: NATIVE_DRIVER, tension: 180, friction: 12 }).start();
   };
   const onPressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 180, friction: 12 }).start();
+    Animated.spring(scale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, tension: 180, friction: 12 }).start();
   };
 
   return (
@@ -348,8 +365,8 @@ function SkeletonLoader({ colors }: { colors: any }) {
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.8, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.8, duration: 900, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 900, useNativeDriver: NATIVE_DRIVER }),
       ])
     ).start();
   }, [pulseAnim]);
@@ -385,8 +402,8 @@ function ForecastSkeleton({ colors }: { colors: any }) {
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.75, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.35, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.75, duration: 800, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 0.35, duration: 800, useNativeDriver: NATIVE_DRIVER }),
       ])
     ).start();
   }, []);
@@ -447,7 +464,7 @@ function TemperatureRangeBar({ low, high, floor = 15, ceiling = 38, colors }: { 
 
 // Weather condition badge color — calm blue tones, amber only for sunny warmth.
 const conditionTint = (day: ForecastDay, colors: any, isDark: boolean) =>
-  day.isRainy ? colors.brand : isDark ? '#FBBF24' : '#D97706';
+  day.isRainy ? colors.brand : colors.warning;
 
 // ---------------------------------------------------------------------------
 // A single, expandable forecast row (no card chrome — part of one continuous list)
@@ -608,7 +625,10 @@ function ForecastBody({
     <>
       {/* HEADER — the trip connection: what + where + when */}
       <FadeInUp delay={0} style={{ alignItems: 'center' }}>
-        <Text style={[styles.v2Eyebrow, { color: colors.textMuted }]}>7-DAY FORECAST</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+          <Text style={[styles.v2Eyebrow, { color: colors.textMuted }]}>7-DAY LIVE METEOROLOGICAL FORECAST</Text>
+        </View>
       </FadeInUp>
       <FadeInUp delay={80} style={{ alignItems: 'center', marginTop: 12 }}>
         <Text style={[styles.v2Destination, { color: colors.text }]} numberOfLines={2}>
@@ -670,7 +690,7 @@ function ForecastBody({
       </FadeInUp>
 
       <View style={styles.v2TimelineWrap}>
-        {forecast.days.map((day, idx) => (
+        {(forecast?.days || []).map((day, idx) => (
           <FadeInUp key={day.isoDate} delay={350 + idx * 40}>
             <View style={idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider } : undefined}>
               <ForecastRow
@@ -786,7 +806,7 @@ export default function TripsScreen() {
   const activeTabIndex = tabNames.indexOf(activeTab);
 
   React.useEffect(() => {
-    Animated.spring(tabAnim, { toValue: activeTabIndex, useNativeDriver: true, tension: 200, friction: 18 }).start();
+    Animated.spring(tabAnim, { toValue: activeTabIndex, useNativeDriver: NATIVE_DRIVER, tension: 200, friction: 18 }).start();
   }, [activeTabIndex]);
 
   const segmentedWidth = SCREEN_WIDTH - 40;
@@ -863,7 +883,21 @@ export default function TripsScreen() {
   // separated by "→". When present we offer a minimal, elegant selector.
   const destList = featuredTrip ? parseDestinations(featuredTrip.destination) : [];
   const [selectedDestIndex, setSelectedDestIndex] = useState(0);
+  const [liveForecast, setLiveForecast] = useState<RealTripForecast | null>(null);
   const forecastBodyOpacity = useRef(new Animated.Value(1)).current;
+
+  const currentDest = destList[selectedDestIndex] ?? destList[0] ?? null;
+
+  // Load real meteorological live weather from Open-Meteo
+  useEffect(() => {
+    if (featuredTrip && currentDest) {
+      fetchLiveTripForecast(currentDest, featuredTrip.startDate, featuredTrip.endDate)
+        .then((res) => {
+          setLiveForecast(res);
+        })
+        .catch(() => {});
+    }
+  }, [featuredTrip?.id, currentDest]);
 
   const openWeatherModal = () => {
     setExpandedDayIso(null);
@@ -871,8 +905,19 @@ export default function TripsScreen() {
     forecastBodyOpacity.setValue(1);
     setIsForecastLoading(true);
     setIsWeatherModalVisible(true);
-    // Brief, honest loading state — the skeleton mirrors the real layout below.
-    setTimeout(() => setIsForecastLoading(false), 450);
+
+    if (featuredTrip && currentDest) {
+      fetchLiveTripForecast(currentDest, featuredTrip.startDate, featuredTrip.endDate)
+        .then((res) => {
+          setLiveForecast(res);
+          setIsForecastLoading(false);
+        })
+        .catch(() => {
+          setIsForecastLoading(false);
+        });
+    } else {
+      setIsForecastLoading(false);
+    }
   };
 
   const toggleDay = (iso: string) => {
@@ -882,19 +927,32 @@ export default function TripsScreen() {
 
   const changeDestination = (idx: number) => {
     if (idx === selectedDestIndex || isForecastLoading) return;
-    // Smooth native-style transition: existing content fades away, then the new
-    // destination's forecast fades in (remounted via key so it re-staggers).
-    Animated.timing(forecastBodyOpacity, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => {
+    const nextDest = destList[idx];
+    setIsForecastLoading(true);
+    Animated.timing(forecastBodyOpacity, { toValue: 0, duration: 160, useNativeDriver: NATIVE_DRIVER }).start(() => {
       setExpandedDayIso(null);
       setSelectedDestIndex(idx);
-      Animated.timing(forecastBodyOpacity, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+      if (nextDest && featuredTrip) {
+        fetchLiveTripForecast(nextDest, featuredTrip.startDate, featuredTrip.endDate)
+          .then((res) => {
+            setLiveForecast(res);
+            setIsForecastLoading(false);
+            Animated.timing(forecastBodyOpacity, { toValue: 1, duration: 320, useNativeDriver: NATIVE_DRIVER }).start();
+          })
+          .catch(() => {
+            setIsForecastLoading(false);
+            Animated.timing(forecastBodyOpacity, { toValue: 1, duration: 320, useNativeDriver: NATIVE_DRIVER }).start();
+          });
+      } else {
+        setIsForecastLoading(false);
+        Animated.timing(forecastBodyOpacity, { toValue: 1, duration: 320, useNativeDriver: NATIVE_DRIVER }).start();
+      }
     });
   };
 
-  const currentDest = destList[selectedDestIndex] ?? destList[0] ?? null;
-  const forecast = featuredTrip && currentDest ? generateDestinationForecast(featuredTrip, currentDest) : null;
-  const travelNote = forecast ? buildTravelNote(forecast) : null;
-  const todayDay = forecast?.days.find((d) => d.isToday) || forecast?.days[0] || null;
+  const forecast: TripForecast | null = (liveForecast as any) || (featuredTrip && currentDest ? generateDestinationForecast(featuredTrip, currentDest) : null);
+  const travelNote = liveForecast?.travelNote || (forecast ? buildTravelNote(forecast) : null);
+  const todayDay = forecast?.days?.find((d) => d.isToday) || forecast?.days?.[0] || null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
@@ -913,7 +971,7 @@ export default function TripsScreen() {
         </Animated.View>
 
         <Animated.View style={[styles.stickyTitleWrapper, { opacity: headerTitleOpacity }]}>
-          <Text style={[styles.stickyHeaderTitle, { color: colors.text }]}>Adventures</Text>
+          <Text style={[styles.stickyHeaderTitle, { color: colors.text }]}>Trips</Text>
         </Animated.View>
 
         {trips.length > 0 && (
@@ -939,13 +997,13 @@ export default function TripsScreen() {
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: NATIVE_DRIVER })}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} progressViewOffset={54} />}
         >
           <Animated.View
             style={[styles.titleContainer, { opacity: largeTitleOpacity, transform: [{ translateY: largeTitleTranslateY }, { scale: largeTitleScale }] }]}
           >
-            <Text style={[styles.pageTitle, { color: colors.text }]}>Adventures</Text>
+            <Text style={[styles.pageTitle, { color: colors.text }]}>Trips</Text>
             <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>Plan, explore, and recall your journeys.</Text>
           </Animated.View>
 
@@ -961,7 +1019,7 @@ export default function TripsScreen() {
                 <View style={styles.halfWidgetColumn}>
                   {featuredTrip ? (
                     (() => {
-                      const weather = getWeatherAdvice(featuredTrip);
+                      const weather = getWeatherAdvice(featuredTrip, liveForecast);
                       return (
                         <InteractiveButton
                           onPress={openWeatherModal}
@@ -993,7 +1051,7 @@ export default function TripsScreen() {
                     >
                       <Ionicons name="add-circle-outline" size={24} color={colors.brand} />
                       <Text style={[styles.weatherWidgetLabel, { color: colors.textSecondary }]}>PLAN A TRIP</Text>
-                      <Text style={{ fontSize: 9, color: colors.textMuted, fontFamily: 'Poppins-Regular', textAlign: 'center' }}>Where to next?</Text>
+                      <Text style={{ ...T.micro, color: colors.textMuted, textAlign: 'center' }}>Where to next?</Text>
                     </InteractiveButton>
                   )}
                 </View>
@@ -1095,26 +1153,22 @@ export default function TripsScreen() {
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>Open</Text>
+                    <Text style={{ ...T.overline, color: colors.brand }}>Open</Text>
                     <Ionicons name="chevron-forward" size={14} color={colors.brand} />
                   </View>
                 </TouchableOpacity>
               )}
             </>
           ) : (
-            <View style={styles.emptyContainer}>
-              {isOnboardingActive ? (
-                <Ionicons name="map-outline" size={72} color={colors.brand} style={{ marginBottom: 12 }} />
-              ) : (
-                <Image source={require('../../../../assets/images/EagleMascotS5.png')} style={{ width: 140, height: 140, resizeMode: 'contain', marginBottom: 12 }} />
-              )}
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No trips planned yet</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>Start organizing a new adventure or join your group's trip right away!</Text>
-              <View style={styles.emptyActions}>
-                <Button title="Create a Trip" onPress={() => router.push('/trip/create')} style={styles.actionBtn} size="small" />
-                <Button title="Join a Trip" onPress={() => router.push('/trip/join')} variant="outline" style={styles.actionBtn} size="small" />
-              </View>
-            </View>
+            <EmptyState
+              icon="map-outline"
+              title="No trips yet"
+              description="Start a new trip, or join one with a code your organizer shared."
+              action={{ label: 'Create a trip', onPress: () => router.push('/trip/create') }}
+              secondaryAction={{ label: 'Join a trip', onPress: () => router.push('/trip/join') }}
+              actionLayout="column"
+              buttonSize="sm"
+            />
           )}
         </Animated.ScrollView>
       )}
@@ -1212,36 +1266,35 @@ const styles = StyleSheet.create({
   },
   headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
-  appName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', letterSpacing: -0.5 },
+  appName: { ...T.title, letterSpacing: -0.5 },
   stickyTitleWrapper: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', zIndex: -1 },
-  stickyHeaderTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: -0.2 },
+  stickyHeaderTitle: { ...T.titleSm, fontWeight: '700', letterSpacing: -0.2 },
   headerActions: { flexDirection: 'row', gap: 8 },
-  smallActionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 30, paddingHorizontal: 12, borderRadius: 15 },
-  smallActionButtonText: { fontFamily: 'Poppins-Bold', fontWeight: '700', fontSize: 12 },
+  smallActionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 32, paddingHorizontal: space.md, borderRadius: radius.sm },
+  smallActionButtonText: { ...T.label },
   listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
   titleContainer: { marginTop: 10, marginBottom: 20 },
-  pageTitle: { fontFamily: 'Poppins-ExtraBold', fontWeight: '800', fontSize: 30, letterSpacing: -0.7, lineHeight: 36 },
-  pageSubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, marginTop: 2 },
+  pageTitle: T.largeTitle,
+  pageSubtitle: { ...T.subhead, marginTop: space.xxs },
   searchBarRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'center' },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 24, paddingHorizontal: 16, gap: 8, flex: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 2,
+    flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: radius.pill, paddingHorizontal: space.lg, gap: space.sm, flex: 1,
   },
-  searchInput: { flex: 1, height: '100%', fontFamily: 'Poppins-Medium', fontSize: 13.5, padding: 0 },
+  searchInput: { flex: 1, height: '100%', ...T.body, padding: 0 },
   searchCancelBtn: { paddingLeft: 12, height: 48, justifyContent: 'center' },
-  searchCancelText: { fontFamily: 'Poppins-Bold', fontSize: 14 },
+  searchCancelText: { ...T.bodyStrong },
   segmentedContainer: { flexDirection: 'row', height: 38, borderRadius: 12, padding: 2, marginBottom: 22, position: 'relative', alignItems: 'center' },
-  segmentedPill: { position: 'absolute', top: 2, bottom: 2, borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  segmentedPill: { position: 'absolute', top: 2, bottom: 2, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
   segmentedTab: { flex: 1, height: '100%', justifyContent: 'center', alignItems: 'center', zIndex: 1 },
   segmentedTabText: { fontSize: 12 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  sectionTitle: { fontSize: 11, fontFamily: 'Poppins-Bold', textTransform: 'uppercase', letterSpacing: 1.2 },
+  sectionTitle: { ...T.overline, textTransform: 'uppercase', letterSpacing: 1.2 },
   albumBannerCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 20,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1257,36 +1310,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   albumBannerTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
   albumBannerSub: {
-    fontSize: 10.5,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
     marginTop: 1,
   },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50 },
-  emptyTitle: { fontFamily: 'Poppins-Bold', fontSize: 18, marginBottom: 6, marginTop: 8 },
-  emptySubtitle: { fontFamily: 'Poppins-Regular', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 20, paddingHorizontal: 10 },
-  emptyActions: { flexDirection: 'row', gap: 12 },
-  actionBtn: { width: 130 },
   widgetsRow: { flexDirection: 'row', gap: 12, marginBottom: 24, width: '100%' },
   halfWidgetColumn: { flex: 1 },
-  halfWidgetCard: { flex: 1, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 14, justifyContent: 'space-between', height: 122, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 6, elevation: 1 },
+  halfWidgetCard: { flex: 1, borderRadius: radius.lg, paddingVertical: space.lg - 2, paddingHorizontal: space.lg - 2, justifyContent: 'space-between', height: 122 },
   weatherWidgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  weatherWidgetLabel: { fontSize: 9, fontFamily: 'Poppins-Bold', letterSpacing: 0.8 },
+  weatherWidgetLabel: { ...T.microStrong, letterSpacing: 0.8 },
   weatherMainContent: { flex: 1, justifyContent: 'center' },
-  weatherTempText: { fontSize: 26, fontFamily: 'Poppins-Bold', lineHeight: 30 },
-  weatherDestText: { fontSize: 10, fontFamily: 'Poppins-Bold', letterSpacing: 1.0, marginTop: 2 },
-  weatherConditionText: { fontSize: 11, fontFamily: 'Poppins-SemiBold' },
-  weatherAdviceCapsule: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, alignSelf: 'flex-start', marginTop: 6, width: '100%' },
-  weatherAdviceText: { fontSize: 9, fontFamily: 'Poppins-Bold' },
+  weatherTempText: { ...T.display, lineHeight: 30 },
+  weatherDestText: { ...T.microStrong, letterSpacing: 1.0, marginTop: 2 },
+  weatherConditionText: { ...T.caption },
+  weatherAdviceCapsule: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, alignSelf: 'flex-start', marginTop: 6, width: '100%' },
+  weatherAdviceText: { ...T.microStrong },
   skeletonContainer: { flex: 1, paddingHorizontal: 20 },
   skeletonSearchBar: { height: 38, borderRadius: 12, width: '100%' },
   skeletonSegmentedControl: { height: 38, borderRadius: 12, width: '100%' },
   skeletonFeaturedCard: { height: 240, borderRadius: 20, width: '100%', marginBottom: 20 },
-  skeletonItemCard: { flexDirection: 'row', borderRadius: 18, padding: 12, gap: 14, alignItems: 'center' },
-  skeletonPhoto: { width: 85, height: 85, borderRadius: 14 },
+  skeletonItemCard: { flexDirection: 'row', borderRadius: 20, padding: 12, gap: 14, alignItems: 'center' },
+  skeletonPhoto: { width: 85, height: 85, borderRadius: 16 },
   skeletonLineShort: { height: 12, borderRadius: 6, width: '50%' },
   skeletonLineLong: { height: 16, borderRadius: 8, width: '85%' },
 
@@ -1310,56 +1356,56 @@ const styles = StyleSheet.create({
   },
   destPillText: { fontSize: 13, maxWidth: 140 },
 
-  v2Eyebrow: { fontSize: 11, fontFamily: 'Poppins-Bold', letterSpacing: 1.4 },
-  v2Destination: { fontSize: 22, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: -0.3, textAlign: 'center' },
+  v2Eyebrow: { ...T.overline, letterSpacing: 1.4 },
+  v2Destination: { ...T.display, fontWeight: '700', letterSpacing: -0.3, textAlign: 'center' },
   v2TripDatesRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  v2DateRange: { fontSize: 13, fontFamily: 'Poppins-Medium' },
+  v2DateRange: { ...T.emphasis },
 
   v2TodayBlock: { paddingVertical: 24, gap: 14 },
   v2TodayHead: { alignItems: 'center', gap: 3 },
-  v2TodayLabel: { fontSize: 11, fontFamily: 'Poppins-Bold', letterSpacing: 1.4 },
-  v2TodayDate: { fontSize: 12, fontFamily: 'Poppins-Regular' },
+  v2TodayLabel: { ...T.overline, letterSpacing: 1.4 },
+  v2TodayDate: { ...T.footnote },
   v2TodayMain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
   v2TodayTemp: { fontSize: 64, fontFamily: 'Poppins-Bold', fontWeight: '700', lineHeight: 70, letterSpacing: -2 },
   v2TodayFeels: { alignItems: 'flex-start', gap: 1 },
-  v2TodayCondition: { fontSize: 15, fontFamily: 'Poppins-SemiBold' },
-  v2TodayFeelsText: { fontSize: 12, fontFamily: 'Poppins-Regular' },
+  v2TodayCondition: { ...T.headline },
+  v2TodayFeelsText: { ...T.footnote },
   v2TodayMetricsRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 12, marginTop: 4,
   },
   v2TodayMetricItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  v2TodayMetric: { fontSize: 12, fontFamily: 'Poppins-Medium' },
+  v2TodayMetric: { ...T.label },
   v2TodayMetricDot: { width: 3, height: 3, borderRadius: 1.5 },
 
   v2SectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
   v2SectionRule: { flex: 1, height: StyleSheet.hairlineWidth },
-  v2SectionLabel: { fontSize: 11, fontFamily: 'Poppins-Bold', letterSpacing: 1.2 },
+  v2SectionLabel: { ...T.overline, letterSpacing: 1.2 },
   v2TimelineWrap: { marginTop: 10 },
 
   v2Row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15 },
   v2RowDayCol: { width: 72 },
-  v2RowDay: { fontSize: 14, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
-  v2RowDate: { fontSize: 11, fontFamily: 'Poppins-Regular', marginTop: 1 },
+  v2RowDay: { ...T.body, fontWeight: '600' },
+  v2RowDate: { ...T.caption, marginTop: 1 },
   v2RowConditionCol: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1.1, paddingRight: 8 },
   v2RowIcon: { width: 20 },
-  v2RowCondition: { fontSize: 11, fontFamily: 'Poppins-Medium', flexShrink: 1 },
-  v2RowLow: { fontSize: 13, fontFamily: 'Poppins-Medium', width: 26, textAlign: 'right' },
-  v2RowHigh: { fontSize: 13, fontFamily: 'Poppins-Bold', width: 30, textAlign: 'right' },
+  v2RowCondition: { ...T.caption, flexShrink: 1 },
+  v2RowLow: { ...T.emphasis, width: 26, textAlign: 'right' },
+  v2RowHigh: { ...T.emphasis, width: 30, textAlign: 'right' },
   v2RowChevron: { marginLeft: 10 },
 
   v2ExpandedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 16, paddingBottom: 18, gap: 16 },
   v2PartsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   v2PartCol: { alignItems: 'center', flex: 1, gap: 2 },
-  v2PartLabel: { fontSize: 10, fontFamily: 'Poppins-Bold', letterSpacing: 0.6 },
-  v2PartTemp: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  v2PartCondition: { fontSize: 10, fontFamily: 'Poppins-Medium', maxWidth: 78, textAlign: 'center' },
+  v2PartLabel: { ...T.microStrong, letterSpacing: 0.6 },
+  v2PartTemp: { ...T.headline, fontWeight: '700' },
+  v2PartCondition: { ...T.micro, maxWidth: 78, textAlign: 'center' },
   v2MetricsDivider: { height: StyleSheet.hairlineWidth, width: '100%' },
   v2MetricsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   v2MetricCol: { alignItems: 'center', gap: 3 },
-  v2MetricLabel: { fontSize: 10, fontFamily: 'Poppins-Medium', letterSpacing: 0.4 },
-  v2MetricValue: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  v2OutsideNote: { fontSize: 11, fontFamily: 'Poppins-Regular', textAlign: 'center' },
+  v2MetricLabel: { ...T.micro, letterSpacing: 0.4 },
+  v2MetricValue: { ...T.emphasis, fontWeight: '700' },
+  v2OutsideNote: { ...T.caption, textAlign: 'center' },
 
   v2NoteWrap: {
     marginTop: 26, flexDirection: 'row', alignItems: 'flex-start', gap: 12,
@@ -1368,13 +1414,13 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
   },
   v2NoteBodyWrap: { flex: 1, gap: 3, paddingTop: 2 },
-  v2NoteLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', letterSpacing: 0.2 },
-  v2NoteBody: { fontSize: 13, fontFamily: 'Poppins-Regular', lineHeight: 20 },
+  v2NoteLabel: { ...T.label, letterSpacing: 0.2 },
+  v2NoteBody: { ...T.subhead, lineHeight: 20 },
 
   v2StateBlock: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 10, paddingHorizontal: 24 },
   v2StateIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  v2StateTitle: { fontSize: 15, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  v2StateBody: { fontSize: 13, fontFamily: 'Poppins-Regular', textAlign: 'center', lineHeight: 19, maxWidth: 280 },
+  v2StateTitle: { ...T.headline, fontWeight: '700' },
+  v2StateBody: { ...T.subhead, textAlign: 'center', lineHeight: 19, maxWidth: 280 },
 
   // ---- Debug delete styles ----
   debugBanner: {
@@ -1390,7 +1436,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 8,
     shadowColor: '#000',
@@ -1399,8 +1445,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  debugTripTitle: { fontSize: 13, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
-  debugTripMeta: { fontSize: 11, fontFamily: 'Poppins-Regular', marginTop: 2 },
+  debugTripTitle: { ...T.emphasis, fontWeight: '600' },
+  debugTripMeta: { ...T.caption, marginTop: 2 },
   debugDeleteBtn: {
     width: 36,
     height: 36,
@@ -1439,15 +1485,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
-  deleteModalTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', fontWeight: '700', marginBottom: 8 },
-  deleteModalBody: { fontSize: 13, fontFamily: 'Poppins-Regular', textAlign: 'center', lineHeight: 20, marginBottom: 22 },
+  deleteModalTitle: { ...T.title, fontWeight: '700', marginBottom: 8 },
+  deleteModalBody: { ...T.subhead, textAlign: 'center', lineHeight: 20, marginBottom: 22 },
   deleteModalActions: { flexDirection: 'row', gap: 10, width: '100%' },
   deleteModalBtn: {
     flex: 1,
     height: 46,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  deleteModalBtnText: { fontSize: 14, fontFamily: 'Poppins-Bold', fontWeight: '700' },
+  deleteModalBtnText: { ...T.bodyStrong, fontWeight: '700' },
 });

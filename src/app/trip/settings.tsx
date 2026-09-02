@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, ScrollView, Switch, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TripFeatureSettings } from '../../services/mockData';
 import { getTripById, updateTripFeatures } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
+import { notify } from '../../components/ui/Feedback';
+import { AppSwitch, NavBar } from '../../components/ui/primitives';
+import { type as T } from '../../components/ui/tokens';
 
 export default function TripSettingsScreen() {
   const router = useRouter();
@@ -61,7 +64,7 @@ export default function TripSettingsScreen() {
     return (
       <SafeAreaView style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <View style={[styles.lockIcon, { backgroundColor: '#FEE2E2' }]}>
-          <Ionicons name="lock-closed" size={32} color="#EF4444" />
+          <Ionicons name="lock-closed" size={32} color={colors.danger} />
         </View>
         <Text style={[styles.lockTitle, { color: colors.text }]}>Access Denied</Text>
         <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
@@ -85,12 +88,11 @@ export default function TripSettingsScreen() {
     if (features && id) {
       const { error } = await updateTripFeatures(id as string, features);
       if (error) {
-        Alert.alert("Error", error);
+        notify(error, 'error');
         return;
       }
-      Alert.alert("Saved", "Trip features updated.", [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      notify('Trip features updated.', 'success');
+      router.back();
     }
   };
 
@@ -98,29 +100,29 @@ export default function TripSettingsScreen() {
     {
       label: 'Planning',
       items: [
-        { key: 'checklist', title: 'Packing Checklist', desc: 'Task assignments and AI packing list', icon: 'checkbox-outline', color: '#10B981', bg: '#D1FAE5' },
+        { key: 'checklist', title: 'Packing Checklist', desc: 'Task assignments and AI packing list', icon: 'checkbox-outline' },
       ],
     },
     {
       label: 'Group',
       items: [
-        { key: 'group_chat', title: 'Group Chat', desc: 'Real-time messaging for coordination', icon: 'chatbubble-ellipses-outline', color: '#EC4899', bg: '#FCE7F3' },
-        { key: 'polls', title: 'Group Polls', desc: 'Vote together on plans and schedules', icon: 'bar-chart-outline', color: '#8B5CF6', bg: '#EDE9FE' },
-        { key: 'announcements', title: 'Announcements', desc: 'Pin important notices for everyone', icon: 'megaphone-outline', color: '#6366F1', bg: '#EEF2FF' },
+        { key: 'group_chat', title: 'Group Chat', desc: 'Real-time messaging for coordination', icon: 'chatbubble-ellipses-outline' },
+        { key: 'polls', title: 'Group Polls', desc: 'Vote together on plans and schedules', icon: 'bar-chart-outline' },
+        { key: 'announcements', title: 'Announcements', desc: 'Pin important notices for everyone', icon: 'megaphone-outline' },
       ],
     },
     {
       label: 'Logistics',
       items: [
-        { key: 'split_expenses', title: 'Expense Tracker', desc: 'Settle bills and track shared costs', icon: 'wallet-outline', color: '#10B981', bg: '#D1FAE5' },
-        { key: 'documents', title: 'Document Vault', desc: 'Flight vouchers, PDFs, and tickets', icon: 'folder-open-outline', color: '#F97316', bg: '#FFF7ED' },
+        { key: 'split_expenses', title: 'Expense Tracker', desc: 'Settle bills and track shared costs', icon: 'wallet-outline' },
+        { key: 'documents', title: 'Document Vault', desc: 'Flight vouchers, PDFs, and tickets', icon: 'folder-open-outline' },
       ],
     },
     {
       label: 'Safety',
       items: [
-        { key: 'attendance', title: 'Arrival Tracking', desc: 'Check-in board for all travelers', icon: 'checkmark-circle-outline', color: '#14B8A6', bg: '#CCFBF1' },
-        { key: 'guardian_mode', title: 'Guardian Radar', desc: 'Live GPS location tracking (Beta)', icon: 'location-outline', color: '#EF4444', bg: '#FEE2E2' },
+        { key: 'attendance', title: 'Arrival Tracking', desc: 'Check-in board for all travelers', icon: 'checkmark-circle-outline' },
+        { key: 'guardian_mode', title: 'Guardian Radar', desc: 'Live GPS location tracking (Beta)', icon: 'location-outline' },
       ],
     },
   ];
@@ -129,29 +131,19 @@ export default function TripSettingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header matching TripPeopleHub layout */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerTitleRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtnIcon}>
-            <Ionicons name="chevron-back" size={24} color={colors.brand} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-            {tripTitle} Settings
-          </Text>
-        </View>
-      </View>
+      <NavBar onBack={() => router.back()} backLabel="Back" eyebrow={tripTitle} title="Trip settings" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Itinerary badge */}
-        <View style={[styles.alwaysOn, { backgroundColor: '#0EA5E915', borderColor: '#0EA5E930' }]}>
-          <View style={[styles.alwaysIcon, { backgroundColor: '#0EA5E925' }]}>
-            <Ionicons name="calendar" size={16} color="#0EA5E9" />
+        <View style={[styles.alwaysOn, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
+          <View style={[styles.alwaysIcon, { backgroundColor: colors.card }]}>
+            <Ionicons name="calendar" size={16} color={colors.brand} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.alwaysLabel, { color: colors.text }]}>Itinerary</Text>
             <Text style={[styles.alwaysDesc, { color: colors.textSecondary }]}>Always on · Timeline schedule</Text>
           </View>
-          <Text style={styles.alwaysBadge}>ALWAYS ON</Text>
+          <Text style={[styles.alwaysBadge, { color: colors.brand, backgroundColor: colors.brandLight }]}>ALWAYS ON</Text>
         </View>
 
         {/* Feature groups */}
@@ -161,20 +153,15 @@ export default function TripSettingsScreen() {
             {group.items.map(item => {
               const active = features[item.key as keyof TripFeatureSettings];
               return (
-                <View key={item.key} style={[styles.featureCard, { backgroundColor: colors.card, borderColor: active ? item.color + '30' : colors.cardBorder }]}>
-                  <View style={[styles.featureIcon, { backgroundColor: active ? item.bg : colors.surface }]}>
-                    <Ionicons name={item.icon as any} size={20} color={active ? item.color : colors.textMuted} />
+                <View key={item.key} style={[styles.featureCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <View style={[styles.featureIcon, { backgroundColor: active ? colors.brandLight : colors.surface }]}>
+                    <Ionicons name={item.icon as any} size={20} color={active ? colors.brand : colors.textMuted} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.featureLabel, { color: active ? colors.text : colors.textSecondary }]}>{item.title}</Text>
                     <Text style={[styles.featureDesc, { color: colors.textMuted }]}>{item.desc}</Text>
                   </View>
-                  <Switch
-                    value={active}
-                    onValueChange={() => toggleFeature(item.key as keyof TripFeatureSettings)}
-                    trackColor={{ false: colors.cardBorder, true: item.color + '60' }}
-                    thumbColor={active ? item.color : '#FFFFFF'}
-                  />
+                  <AppSwitch value={active} onValueChange={() => toggleFeature(item.key as keyof TripFeatureSettings)} />
                 </View>
               );
             })}
@@ -199,27 +186,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-ExtraBold',
-    fontWeight: '800',
-    flex: 1,
-  },
-  headerBackBtnIcon: {
-    paddingRight: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -234,7 +200,7 @@ const styles = StyleSheet.create({
   alwaysOn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 12,
     gap: 10,
@@ -243,25 +209,20 @@ const styles = StyleSheet.create({
   alwaysIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   alwaysLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
   },
   alwaysDesc: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
   },
   alwaysBadge: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
-    color: '#0EA5E9',
-    backgroundColor: '#0EA5E920',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -271,8 +232,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   groupLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -281,7 +241,7 @@ const styles = StyleSheet.create({
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 12,
     gap: 10,
@@ -290,32 +250,29 @@ const styles = StyleSheet.create({
   featureIcon: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   featureLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
   },
   featureDesc: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     marginTop: 1,
   },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     paddingVertical: 14,
     gap: 8,
     marginTop: 8,
   },
   saveBtnText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -327,8 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lockTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.title,
     fontWeight: '800',
   },
   backBtn: {
@@ -338,8 +294,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   backBtnText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
     color: '#FFFFFF',
   },

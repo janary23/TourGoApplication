@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Animated } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import { setOnMascotLand, setOnMascotLeave } from '../../services/mascotBridge';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface MascotGreetingProps {
   colors: any;
@@ -104,12 +110,12 @@ export default function MascotGreeting({
         Animated.timing(hoverAnim, {
           toValue: 1,
           duration: 1600,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(hoverAnim, {
           toValue: 0,
           duration: 1600,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ])
     );
@@ -191,16 +197,16 @@ export default function MascotGreeting({
             startTrigger={isLanded}
             speed={60}
             onComplete={() => setLine1Complete(true)}
-            style={[styles.greetingUserText, { color: colors.text, fontSize: 16, fontFamily: 'Poppins-Bold' }]}
+            style={[styles.greetingUserText, { color: colors.text, ...T.titleSm }]}
           />
           <TypingText
             text={agilitoLine2}
             startTrigger={line1Complete}
             speed={40}
-            style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 6, fontFamily: 'Poppins-Medium', fontSize: 13, lineHeight: 18 }]}
+            style={[styles.greetingSubText, { color: colors.textSecondary, marginTop: 6, ...T.emphasis, lineHeight: 18 }]}
           />
           {line1Complete && (
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 8, fontFamily: 'Poppins-Regular' }}>
+            <Text style={{ ...T.caption, color: colors.textMuted, marginTop: 8 }}>
               Tap to hear more ✦
             </Text>
           )}
@@ -232,7 +238,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   greetingSubText: {
-    fontFamily: 'Poppins-Medium',
-    fontSize: 12,
+    ...T.label,
   },
 });

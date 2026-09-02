@@ -1,5 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, Modal, ImageBackground, ScrollView, useWindowDimensions, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
+import {
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Modal,
+  ImageBackground,
+  ScrollView,
+  useWindowDimensions,
+  FlatList,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  Animated,
+  Platform,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +52,14 @@ import {
   type ProvinceMarker,
 } from '../../components/explore/ExploreMap';
 import { ProvinceSheetContent } from '../../components/explore/ProvinceSheetContent';
+import { notify } from '../../components/ui/Feedback';
+import { EmptyState } from '../../components/ui/primitives';
+import { space, radius as R, shadow, type as T } from '../../components/ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 const TOTAL_PROVINCES = 82;
 const GOLD = '#D9A441';
 const CRIMSON_WAX = '#38BDF8'; // Sky blue stamp color
@@ -113,7 +137,7 @@ export default function ExploreScreen() {
       toValue: exploreTab === 'wishlist' ? 0 : 1,
       tension: 45,
       friction: 8.5,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
     }).start();
   }, [exploreTab]);
 
@@ -166,12 +190,12 @@ export default function ExploreScreen() {
       setIsSaving(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Please grant gallery access to save your Story Card.');
+        notify('Permission Denied. Please grant gallery access to save your Story Card.', 'error');
         setIsSaving(false);
         return;
       }
       if (!cardRef.current) {
-        Alert.alert('Error', 'Card layout not ready yet. Please try again.');
+        notify('Card layout not ready yet. Please try again.', 'error');
         setIsSaving(false);
         return;
       }
@@ -184,11 +208,11 @@ export default function ExploreScreen() {
       });
       setIsExporting(false);
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert('Success', 'Story Card saved to your photo library!');
+      notify('Story Card saved to your photo library.', 'success');
     } catch (error) {
       console.error('Failed to save card:', error);
       setIsExporting(false);
-      Alert.alert('Error', 'Could not save the image. Please try again.');
+      notify('Could not save the image. Please try again.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -630,14 +654,14 @@ export default function ExploreScreen() {
         {/* Branded App Header Row */}
         <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
           <View style={styles.headerBrandContainer}>
-            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand || '#38BDF8' }]} />
-            <Text style={[styles.appName, { color: colors.brand || '#38BDF8' }]}>TourGo</Text>
+            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
           </View>
         </View>
 
         {/* Sub Header Tab Segmented Control */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 8, backgroundColor: colors.background }}>
-          <View style={{ flexDirection: 'row', backgroundColor: colors.inputBg, borderRadius: 16, padding: 3, position: 'relative' }}>
+          <View style={{ flexDirection: 'row', backgroundColor: colors.surface, borderRadius: R.md, padding: 3, position: 'relative' }}>
             
             {/* Sliding animated background pill */}
             <Animated.View
@@ -647,13 +671,9 @@ export default function ExploreScreen() {
                 bottom: 3,
                 left: 3,
                 width: (windowWidth - 46) / 2,
-                borderRadius: 14,
+                borderRadius: R.sm + 1,
                 backgroundColor: colors.card,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 3,
-                elevation: 2,
+                ...shadow(1, isDark),
                 transform: [{
                   translateX: tabAnim.interpolate({
                     inputRange: [0, 1],
@@ -671,7 +691,7 @@ export default function ExploreScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 paddingVertical: 8,
-                borderRadius: 14,
+                borderRadius: R.sm + 1,
                 gap: 6,
               }}
             >
@@ -689,13 +709,13 @@ export default function ExploreScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 paddingVertical: 8,
-                borderRadius: 14,
+                borderRadius: R.sm + 1,
                 gap: 6,
               }}
             >
               <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.brand : colors.textMuted} />
               <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Poppins-Bold' : 'Poppins-Medium', color: exploreTab === 'albums' ? colors.brand : colors.textSecondary }}>
-                My Albums
+                Albums
               </Text>
             </TouchableOpacity>
           </View>
@@ -726,12 +746,12 @@ export default function ExploreScreen() {
                           styles.toggle,
                           {
                             backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                            borderColor: '#10B981',
+                            borderColor: colors.success,
                           },
                         ]}
                       >
-                        <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                        <Text style={[styles.toggleText, { color: '#10B981' }]}>Explored</Text>
+                        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                        <Text style={[styles.toggleText, { color: colors.success }]}>Explored</Text>
                       </View>
                     ) : (
                       <View
@@ -845,7 +865,7 @@ export default function ExploreScreen() {
                 {isPlacesLoading ? (
                   <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={colors.brand} />
-                    <Text style={{ marginTop: 12, fontSize: 13, color: colors.textMuted, fontFamily: 'Poppins-Regular' }}>
+                    <Text style={{ marginTop: 12, ...T.subhead, color: colors.textMuted }}>
                       Fetching top spots from Google Places...
                     </Text>
                   </View>
@@ -875,7 +895,7 @@ export default function ExploreScreen() {
                         ]}
                       >
                         {dest.image && (
-                          <View style={{ overflow: 'hidden', borderRadius: 14, marginBottom: 12, position: 'relative' }}>
+                          <View style={{ overflow: 'hidden', borderRadius: 16, marginBottom: 12, position: 'relative' }}>
                             <Image source={{ uri: dest.image }} style={{ width: '100%', height: 160, resizeMode: 'cover' }} />
                             
                             {/* Glassmorphic Rating Tag on top-left of image */}
@@ -894,13 +914,13 @@ export default function ExploreScreen() {
                               <Ionicons
                                 name={isSaved ? "heart" : "heart-outline"}
                                 size={14}
-                                color={isSaved ? "#EF4444" : "#FFFFFF"}
+                                color={isSaved ? colors.saved : '#FFFFFF'}
                               />
                             </TouchableOpacity>
                           </View>
                         )}
                         <View style={[styles.destCardBody, { padding: 4 }]}>
-                          <Text style={[styles.destCardName, { color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 15 }]} numberOfLines={1}>{dest.name}</Text>
+                          <Text style={[styles.destCardName, { color: colors.text, ...T.headline }]} numberOfLines={1}>{dest.name}</Text>
                           
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                             <Ionicons name="location-outline" size={12} color={colors.brand} />
@@ -922,7 +942,7 @@ export default function ExploreScreen() {
                               <View
                                 style={{
                                   backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                  borderColor: '#10B981',
+                                  borderColor: colors.success,
                                   borderWidth: 1,
                                   height: 38,
                                   borderRadius: 12,
@@ -933,8 +953,8 @@ export default function ExploreScreen() {
                                   gap: 5,
                                 }}
                               >
-                                <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: '#10B981' }}>
+                                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                                <Text style={{ ...T.overline, color: colors.success }}>
                                   Visited
                                 </Text>
                               </View>
@@ -957,7 +977,7 @@ export default function ExploreScreen() {
                               onPress={() => router.push(`/trip/create?dest=${encodeURIComponent(dest.name)}&title=${encodeURIComponent(dest.name)}`)}
                             >
                               <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
-                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: '#FFFFFF' }}>Plan Trip</Text>
+                              <Text style={{ ...T.label, color: '#FFFFFF' }}>Plan Trip</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -965,7 +985,7 @@ export default function ExploreScreen() {
                     );
                   })
                 ) : (
-                  <Text style={{ textAlign: 'center', marginVertical: 30, color: colors.textMuted, fontFamily: 'Poppins-Regular', fontSize: 13 }}>
+                  <Text style={{ textAlign: 'center', marginVertical: 30, color: colors.textMuted, ...T.subhead }}>
                     No tourist spots logged for this province yet.
                   </Text>
                 )}
@@ -977,8 +997,8 @@ export default function ExploreScreen() {
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 16 }}>
                 <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ fontSize: 30, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Travel Albums</Text>
-                  <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Past memories scrapbook & collection map of completed journeys</Text>
+                  <Text style={{ ...T.largeTitle, fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Albums</Text>
+                  <Text style={{ ...T.subhead, color: colors.textMuted, marginTop: 2 }}>Past memories scrapbook & collection map of completed journeys</Text>
                 </View>
                 
                 {/* Share Collection Button */}
@@ -988,17 +1008,15 @@ export default function ExploreScreen() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: colors.brandLight,
-                    borderColor: colors.brand,
-                    borderWidth: 1,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 12,
-                    gap: 5,
+                    paddingHorizontal: space.md,
+                    paddingVertical: space.sm + 2,
+                    borderRadius: R.md,
+                    gap: space.xs + 1,
                   }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="share-social-outline" size={14} color={colors.brand} />
-                  <Text style={{ fontSize: 11.5, fontFamily: 'Poppins-Bold', color: colors.brand }}>Share</Text>
+                  <Text style={{ ...T.label, color: colors.brand }}>Share</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1009,7 +1027,7 @@ export default function ExploreScreen() {
                   backgroundColor: colors.card,
                   borderColor: colors.cardBorder,
                   borderWidth: 1,
-                  borderRadius: 18,
+                  borderRadius: 20,
                   padding: 14,
                   marginBottom: 22,
                   justifyContent: 'space-around',
@@ -1021,28 +1039,28 @@ export default function ExploreScreen() {
                   elevation: 1,
                 }}>
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                    <Text style={{ ...T.title, color: colors.brand }}>
                       {completedTripAlbums.length}
                     </Text>
-                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       {completedTripAlbums.length === 1 ? 'Trip Memory' : 'Trip Memories'}
                     </Text>
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: '#10B981' }}>
+                    <Text style={{ ...T.title, color: colors.success }}>
                       {visitedProvincesList.length}
                     </Text>
-                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       Provinces Explored
                     </Text>
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 18, fontFamily: 'Poppins-Bold', color: '#F59E0B' }}>
+                    <Text style={{ ...T.title, color: colors.warning }}>
                       {log.visitedDestinations.length}
                     </Text>
-                    <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       Spots on Map
                     </Text>
                   </View>
@@ -1055,7 +1073,7 @@ export default function ExploreScreen() {
                   <View style={{ marginBottom: 26 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                       <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
-                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
+                      <Text style={{ ...T.label, color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
                         Past Memories Scrapbook
                       </Text>
                     </View>
@@ -1078,7 +1096,7 @@ export default function ExploreScreen() {
                               backgroundColor: colors.card,
                               borderColor: colors.cardBorder,
                               borderWidth: 1,
-                              borderRadius: 18,
+                              borderRadius: 20,
                               padding: 8,
                               marginBottom: 16,
                               shadowColor: '#000',
@@ -1104,10 +1122,10 @@ export default function ExploreScreen() {
                                 backgroundColor: 'rgba(15, 23, 42, 0.75)',
                                 paddingHorizontal: 6,
                                 paddingVertical: 2.5,
-                                borderRadius: 6,
+                                borderRadius: 8,
                               }}>
                                 <Ionicons name="checkmark-done-outline" size={10} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', fontSize: 7.5, fontFamily: 'Poppins-Bold', letterSpacing: 0.5 }}>MEMORY</Text>
+                                <Text style={{ color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.5 }}>MEMORY</Text>
                               </View>
 
                               {/* Role Chip */}
@@ -1118,9 +1136,9 @@ export default function ExploreScreen() {
                                 backgroundColor: trip.role === 'organizer' ? 'rgba(2, 132, 199, 0.9)' : 'rgba(100, 116, 139, 0.85)',
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
-                                borderRadius: 6,
+                                borderRadius: 8,
                               }}>
-                                <Text style={{ color: '#FFFFFF', fontSize: 7, fontFamily: 'Poppins-Bold' }}>
+                                <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
                                   {trip.role === 'organizer' ? 'ORGANIZED' : 'JOINED'}
                                 </Text>
                               </View>
@@ -1128,20 +1146,20 @@ export default function ExploreScreen() {
 
                             {/* Polaroid Card Details */}
                             <View style={{ paddingTop: 8, paddingHorizontal: 2 }}>
-                              <Text style={{ fontSize: 8.5, fontFamily: 'Poppins-Bold', color: colors.brand, letterSpacing: 0.8 }} numberOfLines={1}>
+                              <Text style={{ ...T.microStrong, color: colors.brand, letterSpacing: 0.8 }} numberOfLines={1}>
                                 {trip.destination.split(',')[0].toUpperCase()}
                               </Text>
-                              <Text style={{ fontSize: 12.5, fontFamily: 'Poppins-Bold', color: colors.text, marginVertical: 2 }} numberOfLines={1}>
+                              <Text style={{ ...T.label, color: colors.text, marginVertical: 2 }} numberOfLines={1}>
                                 {trip.title}
                               </Text>
-                              <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>
+                              <Text style={{ ...T.micro, color: colors.textMuted }}>
                                 {new Date(trip.endDate || trip.startDate).getFullYear()} • {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
                               </Text>
 
                               {itinCount > 0 && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
                                   <Ionicons name="location-outline" size={10} color={colors.textSecondary} />
-                                  <Text style={{ fontSize: 9, fontFamily: 'Poppins-Medium', color: colors.textSecondary }} numberOfLines={1}>
+                                  <Text style={{ ...T.micro, color: colors.textSecondary }} numberOfLines={1}>
                                     {itinCount} itinerary {itinCount === 1 ? 'stop' : 'stops'}
                                   </Text>
                                 </View>
@@ -1149,7 +1167,7 @@ export default function ExploreScreen() {
 
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                  <Text style={{ fontSize: 9.5, fontFamily: 'Poppins-Bold', color: colors.brand }}>Open Memory</Text>
+                                  <Text style={{ ...T.microStrong, color: colors.brand }}>Open Memory</Text>
                                   <Ionicons name="chevron-forward" size={10} color={colors.brand} />
                                 </View>
 
@@ -1158,7 +1176,7 @@ export default function ExploreScreen() {
                                     onPress={async (e) => {
                                       e.stopPropagation();
                                       const { error } = await shareTrip(trip);
-                                      if (error) Alert.alert('Could not share trip', error);
+                                      if (error) notify(error, 'error');
                                     }}
                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     style={{ padding: 2 }}
@@ -1180,7 +1198,7 @@ export default function ExploreScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
-                          <Text style={{ fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
+                          <Text style={{ ...T.label, color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
                             Collection Map & Footprints
                           </Text>
                         </View>
@@ -1188,7 +1206,7 @@ export default function ExploreScreen() {
                           onPress={() => setViewType('map')}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
                         >
-                          <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.brand }}>View Map</Text>
+                          <Text style={{ ...T.overline, color: colors.brand }}>View Map</Text>
                           <Ionicons name="chevron-forward" size={12} color={colors.brand} />
                         </TouchableOpacity>
                       </View>
@@ -1238,17 +1256,17 @@ export default function ExploreScreen() {
                                     }}
                                   >
                                     <Ionicons name="images-outline" size={10} color="#FFFFFF" />
-                                    <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Poppins-Bold' }}>
+                                    <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
                                       {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
                                     </Text>
                                   </View>
                                 </ImageBackground>
                               </View>
                               <View style={{ padding: 12 }}>
-                                <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13 }} numberOfLines={1}>
+                                <Text style={{ color: colors.text, ...T.emphasis }} numberOfLines={1}>
                                   {item.name}
                                 </Text>
-                                <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                                <Text style={{ color: colors.textSecondary, ...T.micro, marginTop: 2 }} numberOfLines={1}>
                                   {item.region} Region
                                 </Text>
                               </View>
@@ -1261,29 +1279,20 @@ export default function ExploreScreen() {
                 </>
               ) : (
                 /* Empty Scrapbook */
-                <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
-                  <Ionicons name="images-outline" size={48} color={colors.brand} style={{ marginBottom: 14 }} />
-                  <Text style={{ fontSize: 17, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 6 }}>
-                    Your Travel Scrapbook
-                  </Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 18, marginBottom: 20, maxWidth: 300 }}>
-                    When an organizer marks a trip as finished, the journey and all its itinerary spots automatically move to your Albums and light up on your Collection Map!
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => router.push('/trips')}
-                    style={{ backgroundColor: colors.brand, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14 }}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontFamily: 'Poppins-Bold' }}>View My Journeys</Text>
-                  </TouchableOpacity>
-                </View>
+                <EmptyState
+                  icon="images-outline"
+                  title="No albums yet"
+                  description="When an organizer marks a trip finished, it moves here and lights up on your collection map."
+                  action={{ label: 'Go to your trips', onPress: () => router.push('/trips') }}
+                />
               )}
             </ScrollView>
           ) : (
             /* ── Wishlist Tab ── */
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 160 }}>
               <View style={{ marginTop: 10, marginBottom: 20 }}>
-                <Text style={{ fontSize: 30, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>My Wishlist</Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 2 }}>Your saved spots and destinations for future travels</Text>
+                <Text style={{ ...T.largeTitle, fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Wishlist</Text>
+                <Text style={{ ...T.subhead, color: colors.textMuted, marginTop: 2 }}>Your saved spots and destinations for future travels</Text>
               </View>
               {wishlistDests.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
@@ -1315,7 +1324,7 @@ export default function ExploreScreen() {
                             setSelectedMuniId(item.municipalityId ?? null);
                             setViewType('province-detail');
                           } else {
-                            Alert.alert(item.name, 'This saved spot can be explored from the Home tab.');
+                            notify('This saved spot can be explored from the Home tab.', 'info');
                           }
                         }}
                       >
@@ -1332,7 +1341,7 @@ export default function ExploreScreen() {
                               backgroundColor: 'rgba(0,0,0,0.6)',
                               paddingHorizontal: 8,
                               paddingVertical: 3,
-                              borderRadius: 10,
+                              borderRadius: 12,
                               flexDirection: 'row',
                               alignItems: 'center',
                               gap: 2,
@@ -1340,7 +1349,7 @@ export default function ExploreScreen() {
                             }}
                           >
                             <Ionicons name="star" size={10} color={GOLD} />
-                            <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontFamily: 'Poppins-Bold' }}>
+                            <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
                               {parseFloat(String(item.rating)).toFixed(1)}
                             </Text>
                           </View>
@@ -1365,14 +1374,14 @@ export default function ExploreScreen() {
                             toggleDestSaved(item.id);
                           }}
                         >
-                          <Ionicons name="heart" size={16} color="#EF4444" />
+                          <Ionicons name="heart" size={16} color={colors.danger} />
                         </TouchableOpacity>
 
                         <View style={{ padding: 12 }}>
-                          <Text style={{ color: colors.text, fontFamily: 'Poppins-Bold', fontSize: 13, textAlign: 'left' }} numberOfLines={1}>
+                          <Text style={{ color: colors.text, ...T.emphasis, textAlign: 'left' }} numberOfLines={1}>
                             {item.name}
                           </Text>
-                          <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                          <Text style={{ color: colors.textSecondary, ...T.micro, marginTop: 2 }} numberOfLines={1}>
                             {(item.bestTime || 'Year-round').split('–')[0]} Season
                           </Text>
                         </View>
@@ -1381,19 +1390,12 @@ export default function ExploreScreen() {
                   })}
                 </View>
               ) : (
-                <View style={{ flex: 1, paddingVertical: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
-                  <Ionicons name="bookmark-outline" size={40} color={colors.textMuted} style={{ marginBottom: 12 }} />
-                  <Text style={{ fontSize: 15, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', marginBottom: 4 }}>Wishlist is Empty</Text>
-                  <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', lineHeight: 16, marginBottom: 18 }}>
-                    Your saved destinations will appear here so you can easily plan trips for them later.
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => { router.push('/'); }}
-                    style={{ backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold' }}>Browse Tourist Spots</Text>
-                  </TouchableOpacity>
-                </View>
+                <EmptyState
+                  icon="bookmark-outline"
+                  title="No saved spots yet"
+                  description="Spots you save will appear here, ready to drop into a trip."
+                  action={{ label: 'Browse destinations', onPress: () => router.navigate('/(tabs)') }}
+                />
               )}
             </ScrollView>
           )}
@@ -1647,7 +1649,7 @@ export default function ExploreScreen() {
                         onPress={async () => {
                           const msg = buildAlbumShareMessage(completedTripAlbums.length, visitedProvincesList.length, log.visitedDestinations.length);
                           const { error } = await shareToFacebook(msg);
-                          if (error) Alert.alert('Facebook Share', error);
+                          if (error) notify(error, 'error');
                         }}
                         style={[styles.floatingGlassBtn, { backgroundColor: '#1877F2' }]}
                       >
@@ -1694,7 +1696,7 @@ export default function ExploreScreen() {
                   <View style={{ position: 'absolute', bottom: 24, left: 16, right: 16, zIndex: 20 }}>
                     {activeControlTab !== 'none' ? (
                       <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)', padding: 16 }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: 'rgba(255, 255, 255, 0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                        <Text style={{ ...T.microStrong, color: 'rgba(255, 255, 255, 0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
                           {activeControlTab === 'background' ? 'Select Background' : activeControlTab === 'region' ? 'Map Region' : activeControlTab === 'scale' ? 'Map Scale' : activeControlTab === 'color' ? 'Map Accent Color' : activeControlTab === 'style' ? 'Map Overlay Style' : ''}
                         </Text>
 
@@ -1704,15 +1706,15 @@ export default function ExploreScreen() {
                               const isActive = activePresetIdx === idx && !useCustomPhoto;
                               return (
                                 <TouchableOpacity key={preset.name} onPress={() => { setActivePresetIdx(idx); setUseCustomPhoto(false); }}
-                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.25)' }]}>
-                                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: '#FFFFFF' }}>{preset.name}</Text>
+                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: colors.brand, backgroundColor: 'rgba(56,189,248,0.25)' }]}>
+                                  <Text style={{ ...T.label, color: '#FFFFFF' }}>{preset.name}</Text>
                                 </TouchableOpacity>
                               );
                             })}
                             <TouchableOpacity onPress={handleUploadPhoto}
-                              style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', gap: 4 }, useCustomPhoto && { borderColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.25)' }]}>
+                              style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)', flexDirection: 'row', alignItems: 'center', gap: 4 }, useCustomPhoto && { borderColor: colors.brand, backgroundColor: 'rgba(56,189,248,0.25)' }]}>
                               <Ionicons name="image-outline" size={14} color="#FFFFFF" />
-                              <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: '#FFFFFF' }}>
+                              <Text style={{ ...T.label, color: '#FFFFFF' }}>
                                 {customImageUri ? 'Custom Photo' : 'Upload Photo'}
                               </Text>
                             </TouchableOpacity>
@@ -1725,8 +1727,8 @@ export default function ExploreScreen() {
                               const isActive = exportRegion === region;
                               return (
                                 <TouchableOpacity key={region} onPress={() => setExportRegion(region)}
-                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.25)' }]}>
-                                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: '#FFFFFF' }}>{region}</Text>
+                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: colors.brand, backgroundColor: 'rgba(56,189,248,0.25)' }]}>
+                                  <Text style={{ ...T.label, color: '#FFFFFF' }}>{region}</Text>
                                 </TouchableOpacity>
                               );
                             })}
@@ -1739,8 +1741,8 @@ export default function ExploreScreen() {
                               const isActive = exportScale === scale;
                               return (
                                 <TouchableOpacity key={scale} onPress={() => setExportScale(scale)}
-                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.25)' }]}>
-                                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: '#FFFFFF' }}>{scale.toFixed(2)}x</Text>
+                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: colors.brand, backgroundColor: 'rgba(56,189,248,0.25)' }]}>
+                                  <Text style={{ ...T.label, color: '#FFFFFF' }}>{scale.toFixed(2)}x</Text>
                                 </TouchableOpacity>
                               );
                             })}
@@ -1778,8 +1780,8 @@ export default function ExploreScreen() {
                               const isActive = mapStyleIdx === idx;
                               return (
                                 <TouchableOpacity key={style.name} onPress={() => setMapStyleIdx(idx)}
-                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: '#38BDF8', backgroundColor: 'rgba(56,189,248,0.25)' }]}>
-                                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-SemiBold', color: '#FFFFFF' }}>{style.name}</Text>
+                                  style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }, isActive && { borderColor: colors.brand, backgroundColor: 'rgba(56,189,248,0.25)' }]}>
+                                  <Text style={{ ...T.label, color: '#FFFFFF' }}>{style.name}</Text>
                                 </TouchableOpacity>
                               );
                             })}
@@ -1787,8 +1789,8 @@ export default function ExploreScreen() {
                         )}
                       </View>
                     ) : (
-                      <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 14, alignSelf: 'center' }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center' }}>
+                      <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 14, alignSelf: 'center' }}>
+                        <Text style={{ ...T.micro, color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center' }}>
                           Drag map to reposition • Tap side tools to edit
                         </Text>
                       </View>
@@ -1835,7 +1837,7 @@ export default function ExploreScreen() {
                 >
                   <Ionicons name="chevron-back" size={20} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text, textAlign: 'center', flex: 1, marginRight: 36 }}>
+                <Text style={{ ...T.titleSm, color: colors.text, textAlign: 'center', flex: 1, marginRight: 36 }}>
                   {CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name || 'Province'} Memories
                 </Text>
               </View>
@@ -1845,10 +1847,10 @@ export default function ExploreScreen() {
                 showsVerticalScrollIndicator={false} 
                 contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
               >
-                <Text style={{ fontSize: 24, fontFamily: 'Poppins-Bold', color: colors.text, marginBottom: 4 }}>
+                <Text style={{ ...T.display, color: colors.text, marginBottom: 4 }}>
                   Footprints Logged
                 </Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginBottom: 20 }}>
+                <Text style={{ ...T.subhead, color: colors.textMuted, marginBottom: 20 }}>
                   Your collection of stamps and captured memories in this province.
                 </Text>
 
@@ -1879,7 +1881,7 @@ export default function ExploreScreen() {
                             position: 'absolute',
                             top: 12,
                             left: 12,
-                            backgroundColor: '#38BDF8', // CRIMSON_WAX stamp color
+                            backgroundColor: colors.brand, // CRIMSON_WAX stamp color
                             width: 32,
                             height: 32,
                             borderRadius: 16,
@@ -1895,12 +1897,12 @@ export default function ExploreScreen() {
 
                           {/* Title Overlay */}
                           <View style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
-                            <Text style={{ color: '#FFFFFF', fontSize: 18, fontFamily: 'Poppins-Bold' }}>
+                            <Text style={{ color: '#FFFFFF', ...T.title }}>
                               {dest.name}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                               <Ionicons name="location-sharp" size={12} color={colors.brand} />
-                              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: 'Poppins-Medium' }}>
+                              <Text style={{ color: 'rgba(255,255,255,0.85)', ...T.caption }}>
                                 {dest.address || (CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name ?? 'Philippines') + ', PH'}
                               </Text>
                             </View>
@@ -1909,10 +1911,10 @@ export default function ExploreScreen() {
 
                         <View style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={{ fontSize: 11, fontFamily: 'Poppins-Bold', color: colors.textSecondary }}>
+                            <Text style={{ ...T.overline, color: colors.textSecondary }}>
                               PASSPORT FOOTPRINT LOGGED
                             </Text>
-                            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>
+                            <Text style={{ ...T.micro, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>
                               Verified stamps & memories archived
                             </Text>
                           </View>
@@ -1920,13 +1922,13 @@ export default function ExploreScreen() {
                             backgroundColor: colors.brandLight,
                             paddingHorizontal: 10,
                             paddingVertical: 5,
-                            borderRadius: 10,
+                            borderRadius: 12,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 4
                           }}>
                             <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
-                            <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>EXPLORED</Text>
+                            <Text style={{ ...T.microStrong, color: colors.brand }}>EXPLORED</Text>
                           </View>
                         </View>
                       </View>
@@ -1935,10 +1937,10 @@ export default function ExploreScreen() {
                 ) : (
                   <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                     <Ionicons name="images-outline" size={48} color={colors.textMuted} />
-                    <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.textSecondary, marginTop: 12 }}>
+                    <Text style={{ ...T.bodyStrong, color: colors.textSecondary, marginTop: 12 }}>
                       No Spots Visited
                     </Text>
-                    <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
+                    <Text style={{ ...T.caption, color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
                       Start checking in at destinations to generate album memories.
                     </Text>
                   </View>
@@ -1959,113 +1961,112 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
   headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
-  appName: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', letterSpacing: -0.5 },
-  headerCollectionLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  emptyContainer: { padding: 16, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: GOLD },
-  emptyHeroTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', textAlign: 'center', marginBottom: 8 },
-  emptyHeroSub: { fontSize: 12, fontFamily: 'Poppins-Regular', textAlign: 'center', lineHeight: 18, marginBottom: 16 },
-  emptyCtaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 14 },
-  emptyCtaButtonText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-Bold' },
+  appName: { ...T.title, letterSpacing: -0.5 },
+  headerCollectionLabel: { ...T.label, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  emptyHeroTitle: { ...T.title, textAlign: 'center', marginBottom: 8 },
+  emptyHeroSub: { ...T.footnote, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
+  emptyCtaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 16 },
+  emptyCtaButtonText: { color: '#FFFFFF', ...T.label },
   dashboardContainer: { padding: 16 },
   profileHeaderCard: { borderRadius: 24, borderWidth: 1, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   profileHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  profileTitleText: { fontSize: 22, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', letterSpacing: -0.8 },
-  profileSubText: { fontSize: 12, fontFamily: 'Poppins-Medium', marginTop: 4 },
+  profileTitleText: { ...T.display, fontWeight: '800', letterSpacing: -0.8 },
+  profileSubText: { ...T.label, marginTop: 4 },
   circularGaugeContainer: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
   gaugeInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  gaugePercent: { fontSize: 16, fontFamily: 'Poppins-ExtraBold', fontWeight: '800' },
-  gaugeLabel: { fontSize: 7, fontFamily: 'Poppins-Bold', fontWeight: '700', letterSpacing: 0.5 },
+  gaugePercent: { ...T.titleSm, fontWeight: '800' },
+  gaugeLabel: { ...T.microStrong, fontWeight: '700', letterSpacing: 0.5 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  statBox: { flex: 1, borderRadius: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
-  statValue: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '800' },
-  statLabelText: { fontSize: 10, fontFamily: 'Poppins-Bold', fontWeight: '700', marginTop: 2 },
+  statBox: { flex: 1, borderRadius: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  statValue: { ...T.titleSm, fontWeight: '800' },
+  statLabelText: { ...T.microStrong, fontWeight: '700', marginTop: 2 },
   actionPillsRow: { flexDirection: 'row', gap: 8 },
   actionPillBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
-  actionPillBtnText: { fontSize: 11, fontFamily: 'Poppins-Bold', fontWeight: '700', marginLeft: 5 },
+  actionPillBtnText: { ...T.overline, fontWeight: '700', marginLeft: 5 },
   segmentContainer: { paddingHorizontal: 16, marginBottom: 14 },
-  segmentedSelector: { flexDirection: 'row', padding: 4, borderRadius: 14, gap: 4 },
-  segmentBtn: { flex: 1, flexDirection: 'row', paddingVertical: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  segmentedSelector: { flexDirection: 'row', padding: 4, borderRadius: 16, gap: 4 },
+  segmentBtn: { flex: 1, flexDirection: 'row', paddingVertical: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   segmentBtnActive: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  segmentBtnText: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '700' },
+  segmentBtnText: { ...T.label, fontWeight: '700' },
   filtersBlock: { paddingHorizontal: 16, marginBottom: 16, gap: 10 },
   filterPillsRow: { gap: 6 },
-  filterPill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: 'transparent', backgroundColor: 'rgba(0,0,0,0.03)' },
+  filterPill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: 'transparent', backgroundColor: 'rgba(0,0,0,0.03)' },
   filterPillActive: { borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0)' },
-  filterPillText: { fontSize: 11, fontFamily: 'Poppins-Bold', fontWeight: '700' },
+  filterPillText: { ...T.overline, fontWeight: '700' },
   searchBarContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, gap: 8, marginTop: 4 },
-  searchInputText: { flex: 1, fontSize: 12, fontFamily: 'Poppins-Medium', padding: 0 },
+  searchInputText: { flex: 1, ...T.label, padding: 0 },
   mapWrapperCard: { alignSelf: 'center', borderRadius: 24, borderWidth: 1, overflow: 'hidden', position: 'relative', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2 },
   floatingMapResetBtn: { position: 'absolute', right: 12, bottom: 12, width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
   provinceGridContainer: { paddingHorizontal: 16 },
   gridContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   collectibleCard: { borderRadius: 4, borderWidth: 1.5, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
   cardImageBg: { height: 90, width: '100%', position: 'relative' },
-  cardStamp: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  cardStamp: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   cardStampExplored: { backgroundColor: CRIMSON_WAX, borderWidth: 1, borderColor: '#FFFFFF' },
   cardStampUnexplored: { backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  cardStampText: { fontSize: 8, fontFamily: 'Poppins-ExtraBold', fontWeight: '900', color: '#FFFFFF' },
+  cardStampText: { ...T.microStrong, fontWeight: '900', color: '#FFFFFF' },
   cardDetails: { padding: 10 },
   cardTitle: { fontSize: 16, fontFamily: 'DMSerifDisplay-Regular', textAlign: 'center' },
-  cardSubTitle: { fontSize: 9, fontFamily: 'Poppins-Medium', marginTop: 3, textAlign: 'center' },
-  noMatchingText: { textAlign: 'center', width: '100%', fontFamily: 'Poppins-Medium', fontSize: 12, marginVertical: 40 },
+  cardSubTitle: { ...T.micro, marginTop: 3, textAlign: 'center' },
+  noMatchingText: { textAlign: 'center', width: '100%', ...T.label, marginVertical: 40 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { height: '65%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottomWidth: 1 },
-  modalTitleText: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', marginLeft: 8, flex: 1 },
+  modalTitleText: { ...T.titleSm, fontWeight: '700', marginLeft: 8, flex: 1 },
   milestonesModalGrid: { paddingTop: 16, paddingBottom: 40, gap: 12 },
   modalMilestoneItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, padding: 12, gap: 12 },
   modalMilestoneIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  modalMilestoneLabel: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  modalMilestoneSub: { fontSize: 10, fontFamily: 'Poppins-Medium', marginTop: 2, lineHeight: 14 },
+  modalMilestoneLabel: { ...T.emphasis, fontWeight: '700' },
+  modalMilestoneSub: { ...T.micro, marginTop: 2, lineHeight: 14 },
   milestoneBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
-  milestoneBadgeText: { fontSize: 8, fontFamily: 'Poppins-ExtraBold', fontWeight: '900' },
+  milestoneBadgeText: { ...T.microStrong, fontWeight: '900' },
   timelineScrollContent: { paddingTop: 20, paddingBottom: 40 },
   timelineEmptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   timelineLineContainer: { position: 'relative', paddingLeft: 24 },
   verticalTimelineLine: { position: 'absolute', left: 4, top: 6, bottom: 6, width: 2 },
   timelineNodeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, position: 'relative' },
   timelineNodeDot: { position: 'absolute', left: -24, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: '#FFFFFF', zIndex: 2 },
-  timelineNodeCard: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1, padding: 10, gap: 10 },
-  timelineNodeCardImg: { width: 50, height: 50, borderRadius: 10 },
+  timelineNodeCard: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, padding: 10, gap: 10 },
+  timelineNodeCardImg: { width: 50, height: 50, borderRadius: 12 },
   timelineNodeCardTextCol: { flex: 1 },
-  timelineNodeCardName: { fontSize: 13, fontFamily: 'Poppins-Bold', fontWeight: '700' },
-  timelineNodeCardTrip: { fontSize: 11, fontFamily: 'Poppins-Medium', marginTop: 1 },
-  timelineNodeCardDate: { fontSize: 9, fontFamily: 'Poppins-Medium', marginTop: 2 },
+  timelineNodeCardName: { ...T.emphasis, fontWeight: '700' },
+  timelineNodeCardTrip: { ...T.caption, marginTop: 1 },
+  timelineNodeCardDate: { ...T.micro, marginTop: 2 },
   celebrationModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   celebrationModalCard: { width: 280, borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
   celebrationSeal: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, borderColor: GOLD, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  celebrationTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700', textAlign: 'center', marginBottom: 4 },
-  celebrationProvName: { fontSize: 22, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', textAlign: 'center', marginBottom: 8 },
-  celebrationSub: { fontSize: 12, fontFamily: 'Poppins-Medium', fontStyle: 'italic', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
+  celebrationTitle: { ...T.titleSm, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
+  celebrationProvName: { ...T.display, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  celebrationSub: { ...T.label, fontStyle: 'italic', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
   celebrationBtnsRow: { flexDirection: 'row', gap: 8 },
   celebrationBtnClose: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
-  celebrationBtnCloseText: { fontSize: 11, fontFamily: 'Poppins-Bold' },
+  celebrationBtnCloseText: { ...T.overline },
   celebrationBtnShare: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
-  celebrationBtnShareText: { color: '#FFFFFF', fontSize: 11, fontFamily: 'Poppins-Bold' },
+  celebrationBtnShareText: { color: '#FFFFFF', ...T.overline },
   shareModalRoot: { flex: 1 },
   shareHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
   shareCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  shareTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', fontWeight: '700' },
+  shareTitle: { ...T.titleSm, fontWeight: '700' },
   shareScrollContent: { paddingVertical: 20, alignItems: 'center' },
   cardContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   shareCard: { width: '100%', flex: 1, overflow: 'hidden', backgroundColor: '#000' },
   cardOverlay: { flex: 1, justifyContent: 'space-between', paddingTop: 52, paddingBottom: 36 },
   shareCardHeader: { alignItems: 'center', marginTop: 10 },
-  shareAppBrand: { fontSize: 20, fontFamily: 'Poppins-ExtraBold', color: '#FFFFFF', letterSpacing: 0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  shareAppQuote: { fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.8)', marginTop: 2, fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  shareAppBrand: { ...T.title, color: '#FFFFFF', letterSpacing: 0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  shareAppQuote: { ...T.micro, color: 'rgba(255,255,255,0.8)', marginTop: 2, fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   shareMapWrapper: { flex: 1, width: '100%' },
   watermarkBadge: { position: 'absolute', left: 0, right: 0, paddingTop: 16, paddingBottom: 16, paddingHorizontal: 20, alignItems: 'center' },
   // Strava-style card branding & stats
   stravaTopBrand: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 20, paddingTop: 4 },
-  stravaBrandName: { fontSize: 16, fontFamily: 'Poppins-ExtraBold', fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  stravaBrandName: { ...T.titleSm, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   stravaBottomStats: { paddingHorizontal: 20, paddingBottom: 8 },
-  stravaCollectionTitle: { fontSize: 22, fontFamily: 'Poppins-ExtraBold', fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  stravaCollectionTitle: { ...T.display, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
   stravaStatsRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginBottom: 10 },
   stravaStatBlock: { alignItems: 'flex-start', flex: 1 },
-  stravaStatNum: { fontSize: 32, fontFamily: 'Poppins-ExtraBold', fontWeight: '900', color: '#FFFFFF', lineHeight: 36, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
-  stravaStatLabel: { fontSize: 9, fontFamily: 'Poppins-Bold', fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: 1.5, marginTop: 1 },
+  stravaStatNum: { ...T.largeTitle, fontWeight: '900', color: '#FFFFFF', lineHeight: 36, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  stravaStatLabel: { ...T.microStrong, fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: 1.5, marginTop: 1 },
   stravaStatDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
-  stravaFooterTag: { fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3, marginTop: 2 },
+  stravaFooterTag: { ...T.micro, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3, marginTop: 2 },
   floatingGlassBtn: {
     width: 42,
     height: 42,
@@ -2081,16 +2082,16 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  watermarkLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  watermarkStats: { fontSize: 9, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.9)', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  watermarkFooter: { fontSize: 9, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', letterSpacing: 0.5 },
+  watermarkLabel: { ...T.label, fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  watermarkStats: { ...T.micro, color: 'rgba(255,255,255,0.9)', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  watermarkFooter: { ...T.micro, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', letterSpacing: 0.5 },
   controlsContainer: { width: '100%', paddingHorizontal: 20 },
-  controlLabel: { fontSize: 10, fontFamily: 'Poppins-Bold', letterSpacing: 1, marginBottom: 10 },
+  controlLabel: { ...T.microStrong, letterSpacing: 1, marginBottom: 10 },
   presetsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  presetBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1 },
-  presetBtnText: { fontSize: 12, fontFamily: 'Poppins-SemiBold', fontWeight: '600' },
-  tipCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 14, borderWidth: 1, marginTop: 4 },
-  tipText: { flex: 1, fontSize: 12, fontFamily: 'Poppins-Medium', lineHeight: 16 },
+  presetBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
+  presetBtnText: { ...T.label, fontWeight: '600' },
+  tipCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 4 },
+  tipText: { flex: 1, ...T.label, lineHeight: 16 },
 
   // Floating Overlay Panels
   floatingTopPanel: {
@@ -2108,7 +2109,7 @@ const styles = StyleSheet.create({
   floatingFilterPill: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   floatingBottomPanel: {
@@ -2138,14 +2139,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detailTitle: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
   detailSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
+    ...T.emphasis,
     marginTop: 2,
   },
   detailHeaderActions: {
@@ -2163,8 +2162,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   detailSectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
     letterSpacing: 1,
     marginBottom: 12,
@@ -2189,20 +2187,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 12,
     zIndex: 10,
   },
   ratingBadgeText: {
     color: '#FFFFFF',
-    fontSize: 9.5,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
   },
   gemHeartBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
     backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 18,
+    borderRadius: 20,
     minWidth: 36,
     minHeight: 36,
     alignItems: 'center',
@@ -2235,13 +2232,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   destCardRatingText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
   },
   destCardAddress: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     marginTop: 4,
   },
   destCardTags: {
@@ -2256,8 +2251,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   destCardTagText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.microStrong,
     fontWeight: '600',
   },
   destCardActions: {
@@ -2270,7 +2264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'transparent',
     paddingVertical: 8,
@@ -2279,8 +2273,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   destCardPillText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
   },
   toggle: {
@@ -2293,8 +2286,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   toggleText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
   stampCard: {
@@ -2324,34 +2316,29 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-12deg' }],
   },
   stampSealText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.microStrong,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   stampStatusTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   stampStatusSub: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
   },
   dividerLine: {
     borderBottomWidth: 1,
     marginVertical: 14,
   },
   statNum: {
-    fontSize: 20,
-    fontFamily: 'Poppins-Bold',
+    ...T.title,
     fontWeight: '800',
   },
   statLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     marginTop: 2,
   },
   unexploredCard: {
@@ -2365,14 +2352,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   unexploredTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '700',
     marginBottom: 6,
   },
   unexploredText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 16,
@@ -2386,8 +2371,7 @@ const styles = StyleSheet.create({
   },
   planButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
   },
   muniScroll: {
@@ -2396,15 +2380,14 @@ const styles = StyleSheet.create({
   muniChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 6,
     paddingHorizontal: 10,
     marginRight: 6,
   },
   muniChipText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.caption,
     fontWeight: '600',
   },
   cardTapeTopCenter: {

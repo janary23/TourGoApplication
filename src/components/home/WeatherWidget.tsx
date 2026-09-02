@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { type as T } from '../ui/tokens';
+import { fetchLiveTripForecast, type RealTripForecast } from '../../services/weatherService';
 
 interface WeatherWidgetProps {
   upcomingTrips: any[];
@@ -28,6 +30,44 @@ interface CityWeather {
   }>;
 }
 
+function toCityWeather(f: RealTripForecast): CityWeather {
+  const condLower = f.currentCondition.toLowerCase();
+  const condition = condLower.includes('rain') || condLower.includes('storm') ? 'rainy' : (condLower.includes('sunny') ? 'sunny' : 'cloudy');
+  return {
+    city: f.destinationName,
+    temp: f.currentTemp,
+    condition,
+    conditionText: f.currentCondition,
+    icon: f.currentIcon,
+    humidity: f.currentHumidity,
+    windSpeed: f.currentWindKph,
+    uvIndex: f.currentTemp >= 31 ? 'Very High' : (f.currentTemp >= 28 ? 'High' : 'Moderate'),
+    forecast: f.days.slice(0, 5).map((d) => {
+      const dCond = d.condition.toLowerCase();
+      const c = d.isRainy || dCond.includes('rain') || dCond.includes('storm') ? 'rainy' : (dCond.includes('sunny') ? 'sunny' : 'cloudy');
+      return {
+        day: d.shortDay.slice(0, 3),
+        tempMin: d.tempLow,
+        tempMax: d.tempHigh,
+        condition: c,
+        icon: d.icon,
+      };
+    }),
+  };
+}
+
+/**
+ * Weather is one of the few places colour genuinely encodes meaning rather than
+ * hierarchy, so it keeps a small palette of its own — defined once here instead
+ * of being retyped (with two different oranges) at each icon.
+ */
+const WEATHER_COLOR = {
+  sunny: '#F5A524',
+  rainy: '#3B82F6',
+  stormy: '#3B82F6',
+  cloudy: '#9CA3AF',
+} as const;
+
 export default function WeatherWidget({
   upcomingTrips,
   homeCityName,
@@ -36,6 +76,20 @@ export default function WeatherWidget({
 }: WeatherWidgetProps) {
   const [isWeatherExpanded, setIsWeatherExpanded] = useState(false);
   const [weatherTab, setWeatherTab] = useState<'home' | 'trip'>('trip');
+  const [liveHomeWeather, setLiveHomeWeather] = useState<CityWeather | null>(null);
+  const [liveTripWeather, setLiveTripWeather] = useState<CityWeather | null>(null);
+
+  useEffect(() => {
+    fetchLiveTripForecast(homeCityName || 'Manila')
+      .then((res) => setLiveHomeWeather(toCityWeather(res)))
+      .catch(() => {});
+
+    if (upcomingTrips[0]?.destination) {
+      fetchLiveTripForecast(upcomingTrips[0].destination)
+        .then((res) => setLiveTripWeather(toCityWeather(res)))
+        .catch(() => {});
+    }
+  }, [homeCityName, upcomingTrips[0]?.destination]);
 
   const getWeatherDataForCity = (cityName: string): CityWeather => {
     const norm = cityName.toLowerCase();
@@ -110,31 +164,35 @@ export default function WeatherWidget({
         { day: 'Tue', tempMin: 25, tempMax: 30, condition: 'sunny', icon: 'sunny-outline' },
         { day: 'Wed', tempMin: 25, tempMax: 30, condition: 'sunny', icon: 'partly-sunny-outline' },
         { day: 'Thu', tempMin: 24, tempMax: 29, condition: 'cloudy', icon: 'cloudy-outline' },
-        { day: 'Fri', tempMin: 25, tempMax: 30, condition: 'rainy', icon: 'rain-outline' },
+        { day: 'Fri', tempMin: 25, tempMax: 30, condition: 'rainy', icon: 'rainy-outline' },
       ]
     };
   };
+
+  const tripDestName = upcomingTrips[0] ? upcomingTrips[0].destination : "El Nido, Palawan";
+
+  const homeData = liveHomeWeather || getWeatherDataForCity(homeCityName || "Manila");
+  const tripData = liveTripWeather || getWeatherDataForCity(tripDestName);
 
   const getContextualWeather = () => {
     const nextTrip = upcomingTrips[0];
     if (nextTrip) {
       return {
         label: "Trip weather",
-        data: getWeatherDataForCity(nextTrip.destination)
+        data: tripData,
       };
     }
     return {
       label: "Home weather",
-      data: getWeatherDataForCity(homeCityName || "Manila")
+      data: homeData,
     };
   };
 
   const contextualWeather = getContextualWeather();
-  const tripDestName = upcomingTrips[0] ? upcomingTrips[0].destination : "El Nido, Palawan";
 
   const weatherData: Record<'home' | 'trip', CityWeather> = {
-    home: getWeatherDataForCity(homeCityName || "Manila"),
-    trip: getWeatherDataForCity(tripDestName)
+    home: homeData,
+    trip: tripData,
   };
 
   const activeWeather = weatherData[weatherTab];
@@ -157,7 +215,7 @@ export default function WeatherWidget({
           <Ionicons
             name={contextualWeather.data.icon as any}
             size={16}
-            color={contextualWeather.data.condition === 'sunny' ? '#FFA500' : (contextualWeather.data.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+            color={contextualWeather.data.condition === 'sunny' ? WEATHER_COLOR.sunny : (contextualWeather.data.condition === 'rainy' ? WEATHER_COLOR.rainy : WEATHER_COLOR.cloudy)}
           />
         </View>
 
@@ -238,19 +296,19 @@ export default function WeatherWidget({
             <View style={[styles.weatherMainCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
               <View style={styles.weatherMainInfo}>
                 <Text style={[styles.weatherCityName, { color: colors.text }]} numberOfLines={1}>
-                  {activeWeather.city}
+                  {activeWeather?.city || 'Weather'}
                 </Text>
                 <Text style={[styles.weatherMainCondText, { color: colors.textSecondary }]}>
-                  {activeWeather.conditionText}
+                  {activeWeather?.conditionText || 'Forecast'}
                 </Text>
                 <Text style={[styles.weatherMainTempText, { color: colors.text }]}>
-                  {activeWeather.temp}°C
+                  {activeWeather?.temp ?? 28}°C
                 </Text>
               </View>
               <Ionicons
-                name={activeWeather.icon as any}
+                name={(activeWeather?.icon || 'partly-sunny-outline') as any}
                 size={50}
-                color={activeWeather.condition === 'sunny' ? '#FF9F1C' : (activeWeather.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+                color={activeWeather?.condition === 'sunny' ? WEATHER_COLOR.sunny : (activeWeather?.condition === 'rainy' ? WEATHER_COLOR.rainy : WEATHER_COLOR.cloudy)}
                 style={styles.weatherMainIcon}
               />
             </View>
@@ -258,18 +316,18 @@ export default function WeatherWidget({
             {/* Metrics */}
             <View style={styles.weatherMetricsContainer}>
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                <Ionicons name="water-outline" size={16} color="#3B82F6" />
-                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.humidity}%</Text>
+                <Ionicons name="water-outline" size={16} color={WEATHER_COLOR.rainy} />
+                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather?.humidity ?? 75}%</Text>
                 <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>Humidity</Text>
               </View>
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                <Ionicons name="sunny-outline" size={16} color="#FF9F1C" />
-                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.uvIndex}</Text>
+                <Ionicons name="sunny-outline" size={16} color={WEATHER_COLOR.sunny} />
+                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather?.uvIndex || 'Moderate'}</Text>
                 <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>UV Index</Text>
               </View>
               <View style={[styles.weatherMetricItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                <Ionicons name="thunderstorm-outline" size={16} color="#38BDF8" />
-                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather.windSpeed} km/h</Text>
+                <Ionicons name="thunderstorm-outline" size={16} color={WEATHER_COLOR.stormy} />
+                <Text style={[styles.weatherMetricVal, { color: colors.text }]}>{activeWeather?.windSpeed ?? 12} km/h</Text>
                 <Text style={[styles.weatherMetricLabel, { color: colors.textMuted }]}>Wind</Text>
               </View>
             </View>
@@ -277,14 +335,14 @@ export default function WeatherWidget({
             {/* 5-Day Forecast */}
             <Text style={[styles.forecastHeaderTitle, { color: colors.text }]}>5-Day Forecast</Text>
             <ScrollView contentContainerStyle={styles.forecastList} showsVerticalScrollIndicator={false}>
-              {activeWeather.forecast.map((fc, idx) => (
+              {(activeWeather?.forecast || []).map((fc, idx) => (
                 <View key={idx} style={styles.forecastRow}>
                   <Text style={[styles.forecastDayName, { color: colors.text }]}>{fc.day}</Text>
                   <View style={styles.forecastMidSection}>
                     <Ionicons
                       name={fc.icon as any}
                       size={16}
-                      color={fc.condition === 'sunny' ? '#FF9F1C' : (fc.condition === 'rainy' ? '#3B82F6' : '#9CA3AF')}
+                      color={fc.condition === 'sunny' ? WEATHER_COLOR.sunny : (fc.condition === 'rainy' ? WEATHER_COLOR.rainy : WEATHER_COLOR.cloudy)}
                       style={{ marginRight: 8 }}
                     />
                     <Text style={[styles.forecastCondText, { color: colors.textSecondary }]}>{fc.condition}</Text>
@@ -324,8 +382,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   weatherLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
     letterSpacing: 0.2,
   },
   weatherTempContainer: {
@@ -333,18 +390,15 @@ const styles = StyleSheet.create({
   },
   // Hero stat
   weatherTemp: {
-    fontSize: 28,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.display,
     lineHeight: 32,
   },
   weatherCondText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     marginTop: 1,
   },
   weatherLocation: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
   },
   modalBackdrop: {
     flex: 1,
@@ -369,8 +423,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   expandedTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.title,
     letterSpacing: -0.2,
   },
   weatherTabContainer: {
@@ -384,11 +437,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 9,
+    borderRadius: 8,
   },
   weatherTabBtnText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.label,
   },
   weatherMainCard: {
     flexDirection: 'row',
@@ -403,18 +455,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weatherCityName: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.title,
   },
   weatherMainCondText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
+    ...T.subhead,
     marginTop: 2,
     marginBottom: 6,
   },
   weatherMainTempText: {
-    fontSize: 28,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.display,
   },
   weatherMainIcon: {
     marginLeft: 12,
@@ -433,18 +482,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   weatherMetricVal: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.emphasis,
     marginTop: 5,
   },
   weatherMetricLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Regular',
+    ...T.micro,
     marginTop: 2,
   },
   forecastHeaderTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     marginBottom: 12,
   },
   forecastList: {
@@ -458,8 +504,7 @@ const styles = StyleSheet.create({
   },
   forecastDayName: {
     width: 36,
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
   },
   forecastMidSection: {
     flexDirection: 'row',
@@ -468,8 +513,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   forecastCondText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
   },
   forecastTempRange: {
     flexDirection: 'row',
@@ -477,8 +521,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   forecastTempText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
   },
   forecastTempBarTrack: {
     width: 44,

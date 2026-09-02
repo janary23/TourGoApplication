@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   StyleSheet, View, Text, ScrollView, Image, TouchableOpacity,
-  ActivityIndicator, Alert, Animated, Easing,
+  ActivityIndicator, Animated, Easing, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,12 +23,15 @@ import {
   currentDayIndex,
   type Adjustment,
 } from "../../services/tripProgress";
-import {
-  Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card,
-  Button, IconButton, Badge, Avatar, ProgressBar, EmptyState,
-} from "../ui/primitives";
+import { Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card, Button, IconButton, Badge, Avatar, ProgressBar, EmptyState, InlineEmpty } from "../ui/primitives";
 import { space, radius, hairline, type as T, stateColor, stripEmoji } from "../ui/tokens";
 import { useTheme } from "../../context/ThemeContext";
+import { confirmAction, notify } from '../ui/Feedback';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 const HERO_HEIGHT = 336;
 const STACK_MAX = 3;
@@ -81,8 +84,8 @@ const getStopImage = (item: any) => {
 // ── Spring-press feedback on every touch target ──
 function Press({ onPress, style, children, scaleTo = 0.97, disabled = false }: any) {
   const scale = useRef(new Animated.Value(1)).current;
-  const onPressIn = () => Animated.spring(scale, { toValue: scaleTo, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
-  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 9 }).start();
+  const onPressIn = () => Animated.spring(scale, { toValue: scaleTo, useNativeDriver: NATIVE_DRIVER, speed: 40, bounciness: 6 }).start();
+  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: NATIVE_DRIVER, speed: 30, bounciness: 9 }).start();
   return (
     <Animated.View style={[style, { transform: [{ scale }] }]}>
       <TouchableOpacity activeOpacity={0.9} disabled={disabled} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} style={{ flex: 1 }}>
@@ -110,7 +113,7 @@ export default function TripOverview({
 
   const handleFacebookShare = async () => {
     const { error } = await shareToFacebook(trip);
-    if (error) Alert.alert('Facebook Share', error);
+    if (error) notify(error, 'error');
   };
 
   const runLifecycleAction = async (
@@ -118,22 +121,21 @@ export default function TripOverview({
     confirmTitle: string,
     confirmBody: string
   ) => {
-    Alert.alert(confirmTitle, confirmBody, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm',
-        onPress: async () => {
-          setIsUpdatingStatus(true);
-          try {
-            const { error } = await action();
-            if (error) Alert.alert('Could not update trip', error);
-            else loadTrip();
-          } finally {
-            setIsUpdatingStatus(false);
-          }
-        },
-      },
-    ]);
+    confirmAction({
+        title: confirmTitle,
+        message: confirmBody,
+        confirmLabel: 'Confirm',
+      }).then(async (ok) => {
+        if (!ok) return;
+        setIsUpdatingStatus(true);
+        try {
+          const { error } = await action();
+          if (error) notify(error, 'error');
+          else loadTrip();
+        } finally {
+          setIsUpdatingStatus(false);
+        }
+      });
   };
 
   const handleStartTrip = () =>
@@ -154,7 +156,7 @@ export default function TripOverview({
    *  crew and Trip Code) through the OS share sheet. */
   const handleShareTrip = async () => {
     const { shared, error } = await shareTrip(trip);
-    if (error) Alert.alert('Could not share trip', error);
+    if (error) notify(error, 'error');
     else if (!shared) { /* user dismissed the sheet — nothing to report */ }
   };
 
@@ -189,14 +191,14 @@ export default function TripOverview({
       if (adj.kind === 'reschedule' && adj.newTimes) {
         for (const t of adj.newTimes) {
           const { error } = await dbUpdateItineraryItem(t.id, { time_label: t.time });
-          if (error) { Alert.alert('Could not reschedule', error); return; }
+          if (error) { notify(error, 'error'); return; }
         }
       } else if (adj.kind === 'drop' && adj.stopId) {
         const { error } = await dbDeleteItineraryItem(adj.stopId);
-        if (error) { Alert.alert('Could not remove stop', error); return; }
+        if (error) { notify(error, 'error'); return; }
       } else if (adj.kind === 'move_to_next_day' && adj.stopId && adj.targetDayIndex !== undefined) {
         const { error } = await dbUpdateItineraryItem(adj.stopId, { day_index: adj.targetDayIndex });
-        if (error) { Alert.alert('Could not move stop', error); return; }
+        if (error) { notify(error, 'error'); return; }
       }
       loadTrip();
     } finally {
@@ -205,10 +207,11 @@ export default function TripOverview({
   };
 
   const confirmAdjustment = (adj: Adjustment) => {
-    Alert.alert('Apply this change?', adj.summary, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Apply', onPress: () => applyAdjustment(adj) },
-    ]);
+    confirmAction({
+      title: 'Apply this change?',
+      message: adj.summary,
+      confirmLabel: 'Apply',
+    }).then(ok => { if (ok) applyAdjustment(adj); });
   };
 
 
@@ -228,14 +231,14 @@ export default function TripOverview({
   const prepRatio = totalTasks > 0 ? completedTasks / totalTasks : 0;
 
   useEffect(() => {
-    Animated.timing(enterAnim, { toValue: 1, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(enterAnim, { toValue: 1, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }).start();
   }, []);
 
   useEffect(() => {
     if (tripPhase.phase !== "during") return;
     Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.4, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(pulseAnim, { toValue: 1.4, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(pulseAnim, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: NATIVE_DRIVER }),
     ])).start();
   }, [tripPhase.phase]);
 
@@ -246,10 +249,10 @@ export default function TripOverview({
   const toggleFab = () => {
     const toValue = fabOpen ? 0 : 1;
     Animated.parallel([
-      Animated.spring(fabAnim, { toValue, useNativeDriver: true, tension: 120, friction: 8 }),
+      Animated.spring(fabAnim, { toValue, useNativeDriver: NATIVE_DRIVER, tension: 120, friction: 8 }),
       Animated.sequence([
-        Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
+        Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: NATIVE_DRIVER, easing: Easing.out(Easing.ease) }),
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: NATIVE_DRIVER, tension: 200, friction: 10 }),
       ]),
     ]).start();
     setFabOpen(v => !v);
@@ -333,13 +336,13 @@ export default function TripOverview({
   const doCheckIn = async () => {
     setIsCheckingIn(true);
     const { error } = await dbToggleCheckIn(trip.id, false);
-    if (error) Alert.alert("Error", error); else loadTrip();
+    if (error) notify(error, 'error'); else loadTrip();
     setIsCheckingIn(false);
   };
 
   const openAgilito = () => {
     if (typeof (globalThis as any).openAiChat === 'function') (globalThis as any).openAiChat();
-    else Alert.alert('Agilito Says', mascotMsg());
+    else notify(mascotMsg(), 'info');
   };
 
   const mascotMsg = () => {
@@ -455,7 +458,7 @@ export default function TripOverview({
     if (!activePoll || activePoll.closed) return;
     setVotingOptionId(optionId);
     const { error } = await dbVoteInPoll(optionId);
-    if (error) Alert.alert('Vote failed', error); else loadTrip();
+    if (error) notify(error, 'error'); else loadTrip();
     setVotingOptionId(null);
   };
 
@@ -535,7 +538,7 @@ export default function TripOverview({
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: NATIVE_DRIVER })}
         scrollEventThrottle={16}
       >
         <Animated.View style={{ opacity: enterAnim, transform: [{ translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
@@ -803,12 +806,7 @@ export default function TripOverview({
                   ) : null}
                 </ListGroup>
               ) : (
-                <Press onPress={goToPlan}>
-                  <View style={[styles.emptyRow, { borderColor: colors.cardBorder }]}>
-                    <Ionicons name="add" size={15} color={colors.textMuted} />
-                    <Txt variant="subhead" tone="muted">Plan your first stop</Txt>
-                  </View>
-                </Press>
+                <InlineEmpty icon="add" label="Plan your first stop" onPress={goToPlan} />
               )}
             </Section>
 
@@ -947,12 +945,12 @@ const styles = StyleSheet.create({
   },
   statusGlow: { position: 'absolute', left: 11, width: 12, height: 12, borderRadius: 6, opacity: 0.4 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusTxt: { color: '#fff', fontSize: 11.5, fontFamily: 'Poppins-SemiBold' },
+  statusTxt: { color: '#fff', ...T.label },
   heroIconBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.34)', alignItems: 'center', justifyContent: 'center' },
   heroContent: { position: 'absolute', left: 18, right: 18, bottom: 18 },
-  heroDest: { color: 'rgba(255,255,255,0.72)', fontSize: 11.5, fontFamily: 'Poppins-Bold', letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
-  heroTitle: { color: '#FFFFFF', fontSize: 26, fontFamily: 'Poppins-Bold', lineHeight: 30, letterSpacing: -0.5 },
-  heroMetaTxt: { color: 'rgba(255,255,255,0.82)', fontSize: 12, fontFamily: 'Poppins-Medium' },
+  heroDest: { color: 'rgba(255,255,255,0.72)', ...T.label, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
+  heroTitle: { color: '#FFFFFF', ...T.display, lineHeight: 30, letterSpacing: -0.5 },
+  heroMetaTxt: { color: 'rgba(255,255,255,0.82)', ...T.label },
 
   body: { paddingHorizontal: 16, paddingTop: 18 },
 
@@ -1010,16 +1008,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: space.sm,
   },
-  emptyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-    paddingVertical: space.xl,
-    borderRadius: radius.lg,
-    borderWidth: hairline,
-    borderStyle: 'dashed',
-  },
   pollOpt: {
     borderRadius: radius.md,
     borderWidth: hairline,
@@ -1041,7 +1029,7 @@ const styles = StyleSheet.create({
   agilitoAvatar: { width: 44, height: 44, resizeMode: 'contain' },
   atActionRow: { position: 'absolute', bottom: 24, right: 16, zIndex: 900, flexDirection: 'row', alignItems: 'center', gap: 10 },
   atLabel: {
-    fontSize: 11.5, fontFamily: 'Poppins-SemiBold', paddingHorizontal: 11, paddingVertical: 6, borderRadius: 11, overflow: 'hidden',
+    ...T.label, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 12, overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 3,
   },
   facebookShareBtn: {
@@ -1055,7 +1043,6 @@ const styles = StyleSheet.create({
   },
   facebookShareText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
   },
 });

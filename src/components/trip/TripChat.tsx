@@ -1,7 +1,16 @@
 import React, { useState, useRef, useMemo } from 'react';
 import {
-  StyleSheet, View, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform,
-  Image, Alert, Modal, Pressable, ActivityIndicator,
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+  Modal,
+  Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { sendChatMessage as dbSendChat, uploadTripImage } from '../../services/tripService';
@@ -12,6 +21,7 @@ import {
   Txt, Press, EmptyState, Sheet, Loading, Avatar, IconButton,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T } from '../ui/tokens';
+import { notify } from '../ui/Feedback';
 
 interface TripChatProps {
   trip: any;
@@ -69,7 +79,7 @@ export default function TripChat({
   const handlePickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Photos needed', 'Allow photo access to share images in chat.');
+      notify('Photos needed. Allow photo access to share images in chat.', 'info');
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -100,7 +110,7 @@ export default function TripChat({
           // Restore the draft so nothing the user typed or picked is lost.
           setDraft(keptText);
           setPendingImage(keptImage);
-          Alert.alert('Could not upload image', upErr || 'Try again.');
+          notify(upErr || 'Try again.', 'error');
           return;
         }
         imageUrl = url;

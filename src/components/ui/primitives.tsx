@@ -10,12 +10,17 @@ import React, { ReactNode, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable, Animated, StyleSheet,
   TextInput, ScrollView, ActivityIndicator, Modal, ViewStyle, TextStyle,
-  KeyboardAvoidingView, Platform, StyleProp,
+  KeyboardAvoidingView, Platform, StyleProp, Switch, Image, ImageSourcePropType,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { space, radius, type as T, hairline, shadow, motion, stateColor } from './tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -76,19 +81,25 @@ interface PressProps {
   onPress?: () => void;
   onLongPress?: () => void;
   disabled?: boolean;
+  /** Applied to the animated box, so it scales with the press. */
   style?: StyleProp<ViewStyle>;
+  /**
+   * Applied to the pressable itself. Use for layout — `flex`, `width`, margins —
+   * which has to sit on the outer element or the control won't stretch.
+   */
+  containerStyle?: StyleProp<ViewStyle>;
   scaleTo?: number;
 }
 
 /** Uniform press feedback. Everything tappable uses this. */
 export function Press({
-  children, onPress, onLongPress, disabled, style, scaleTo = motion.pressScale,
+  children, onPress, onLongPress, disabled, style, containerStyle, scaleTo = motion.pressScale,
 }: PressProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const to = (v: number) =>
     Animated.spring(scale, {
-      toValue: v, useNativeDriver: true, speed: 45, bounciness: 0,
+      toValue: v, useNativeDriver: NATIVE_DRIVER, speed: 45, bounciness: 0,
     }).start();
 
   return (
@@ -98,6 +109,7 @@ export function Press({
       disabled={disabled || !onPress}
       onPressIn={() => to(scaleTo)}
       onPressOut={() => to(1)}
+      style={containerStyle}
     >
       <Animated.View style={[{ transform: [{ scale }] }, disabled && { opacity: 0.4 }, style]}>
         {children}
@@ -186,6 +198,93 @@ export function Card({ children, style, onPress, padded = true, inset }: CardPro
     </View>
   );
   return onPress ? <Press onPress={onPress}>{body}</Press> : body;
+}
+
+/**
+ * The navigation bar used at the top of a pushed screen.
+ *
+ * Three slots of *equal fixed width* — back, title, actions — so the title is
+ * optically centred no matter what sits beside it. Both trip screens previously
+ * hand-rolled this and both drifted: one packed the row left so the title was
+ * never centred at all, the other gave the right slot 100px for an organizer
+ * and 24px for a member, so the title jumped ~38px depending on your role.
+ *
+ * The slot is sized for the widest case (a back label on one side, two icon
+ * actions on the other). Actions beyond that overflow their slot rather than
+ * pushing the title, which is the correct trade: the title never moves.
+ */
+export function NavBar({
+  onBack, backLabel, eyebrow, title, actions, style,
+}: {
+  onBack?: () => void;
+  backLabel?: string;
+  /** Small context line above the title. */
+  eyebrow?: string;
+  title: string;
+  /** Trailing icon actions, right-aligned. */
+  actions?: { icon: IconName; onPress: () => void; destructive?: boolean; accessibilityLabel?: string }[];
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[
+        styles.navBar,
+        { backgroundColor: colors.card, borderBottomColor: colors.cardBorder },
+        style,
+      ]}
+    >
+      <View style={styles.navSlot}>
+        {!!onBack && (
+          <TouchableOpacity
+            onPress={onBack}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            style={styles.navBack}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.brand} />
+            {!!backLabel && (
+              <Txt variant="emphasis" tone="accent" numberOfLines={1} style={{ fontSize: 14 }}>
+                {backLabel}
+              </Txt>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.navTitle}>
+        {!!eyebrow && (
+          <Txt variant="microStrong" tone="secondary" uppercase numberOfLines={1}
+            style={{ letterSpacing: 0.5 }}>
+            {eyebrow}
+          </Txt>
+        )}
+        <Txt variant="headline" align="center" numberOfLines={1}>{title}</Txt>
+      </View>
+
+      <View style={[styles.navSlot, { alignItems: 'flex-end' }]}>
+        <View style={styles.navActions}>
+          {(actions ?? []).map(a => (
+            <TouchableOpacity
+              key={a.icon}
+              onPress={a.onPress}
+              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={a.accessibilityLabel}
+            >
+              <Ionicons
+                name={a.icon}
+                size={21}
+                color={a.destructive ? colors.danger : colors.brand}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 /** iOS inset-grouped list container. Children are ListRows. */
@@ -354,11 +453,12 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   fullWidth?: boolean;
+  size?: 'sm' | 'md';
   style?: StyleProp<ViewStyle>;
 }
 
 export function Button({
-  label, onPress, variant = 'primary', icon, loading, disabled, fullWidth, style,
+  label, onPress, variant = 'primary', icon, loading, disabled, fullWidth, size = 'md', style,
 }: ButtonProps) {
   const { colors, isDark } = useTheme();
   const sc = stateColor(isDark);
@@ -370,26 +470,34 @@ export function Button({
     destructive: { bg: 'transparent', fg: sc.destructive, border: colors.cardBorder },
   };
   const s = skin[variant];
+  const isSmall = size === 'sm';
 
   return (
-    <Press onPress={onPress} disabled={disabled || loading} style={fullWidth ? { width: '100%' } : undefined}>
+    <Press
+      onPress={onPress}
+      disabled={disabled || loading}
+      // Layout goes on the pressable so a button can share a row (flex: 1);
+      // the visual box inside just fills whatever it's given.
+      containerStyle={[fullWidth ? { width: '100%' } : null, style]}
+    >
       <View
         style={[
           styles.button,
+          isSmall && styles.buttonSmall,
           {
             backgroundColor: s.bg,
             borderColor: s.border,
             borderWidth: s.border === 'transparent' ? 0 : hairline,
+            width: '100%',
           },
-          style,
         ]}
       >
         {loading ? (
           <ActivityIndicator size="small" color={s.fg} />
         ) : (
           <>
-            {!!icon && <Ionicons name={icon} size={16} color={s.fg} />}
-            <Text style={[T.emphasis, { color: s.fg, fontSize: 14 }]}>{label}</Text>
+            {!!icon && <Ionicons name={icon} size={isSmall ? 14 : 16} color={s.fg} />}
+            <Text style={[T.emphasis, { color: s.fg, fontSize: isSmall ? 12 : 14 }]}>{label}</Text>
           </>
         )}
       </View>
@@ -501,37 +609,285 @@ export function Field({
             minHeight: multiline ? 88 : 44,
             textAlignVertical: multiline ? 'top' : 'center',
           },
+          { outlineStyle: 'none' } as any,
         ]}
       />
     </View>
   );
 }
 
-// ── States ───────────────────────────────────────────────────────────────────
-
-export function EmptyState({
-  icon, title, description, action,
+/**
+ * The app's full-featured text input: label, optional leading icon, focus ring,
+ * password reveal, validation error and helper text.
+ *
+ * `Field` above stays as the compact form control used inside sheets. This is
+ * the one to reach for on a standalone form (auth, profile, trip settings) so
+ * those screens stop hand-rolling their own inputs.
+ */
+export function TextField({
+  label, value, onChangeText, placeholder, icon, secure, error, helper,
+  keyboardType, autoCapitalize, autoComplete, returnKeyType, onSubmitEditing,
+  editable = true, style, inputRef,
 }: {
-  icon: IconName; title: string; description?: string;
-  action?: { label: string; onPress: () => void };
+  label?: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  icon?: IconName;
+  secure?: boolean;
+  error?: string;
+  helper?: string;
+  keyboardType?: TextInput['props']['keyboardType'];
+  autoCapitalize?: TextInput['props']['autoCapitalize'];
+  autoComplete?: TextInput['props']['autoComplete'];
+  returnKeyType?: TextInput['props']['returnKeyType'];
+  onSubmitEditing?: () => void;
+  editable?: boolean;
+  style?: StyleProp<ViewStyle>;
+  inputRef?: React.RefObject<TextInput | null>;
 }) {
   const { colors } = useTheme();
+  const [focused, setFocused] = React.useState(false);
+  const [reveal, setReveal] = React.useState(false);
+
+  // Error outranks focus: if the field is wrong, saying so matters more than
+  // saying it is selected.
+  const borderColor = error ? colors.danger : focused ? colors.brand : colors.inputBorder;
+
   return (
-    <View style={styles.empty}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
-        <Ionicons name={icon} size={22} color={colors.textMuted} />
-      </View>
-      <Txt variant="headline" align="center">{title}</Txt>
-      {!!description && (
-        <Txt variant="subhead" tone="muted" align="center" style={{ marginTop: space.xs, maxWidth: 280 }}>
-          {description}
+    <View style={style}>
+      {!!label && (
+        <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          {label}
         </Txt>
       )}
-      {action && (
-        <Button label={action.label} onPress={action.onPress} variant="secondary" style={{ marginTop: space.lg }} />
+
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.md - 2,
+          minHeight: 48,
+          paddingHorizontal: space.md,
+          borderRadius: radius.md,
+          borderWidth: focused || !!error ? 1 : hairline,
+          borderColor,
+          backgroundColor: editable ? colors.inputBg : colors.disabledBg,
+          // A ring rather than a thicker border, so the control does not shift
+          // by a pixel when it gains focus.
+          ...(focused && !error
+            ? {
+              shadowColor: colors.brand,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 0,
+              borderColor: colors.brand,
+            }
+            : null),
+        }}
+      >
+        {!!icon && (
+          <Ionicons
+            name={icon}
+            size={18}
+            color={error ? colors.danger : focused ? colors.brand : colors.textMuted}
+          />
+        )}
+
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry={secure && !reveal}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoComplete={autoComplete}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          editable={editable}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={[
+            T.body,
+            {
+              flex: 1,
+              color: editable ? colors.text : colors.disabledText,
+              paddingVertical: space.md,
+            },
+            // Web only: the field's own border already shows focus and error.
+            { outlineStyle: 'none' } as any,
+          ]}
+        />
+
+        {secure && (
+          <TouchableOpacity
+            onPress={() => setReveal(v => !v)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
+          >
+            <Ionicons
+              name={reveal ? 'eye-off-outline' : 'eye-outline'}
+              size={18}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {(!!error || !!helper) && (
+        <Txt
+          variant="footnote"
+          tone={error ? 'destructive' : 'muted'}
+          style={{ marginTop: space.sm - 2 }}
+        >
+          {error || helper}
+        </Txt>
       )}
     </View>
   );
+}
+
+/**
+ * The app's switch.
+ *
+ * React Native and React Native Web disagree about how a switch is coloured:
+ * RN uses `trackColor`/`thumbColor`, RNW wants `activeTrackColor`/`activeThumbColor`.
+ * Passing only the RN props left every switch on web falling back to the
+ * browser's default green — a colour that appears nowhere else in TourGo.
+ * Passing both keeps one switch on both platforms.
+ */
+export function AppSwitch({
+  value, onValueChange, disabled,
+}: { value: boolean; onValueChange: (v: boolean) => void; disabled?: boolean }) {
+  const { colors } = useTheme();
+  const webProps = Platform.OS === 'web'
+    ? {
+      activeTrackColor: colors.brand,
+      activeThumbColor: '#FFFFFF',
+      thumbColor: '#FFFFFF',
+      trackColor: colors.cardBorder,
+    } as any
+    : {};
+
+  return (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      disabled={disabled}
+      trackColor={{ false: colors.cardBorder, true: colors.brand }}
+      thumbColor="#FFFFFF"
+      ios_backgroundColor={colors.cardBorder}
+      {...webProps}
+    />
+  );
+}
+
+// ── States ───────────────────────────────────────────────────────────────────
+
+/**
+ * The screen-level empty state: this whole view has nothing in it.
+ *
+ * There are two empty patterns in the product and the difference is scale, not
+ * style. This one owns a screen (an empty Trips tab, an empty wishlist) and can
+ * afford an icon, a heading and an action. `InlineEmpty` below owns a section
+ * inside an otherwise populated screen and stays quiet.
+ *
+ * `illustration` swaps the icon tile for artwork, for the one or two screens
+ * whose entire purpose is empty and where a brand moment earns its place. The
+ * heading, copy and action stay identical either way — that consistency is the
+ * point.
+ */
+export function EmptyState({
+  icon, title, description, action, secondaryAction, illustration, tone = 'neutral',
+  buttonSize = 'sm', actionLayout = 'column',
+}: {
+  icon: IconName; title: string; description?: string;
+  action?: { label: string; onPress: () => void; icon?: IconName; size?: 'sm' | 'md' };
+  secondaryAction?: { label: string; onPress: () => void; icon?: IconName; size?: 'sm' | 'md' };
+  illustration?: ImageSourcePropType;
+  buttonSize?: 'sm' | 'md';
+  actionLayout?: 'row' | 'column';
+  /** `positive` is for "nothing here and that's good" — no conflicts, all settled. */
+  tone?: 'neutral' | 'positive';
+}) {
+  const { colors } = useTheme();
+  const positive = tone === 'positive';
+  const isColumn = actionLayout === 'column';
+  return (
+    <View style={styles.empty}>
+      {illustration ? (
+        <Image source={illustration} style={styles.emptyArt} resizeMode="contain" />
+      ) : (
+        <View
+          style={[
+            styles.emptyIcon,
+            { backgroundColor: positive ? colors.successSurface : colors.surface },
+          ]}
+        >
+          <Ionicons name={icon} size={22} color={positive ? colors.success : colors.textMuted} />
+        </View>
+      )}
+      <Txt variant="headline" align="center">{title}</Txt>
+      {!!description && (
+        <Txt variant="subhead" tone="muted" align="center" style={{ marginTop: space.xs, maxWidth: 300 }}>
+          {description}
+        </Txt>
+      )}
+      {(action || secondaryAction) && (
+        <View style={[styles.emptyActions, isColumn && styles.emptyActionsColumn]}>
+          {action && (
+            <Button
+              label={action.label}
+              onPress={action.onPress}
+              icon={action.icon}
+              size={action.size ?? buttonSize}
+              fullWidth={isColumn}
+            />
+          )}
+          {secondaryAction && (
+            <Button
+              label={secondaryAction.label}
+              onPress={secondaryAction.onPress}
+              icon={secondaryAction.icon}
+              variant="secondary"
+              size={secondaryAction.size ?? buttonSize}
+              fullWidth={isColumn}
+            />
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * The section-level empty state: one list inside a populated screen is empty.
+ *
+ * Deliberately quiet — a small icon and a line of muted copy on the same
+ * baseline grid as the content it replaces. Screens that used this moment to
+ * show a bare sentence, a bordered box, or a 32px icon with no heading now all
+ * read the same. Pass `onPress` when the emptiness is itself an invitation
+ * ("Plan your first stop") and it becomes a tappable row.
+ */
+export function InlineEmpty({
+  icon, label, onPress,
+}: { icon: IconName; label: string; onPress?: () => void }) {
+  const { colors } = useTheme();
+  const body = (
+    <View
+      style={[
+        styles.inlineEmpty,
+        { borderColor: colors.cardBorder, backgroundColor: onPress ? 'transparent' : colors.surface },
+      ]}
+    >
+      <Ionicons name={icon} size={15} color={colors.textMuted} />
+      <Txt variant="subhead" tone="muted" align="center">{label}</Txt>
+    </View>
+  );
+  return onPress ? <Press onPress={onPress}>{body}</Press> : body;
 }
 
 export function Loading({ label }: { label?: string }) {
@@ -698,6 +1054,34 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingBottom: space.xl,
   },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    minHeight: 52,
+    borderBottomWidth: hairline,
+  },
+  // Equal side slots are what keeps the title centred; do not make these `auto`.
+  navSlot: {
+    width: 96,
+    justifyContent: 'center',
+  },
+  navBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+  },
+  navTitle: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: space.xs,
+  },
+  navActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -742,6 +1126,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     minHeight: 46,
   },
+  buttonSmall: {
+    minHeight: 34,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs + 3,
+    borderRadius: radius.sm + 1,
+    gap: space.xs,
+  },
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -752,6 +1143,32 @@ const styles = StyleSheet.create({
     width: 52, height: 52, borderRadius: radius.lg,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: space.lg,
+  },
+  emptyArt: { width: 132, height: 132, marginBottom: space.md },
+  emptyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    marginTop: space.lg,
+  },
+  emptyActionsColumn: {
+    flexDirection: 'column',
+    width: '100%',
+    maxWidth: 200,
+    alignItems: 'stretch',
+    gap: space.sm,
+    marginTop: space.lg,
+  },
+  inlineEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: hairline,
   },
   sheetHead: {
     flexDirection: 'row',

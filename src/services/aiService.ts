@@ -1,4 +1,4 @@
-import { GEMINI_API_KEY, GOOGLE_MAPS_API_KEY } from '../config/env';
+import { GEMINI_API_KEY } from '../config/env';
 
 export const AI_FEATURES_ENABLED = true;
 
@@ -7,13 +7,33 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 
 // Helper to sanitize markdown block wrappers from JSON responses
 function cleanJsonResponse(text: string): string {
+  if (!text) return '';
   let cleaned = text.trim();
-  // Remove starting markdown code blocks
-  cleaned = cleaned.replace(/^```json\s*/i, '');
-  cleaned = cleaned.replace(/^```\s*/, '');
-  // Remove ending markdown code blocks
-  cleaned = cleaned.replace(/\s*```$/, '');
-  return cleaned.trim();
+
+  // Strip standard markdown fences
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
+  cleaned = cleaned.replace(/\s*```\s*$/i, '');
+  cleaned = cleaned.trim();
+
+  // Extract JSON object or array if extra text exists
+  const firstBrace = cleaned.indexOf('{');
+  const firstBracket = cleaned.indexOf('[');
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = cleaned.lastIndexOf('}');
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = cleaned.lastIndexOf(']');
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx >= startIdx) {
+    return cleaned.slice(startIdx, endIdx + 1);
+  }
+
+  return cleaned;
 }
 
 // Helper to call Gemini and return response text
@@ -22,30 +42,45 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
     throw new Error('Gemini API key is not configured');
   }
 
-  const response = await fetch(GEMINI_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemPrompt }]
-      },
-      contents: [
-        { role: 'user', parts: [{ text: userPrompt }] }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4000,
-        responseMimeType: 'application/json'
-      }
-    })
-  });
+  const makeRequest = async (useJsonMime: boolean) => {
+    const generationConfig: Record<string, any> = {
+      temperature: 0.7,
+      maxOutputTokens: 4000,
+    };
+    if (useJsonMime) {
+      generationConfig.responseMimeType = 'application/json';
+    }
+
+    return fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: [
+          { role: 'user', parts: [{ text: userPrompt }] },
+        ],
+        generationConfig,
+      }),
+    });
+  };
+
+  let response = await makeRequest(true);
+  if (!response.ok) {
+    response = await makeRequest(false);
+  }
 
   if (!response.ok) {
-    throw new Error(`Gemini API returned status ${response.status}`);
+    const errText = await response.text().catch(() => '');
+    console.error(`Gemini API error ${response.status}:`, errText);
+    throw new Error(`Gemini API error ${response.status}: ${errText}`);
   }
 
   const json = await response.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  const parts = json?.candidates?.[0]?.content?.parts || [];
+  const nonThoughtPart = parts.slice().reverse().find((p: any) => !p.thought && p.text);
+  const text = (nonThoughtPart?.text || parts[parts.length - 1]?.text || '').trim();
   if (!text) {
     throw new Error('Gemini returned an empty response');
   }
@@ -480,15 +515,22 @@ export interface SpontaneousDayPlan {
 
 // 14. ONE-MINUTE SPONTANEOUS DAY PLANNER (single-day, no multi-day planning)
 export async function generateSpontaneousDayPlan(
-  destination: string,
+  destination: string = '',
   dateLabel: string,
   preferences: string[],
   companions: string,
-  optimizeRouting: boolean = false
+  optimizeRouting: boolean = false,
+  timeRange?: { start?: string; end?: string }
 ): Promise<SpontaneousDayPlan> {
+  const isAnywhere = !destination || destination.trim() === '' || destination.toLowerCase().includes('anywhere');
+  const startTime = timeRange?.start?.trim() || '8:00 AM';
+  const endTime = timeRange?.end?.trim() || '8:00 PM';
+
   const systemPrompt = `You are Agilito, a smart travel co-pilot. Build a complete, beautifully optimized ONE-DAY itinerary for a spontaneous trip.
-This is NOT a multi-day trip — only a single day (morning to evening). Do not include overnight stays or multiple days.
-Plan 3 to 5 great stops total. Pick quality over quantity: the best local places that match the preferences, placed in a natural geographic order so the route flows (no backtracking).
+This is NOT a multi-day trip — only a single day. Do not include overnight stays or multiple days.
+${isAnywhere ? 'Choose a wonderful, popular Philippine day-trip destination that best matches the traveler preferences (e.g. Tagaytay, Baguio, Rizal, Batangas, Cebu, etc.) and set it in "destination".' : ''}
+Plan 3 to 5 great stops total that fit comfortably within the requested time frame from ${startTime} to ${endTime}.
+Pick quality over quantity: the best local places that match the preferences, placed in a natural geographic order so the route flows (no backtracking).
 Return ONLY a JSON object matching this structure:
 {
   "destination": "the clean destination name",
@@ -505,33 +547,110 @@ Return ONLY a JSON object matching this structure:
 Guidelines:
 - "time" must be 12-hour format like "8:30 AM" or "5:30 PM".
 - "durationMinutes" must be a plain number (between 30 and 150).
-- Stops must be in chronological order (morning first, evening last) and nearby each other.
-- If preferences are empty, pick a balanced mix (cafe, highlight/attraction, lunch, scenic stop, dinner or sunset spot).
-- The final stop should be a satisfying sunset or evening moment.`;
+- Stops must be in chronological order starting around ${startTime} and concluding by ${endTime}.
+- If preferences are empty, pick a balanced mix fitting the time window (e.g. morning cafe/sightseeing, or afternoon/sunset dining).
+- The final stop should fit the ending hour (${endTime}).`;
 
-  const userPrompt = `Where: ${destination}
+  const userPrompt = `${isAnywhere ? 'Where: Pick the best destination for my vibe' : `Where: ${destination}`}
 When: ${dateLabel}
+Available Time Range: ${startTime} to ${endTime}
 Preferences: ${preferences.join(', ') || 'General mix'}
 Going with: ${companions || 'Just myself'}
-${optimizeRouting ? 'ACTION: Re-order the same set of stops so the route is the shortest possible (no backtracking) and adjust times accordingly. Keep every stop.' : 'Build the plan now.'}`;
+${optimizeRouting ? 'ACTION: Re-order the same set of stops so the route is the shortest possible (no backtracking) and adjust times accordingly within the time range. Keep every stop.' : 'Build the plan now.'}`;
 
   try {
     const text = await callGemini(systemPrompt, userPrompt);
-    const parsed = JSON.parse(text) as SpontaneousDayPlan;
-    const stops = Array.isArray(parsed?.stops) ? parsed.stops : [];
-    if (stops.length === 0) throw new Error('Empty plan');
-    return { destination: parsed.destination || destination, stops };
+    const cleaned = cleanJsonResponse(text);
+    const raw = JSON.parse(cleaned);
+
+    const destName = raw?.destination || (isAnywhere ? 'Tagaytay' : destination);
+    const rawStops = Array.isArray(raw?.stops)
+      ? raw.stops
+      : Array.isArray(raw?.itinerary)
+      ? raw.itinerary
+      : Array.isArray(raw?.plan?.stops)
+      ? raw.plan.stops
+      : Array.isArray(raw)
+      ? raw
+      : [];
+
+    if (rawStops.length === 0) {
+      throw new Error(`Gemini plan did not contain valid stops: ${cleaned.slice(0, 100)}`);
+    }
+
+    const stops: SpontaneousDayStop[] = rawStops.map((s: any, idx: number) => ({
+      time: s.time || (idx === 0 ? '8:30 AM' : idx === 1 ? '11:00 AM' : idx === 2 ? '1:30 PM' : idx === 3 ? '4:30 PM' : '7:00 PM'),
+      title: s.title || s.name || s.place || 'Featured Spot',
+      category: s.category || s.type || 'Experience',
+      description: s.description || s.desc || 'Explore this local spot.',
+      durationMinutes: typeof s.durationMinutes === 'number' ? s.durationMinutes : parseInt(s.duration || '60', 10) || 60,
+    }));
+
+    return { destination: destName, stops };
   } catch (error: any) {
-    console.warn('generateSpontaneousDayPlan Gemini error:', error);
-    const seed = destination.split(',')[0].trim() || destination;
-    const fallback: SpontaneousDayStop[] = [
-      { time: '8:30 AM', title: `Local Coffee Start`, category: 'Coffee Shop', description: `Kick off the day in ${seed} with a well-loved local coffee stop.`, durationMinutes: 45 },
-      { time: '10:00 AM', title: `${seed} Highlights`, category: 'Sightseeing', description: 'See the iconic spots, take photos, and soak in the scenery.', durationMinutes: 90 },
-      { time: '12:45 PM', title: 'Local Lunch', category: 'Restaurant', description: `Enjoy a classic ${seed} lunch at a crowd favorite.`, durationMinutes: 75 },
-      { time: '5:30 PM', title: 'Sunset View', category: 'Scenic Spot', description: 'End the day with a beautiful sunset view.', durationMinutes: 60 },
-    ];
-    return { destination, stops: fallback };
+    console.warn('[TourGo AI] generateSpontaneousDayPlan using curated fallback due to:', error?.message || error);
+    return buildFallbackSpontaneousPlan(destination, startTime, endTime, preferences);
   }
+}
+
+function buildFallbackSpontaneousPlan(
+  destination: string,
+  startTime: string = '8:00 AM',
+  endTime: string = '8:00 PM',
+  preferences: string[] = []
+): SpontaneousDayPlan {
+  const norm = (destination || 'Tagaytay').toLowerCase();
+  const destName = destination.trim() || 'Tagaytay';
+
+  if (norm.includes('baguio')) {
+    return {
+      destination: 'Baguio',
+      stops: [
+        { time: startTime || '8:30 AM', title: 'Cafe by the Ruins', category: 'Coffee & Breakfast', description: 'Cozy artisan mountain breakfast with fresh strawberries and highland coffee.', durationMinutes: 60 },
+        { time: '11:00 AM', title: 'Burnham Park & Rose Garden', category: 'Sightseeing & Boats', description: 'Scenic boat ride on the lagoon and bike rentals through lush garden trails.', durationMinutes: 75 },
+        { time: '1:30 PM', title: 'Good Shepherd Convent', category: 'Souvenirs & Delicacies', description: 'Pick up famous ube jam and enjoy peaceful mountain view overlooks.', durationMinutes: 45 },
+        { time: '3:30 PM', title: 'Camp John Hay Pine Trail', category: 'Nature Walk', description: 'Relaxing stroll among fragrant pines and crisp fresh mountain air.', durationMinutes: 90 },
+        { time: '6:00 PM', title: 'Session Road & Night Market', category: 'Food & Shopping', description: 'Taste local street food, shop thrift finds, and experience Baguio night vibes.', durationMinutes: 90 },
+      ],
+    };
+  }
+
+  if (norm.includes('el nido') || norm.includes('palawan')) {
+    return {
+      destination: 'El Nido',
+      stops: [
+        { time: startTime || '8:30 AM', title: 'Artcafe El Nido', category: 'Breakfast & Cafe', description: 'Fresh tropical fruit bowls, bakery pastries, and overlooking town beach views.', durationMinutes: 60 },
+        { time: '10:30 AM', title: 'Nacpan Beach', category: 'Beach & Nature', description: 'Famous twin beach with golden sands, coconut palms, and crystal waters.', durationMinutes: 120 },
+        { time: '1:30 PM', title: 'Big Lagoon Kayaking', category: 'Adventure & Scenic', description: 'Paddle through iconic limestone walls and emerald marine waters.', durationMinutes: 90 },
+        { time: '4:30 PM', title: 'Las Cabañas Beach', category: 'Sunset & Drinks', description: 'Watch the world-class Palawan sunset with chilled fresh young coconut drinks.', durationMinutes: 90 },
+        { time: '7:00 PM', title: 'El Nido Seaside Grills', category: 'Dinner & Dining', description: 'Savor fresh caught grilled fish and seaside evening ambience.', durationMinutes: 75 },
+      ],
+    };
+  }
+
+  if (norm.includes('cebu')) {
+    return {
+      destination: 'Cebu',
+      stops: [
+        { time: startTime || '8:30 AM', title: 'Magellan’s Cross & Basilica', category: 'Culture & History', description: 'Historic landmark where Christianity began in the Philippines.', durationMinutes: 60 },
+        { time: '11:00 AM', title: 'House of Lechon', category: 'Local Food & Lunch', description: 'Award-winning Cebu roasted lechon with spicy vinegar and hanging rice.', durationMinutes: 75 },
+        { time: '1:30 PM', title: 'Temple of Leah', category: 'Sightseeing & View', description: 'Roman-style architectural masterpiece with panoramic city views.', durationMinutes: 60 },
+        { time: '3:30 PM', title: 'Sirao Flower Garden', category: 'Nature & Photography', description: 'Little Amsterdam with colorful celosia flowerbeds and mountain backdrops.', durationMinutes: 75 },
+        { time: '6:30 PM', title: 'Tops Lookout Cebu', category: 'Scenic Dinner', description: 'Catch the glittering Cebu City skyline lights under the evening stars.', durationMinutes: 90 },
+      ],
+    };
+  }
+
+  return {
+    destination: destName,
+    stops: [
+      { time: startTime || '8:30 AM', title: `${destName} Artisan Bakery & Cafe`, category: 'Coffee & Breakfast', description: 'Hearty local breakfast with fresh brewed coffee overlooking the valley.', durationMinutes: 60 },
+      { time: '11:00 AM', title: `${destName} Scenic Ridge & Park`, category: 'Sightseeing', description: 'Take in breezy viewpoints, cool mountain air, and panoramic lookouts.', durationMinutes: 75 },
+      { time: '1:30 PM', title: `Balay Traditional Dining`, category: 'Food & Dining', description: 'Savor comforting hot bulalo soup and classic Filipino dishes.', durationMinutes: 75 },
+      { time: '4:00 PM', title: `${destName} Highland Gardens`, category: 'Nature & Relaxation', description: 'Walk through pine paths, landscaped lawns, and quiet photo spots.', durationMinutes: 60 },
+      { time: '6:30 PM', title: `${destName} Sunset Boulevard & Grills`, category: 'Dinner & Sunset', description: 'Relax with cool evening breezes and dinner to celebrate a memorable day.', durationMinutes: 90 },
+    ],
+  };
 }
 
 export interface AiAnalysisSuggestion {
@@ -642,7 +761,7 @@ Ensure all fields are kept. Do not wrap in markdown code blocks.`;
     return itineraryStops.map((stop, idx) => {
       const stopsOnDay = itineraryStops.filter(s => s.dayIndex === stop.dayIndex);
       const positionOnDay = stopsOnDay.indexOf(stop);
-      
+
       let newTime = stop.time;
       if (positionOnDay === 0) newTime = '08:30 AM';
       else if (positionOnDay === 1) newTime = '01:30 PM';
@@ -749,8 +868,8 @@ Travelers: ${JSON.stringify(members.map(m => ({ id: m.userId, name: m.name })))}
     const evenPct = parseFloat((100 / Math.max(members.length, 1)).toFixed(1));
     return {
       category: title.toLowerCase().includes('food') || title.toLowerCase().includes('eat') || title.toLowerCase().includes('dinner') ? 'food' :
-                title.toLowerCase().includes('hotel') || title.toLowerCase().includes('stay') ? 'lodging' :
-                title.toLowerCase().includes('taxi') || title.toLowerCase().includes('flight') || title.toLowerCase().includes('gas') ? 'transport' : 'activities',
+        title.toLowerCase().includes('hotel') || title.toLowerCase().includes('stay') ? 'lodging' :
+          title.toLowerCase().includes('taxi') || title.toLowerCase().includes('flight') || title.toLowerCase().includes('gas') ? 'transport' : 'activities',
       splitSuggestions: members.map(m => ({ userId: m.userId, sharePercentage: evenPct }))
     };
   }
@@ -968,31 +1087,10 @@ export interface InteractiveSuggestedStop {
 }
 
 async function fetchGooglePlacePhoto(title: string): Promise<string | null> {
-  try {
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'places.photos'
-      },
-      body: JSON.stringify({
-        textQuery: title + " Philippines"
-      })
-    });
-
-    if (response.ok) {
-      const json = await response.json();
-      const photoName = json?.places?.[0]?.photos?.[0]?.name;
-      if (photoName) {
-        return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=600&key=${GOOGLE_MAPS_API_KEY}`;
-      }
-    }
-  } catch (e) {
-    console.warn('Google Places photo error for ' + title, e);
-  }
-  return null;
+  // Live Wikipedia image lookup
+  return fetchWikiImage(title);
 }
+
 
 async function fetchWikiImage(title: string): Promise<string | null> {
   try {
@@ -1000,7 +1098,7 @@ async function fetchWikiImage(title: string): Promise<string | null> {
     const searchRes = await fetch(searchUrl);
     const searchJson = await searchRes.json();
     const firstResult = searchJson?.query?.search?.[0];
-    
+
     if (firstResult) {
       const pageTitle = firstResult.title;
       const imgUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=600&titles=${encodeURIComponent(pageTitle)}&redirects=true`;
@@ -1021,7 +1119,7 @@ async function fetchWikiImage(title: string): Promise<string | null> {
 
 function getPlaceImageUrl(name: string, categories: string[] = []): string {
   const normalized = name.toLowerCase();
-  
+
   if (normalized.includes('sardine') || normalized.includes('moalboal')) {
     return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80';
   }
@@ -1034,7 +1132,7 @@ function getPlaceImageUrl(name: string, categories: string[] = []): string {
   if (normalized.includes('oslob') || normalized.includes('whale')) {
     return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80';
   }
-  
+
   let keyword = 'scenery';
   const catStr = categories.join(',').toLowerCase();
   if (catStr.includes('beach') || catStr.includes('sea') || catStr.includes('island')) {
@@ -1044,7 +1142,7 @@ function getPlaceImageUrl(name: string, categories: string[] = []): string {
   } else if (catStr.includes('nature') || catStr.includes('falls') || catStr.includes('hiking')) {
     keyword = 'nature';
   }
-  
+
   return `https://loremflickr.com/600/400/philippines,${keyword}/all`;
 }
 
@@ -1090,7 +1188,7 @@ Please suggest 3 activities.`;
   try {
     const text = await callGemini(systemPrompt, userPrompt);
     const parsed: InteractiveSuggestedStop[] = JSON.parse(text);
-    
+
     // Enrich with image fetch in parallel
     const enriched = await Promise.all(parsed.map(async (item) => {
       const googleImg = await fetchGooglePlacePhoto(item.title);
@@ -1101,7 +1199,7 @@ Please suggest 3 activities.`;
         imageUrl: googleImg || wikiImg || fallback || ''
       };
     }));
-    
+
     return enriched;
   } catch (error) {
     console.warn('suggestInteractiveStops error:', error);

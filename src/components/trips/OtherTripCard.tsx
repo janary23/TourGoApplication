@@ -1,7 +1,13 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Animated } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface OtherTripCardProps {
   trip: any;
@@ -30,7 +36,7 @@ export default function OtherTripCard({
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.96,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -39,7 +45,7 @@ export default function OtherTripCard({
   const onPressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -123,7 +129,7 @@ const styles = StyleSheet.create({
   tripPhoto: {
     width: 85,
     height: 85,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
   },
   tripDetails: {
@@ -135,13 +141,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tripDestinationText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     letterSpacing: 1,
   },
   tripTitleText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     lineHeight: 18,
   },
   bottomInfoRow: {
@@ -156,8 +160,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tripDateText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   statDot: {
     width: 3,
@@ -166,8 +169,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   membersCountText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
   },
   roleBadge: {
     paddingHorizontal: 8,
@@ -175,8 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   roleBadgeText: {
-    fontSize: 8,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
   },
   arrowContainer: {
     justifyContent: 'center',

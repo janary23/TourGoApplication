@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Alert, Switch, Pressable, Image, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { voteInPoll as dbVoteInPoll, addPoll as dbAddPoll, uploadTripImage } from '../../services/tripService';
 import * as ImagePicker from 'expo-image-picker';
 import { AI_FEATURES_ENABLED } from '../../services/aiService';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  ScreenHeader, Section, Card, EmptyState, Sheet, Field, Button, Txt,
-  Badge, IconButton, Avatar, Press,
+  ScreenHeader, Section, Card, EmptyState, Sheet, Field, Button, Txt, Badge, IconButton, Avatar, Press, AppSwitch,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T } from '../ui/tokens';
+import { notify } from '../ui/Feedback';
 
 interface TripPollsProps {
   trip: any;
@@ -55,7 +55,7 @@ export default function TripPolls({
   const pickOptionImage = async (index: number) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Photos needed', 'Allow photo access to add images to options.');
+      notify('Photos needed. Allow photo access to add images to options.', 'info');
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
@@ -73,7 +73,7 @@ export default function TripPolls({
       setOptions(suggested);
       setOptionImages(suggested.map(() => null));
     } catch {
-      Alert.alert('Unavailable', 'Agilito could not suggest options right now.');
+      notify('Unavailable. Agilito could not suggest options right now.', 'error');
     } finally {
       setSuggesting(false);
     }
@@ -94,14 +94,14 @@ export default function TripPolls({
         const local = optionImages[i];
         if (local) {
           const { url, error: upErr } = await uploadTripImage(local, 'polls');
-          if (upErr) { Alert.alert('Could not upload image', upErr); return; }
+          if (upErr) { notify(upErr, 'error'); return; }
           imageUrl = url;
         }
         payload.push({ text, imageUrl });
       }
 
       const { error } = await dbAddPoll(trip.id, question.trim(), payload, multi);
-      if (error) { Alert.alert('Could not create poll', error); return; }
+      if (error) { notify(error, 'error'); return; }
       reset();
       setSheetOpen(false);
       loadTrip();
@@ -368,12 +368,7 @@ export default function TripPolls({
               People can pick more than one option.
             </Txt>
           </View>
-          <Switch
-            value={multi}
-            onValueChange={setMulti}
-            trackColor={{ false: colors.cardBorder, true: colors.brand }}
-            thumbColor="#FFFFFF"
-          />
+          <AppSwitch value={multi} onValueChange={setMulti} />
         </View>
       </Sheet>
     </View>

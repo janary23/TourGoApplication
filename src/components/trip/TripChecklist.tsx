@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, Alert, Pressable } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   toggleChecklistItem as dbToggleChecklist,
@@ -14,6 +14,7 @@ import {
   EmptyState, Sheet, Field, Txt, ProgressBar, Avatar, Loading, Press,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
+import { notify } from '../ui/Feedback';
 
 interface TripChecklistProps {
   trip: any;
@@ -97,7 +98,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
       clearTimers();
       const { error } = await dbDeleteChecklistItem(item.id);
       setPendingDelete(null);
-      if (error) Alert.alert('Could not remove task', error);
+      if (error) notify(error, 'error');
       else loadTrip();
     }, UNDO_SECONDS * 1000);
   };
@@ -113,7 +114,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
     setSaving(true);
     try {
       const { error } = await dbAddChecklistItem(trip.id, text, assignToMe ? currentUserId : undefined);
-      if (error) { Alert.alert('Could not add task', error); return; }
+      if (error) { notify(error, 'error'); return; }
       setDraft('');
       setAssignToMe(false);
       setAddOpen(false);
@@ -132,7 +133,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
       setPicked(items);
     } catch {
       setAiOpen(false);
-      Alert.alert('Unavailable', 'Agilito could not build a packing list right now.');
+      notify('Unavailable. Agilito could not build a packing list right now.', 'error');
     } finally {
       setAiLoading(false);
     }
@@ -148,7 +149,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
       setPicked([]);
       loadTrip();
     } catch {
-      Alert.alert('Could not add', 'Some tasks may not have been saved.');
+      notify('Could not add. Some tasks may not have been saved.', 'error');
     } finally {
       setAddingAi(false);
     }
@@ -258,7 +259,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
             action={{ label: 'Add a task', onPress: () => setAddOpen(true) }}
           />
         ) : filtered.length === 0 ? (
-          <EmptyState icon="funnel-outline" title="Nothing here" description="No tasks match this filter." />
+          <EmptyState icon="funnel-outline" title="No matches" description="No tasks match this filter." />
         ) : (
           <>
             {open.length > 0 && (
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   checkbox: {
-    width: 21, height: 21, borderRadius: 11,
+    width: 21, height: 21, borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },

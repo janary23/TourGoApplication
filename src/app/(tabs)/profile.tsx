@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet, View, Text, ScrollView, Image, TextInput, Alert, Switch, TouchableOpacity,
-} from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,10 +14,13 @@ import { WalkthroughModal, shouldShowWalkthrough } from '../../components/Walkth
 import { PreferencesOnboarding } from '../../components/PreferencesOnboarding';
 import ProfileInfoCard from '../../components/profile/ProfileInfoCard';
 import ProfileSettingRow from '../../components/profile/ProfileSettingRow';
+import { notify, confirmAction } from '../../components/ui/Feedback';
+import { AppSwitch } from '../../components/ui/primitives';
+import { space, radius, type as T } from '../../components/ui/tokens';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { isDark, toggleTheme, colors, mascotFlightEnabled, toggleMascotFlight } = useTheme();
+  const { isDark, themeMode, setThemeMode, toggleTheme, colors, mascotFlightEnabled, toggleMascotFlight } = useTheme();
   const { profile: authProfile, signOut, refreshProfile } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -40,16 +41,16 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty.');
+      notify('Name cannot be empty.', 'error');
       return;
     }
     const { error } = await updateProfile({ name: name.trim(), home_city: homeCity.trim() });
     if (error) {
-      Alert.alert('Error', error);
+      notify(error, 'error');
     } else {
       await refreshProfile();
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated successfully!');
+      notify('Profile updated.', 'success');
     }
   };
 
@@ -61,27 +62,22 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-            router.replace('/(auth)/login');
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out?',
+      confirmLabel: 'Log Out',
+      destructive: true,
+    }).then(async (ok) => {
+      if (!ok) return;
+      await signOut();
+      router.replace('/(auth)/login');
+    });
   };
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow photo library access to change your profile picture.');
+      notify('Permission needed. Please allow photo library access to change your profile picture.', 'info');
       return;
     }
 
@@ -96,7 +92,7 @@ export default function ProfileScreen() {
 
     const { url, error } = await uploadAvatar(result.assets[0].uri);
     if (error) {
-      Alert.alert('Upload failed', error);
+      notify(error, 'error');
     } else {
       await refreshProfile();
     }
@@ -106,6 +102,10 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        <View style={styles.pageHeader}>
+          <Text style={[T.largeTitle, { color: colors.text }]}>Profile</Text>
+        </View>
 
         {/* Profile Card */}
         <ProfileInfoCard
@@ -129,82 +129,138 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Application Settings</Text>
 
           <View style={[styles.settingCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            {/* Dark Mode Toggle */}
-            <ProfileSettingRow
-              iconName={isDark ? 'moon' : 'sunny'}
-              iconColor={isDark ? '#A78BFA' : '#F59E0B'}
-              iconBgColor={isDark ? '#2C2C40' : '#EEF2FF'}
-              title="Dark Mode"
-              subtitle={isDark ? 'Dark theme active' : 'Light theme active'}
-              colors={colors}
-              rightElement={
-                <Switch
-                  value={isDark}
-                  onValueChange={toggleTheme}
-                  trackColor={{ false: '#E0E0E0', true: colors.brand }}
-                  thumbColor="#FFFFFF"
-                  ios_backgroundColor="#E0E0E0"
-                />
-              }
-            />
+            {/* Theme & Appearance (Light / Dark / System) */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.brandLight,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}
+                >
+                  <Ionicons
+                    name={themeMode === 'dark' ? 'moon' : themeMode === 'light' ? 'sunny' : 'phone-portrait-outline'}
+                    size={18}
+                    color={colors.brand}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...T.bodyStrong, color: colors.text }}>Theme & Appearance</Text>
+                  <Text style={{ ...T.caption, color: colors.textSecondary }}>
+                    {themeMode === 'system'
+                      ? `System Default (${isDark ? 'Dark' : 'Light'})`
+                      : themeMode === 'dark'
+                      ? 'Dark theme active'
+                      : 'Light theme active'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 3-way Segmented Selector: Light | Dark | System */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
+                  borderRadius: 14,
+                  padding: 4,
+                  gap: 4,
+                }}
+              >
+                {[
+                  { mode: 'light', label: 'Light', icon: 'sunny-outline' },
+                  { mode: 'dark', label: 'Dark', icon: 'moon-outline' },
+                  { mode: 'system', label: 'System', icon: 'phone-portrait-outline' },
+                ].map((item) => {
+                  const isSelected = themeMode === item.mode;
+                  return (
+                    <TouchableOpacity
+                      key={item.mode}
+                      onPress={() => setThemeMode(item.mode as any)}
+                      activeOpacity={0.8}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 9,
+                        borderRadius: 10,
+                        backgroundColor: isSelected ? colors.card : 'transparent',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: isSelected ? 0.08 : 0,
+                        shadowRadius: 2,
+                        elevation: isSelected ? 2 : 0,
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={14}
+                        color={isSelected ? colors.brand : colors.textMuted}
+                      />
+                      <Text
+                        style={{
+                          ...T.caption,
+                          fontWeight: isSelected ? '700' : '500',
+                          color: isSelected ? colors.text : colors.textSecondary,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.divider, marginHorizontal: 16 }} />
 
             {/* Mascot Flight Animation */}
             <ProfileSettingRow
               iconName="airplane"
-              iconColor="#38BDF8"
-              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
               title="Bird Flight Animation"
               subtitle={mascotFlightEnabled ? 'Flying bird on screen transitions' : 'Flight disabled — bird stays still'}
               colors={colors}
               rightElement={
-                <Switch
-                  value={mascotFlightEnabled}
-                  onValueChange={toggleMascotFlight}
-                  trackColor={{ false: '#E0E0E0', true: colors.brand }}
-                  thumbColor="#FFFFFF"
-                  ios_backgroundColor="#E0E0E0"
-                />
+                <AppSwitch value={mascotFlightEnabled} onValueChange={toggleMascotFlight} />
               }
             />
 
             {/* Push Notifications */}
             <ProfileSettingRow
               iconName="notifications-outline"
-              iconColor={colors.brand}
-              iconBgColor={colors.brandLight}
               title="Push Notifications"
               subtitle="Manage alerts & reminders"
               colors={colors}
-              onPress={() => {}}
+              onPress={() => { }}
             />
 
             {/* GPS Tracking */}
             <ProfileSettingRow
               iconName="location-outline"
-              iconColor="#38BDF8"
-              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
               title="GPS Tracking"
               subtitle="Location sharing permissions"
               colors={colors}
-              onPress={() => {}}
+              onPress={() => { }}
             />
 
             {/* Privacy */}
             <ProfileSettingRow
               iconName="shield-outline"
-              iconColor="#EF4444"
-              iconBgColor={isDark ? '#2E1A1A' : '#FFF1F0'}
               title="Privacy & Security"
               subtitle="Data & account controls"
               colors={colors}
-              onPress={() => {}}
+              onPress={() => { }}
             />
 
             {/* Travel Preferences */}
             <ProfileSettingRow
               iconName="heart-outline"
-              iconColor="#F472B6"
-              iconBgColor={isDark ? '#2C2030' : '#FDF2F8'}
               title="Travel Preferences"
               subtitle="Pick what you love — powers your recommendations"
               colors={colors}
@@ -214,8 +270,6 @@ export default function ProfileScreen() {
             {/* Subscription */}
             <ProfileSettingRow
               iconName="ribbon-outline"
-              iconColor="#F59E0B"
-              iconBgColor={isDark ? '#2E2718' : '#FFFBEB'}
               title="Subscription"
               subtitle="Your plan and what it includes"
               colors={colors}
@@ -225,8 +279,6 @@ export default function ProfileScreen() {
             {/* Replay App Tour */}
             <ProfileSettingRow
               iconName="play-circle-outline"
-              iconColor="#0EA5E9"
-              iconBgColor={isDark ? '#1A1A2E' : '#EFF6FF'}
               title="Replay App Tour"
               subtitle="See the walkthrough again"
               colors={colors}
@@ -236,19 +288,16 @@ export default function ProfileScreen() {
             {/* Help */}
             <ProfileSettingRow
               iconName="help-circle-outline"
-              iconColor={colors.brand}
-              iconBgColor={colors.brandLight}
               title="Help Center & FAQ"
               subtitle="Support & documentation"
               colors={colors}
-              onPress={() => {}}
+              onPress={() => { }}
             />
 
             {/* Log Out */}
             <ProfileSettingRow
               iconName="log-out-outline"
-              iconColor="#EF4444"
-              iconBgColor={isDark ? '#2E1A1A' : '#FFF1F0'}
+              tone="destructive"
               title="Log Out"
               subtitle="Sign out of your account"
               colors={colors}
@@ -284,6 +333,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  pageHeader: { paddingHorizontal: space.xl, marginTop: space.sm, marginBottom: space.lg },
   container: {
     flex: 1,
   },
@@ -330,8 +380,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   userName: {
-    fontSize: 22,
-    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
+    ...T.display, fontWeight: '800',
   },
   userEmail: {
     fontSize: 14,
@@ -344,8 +393,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   userLocation: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
+    ...T.body, fontWeight: '600',
     marginLeft: 4,
   },
   editBtn: {
@@ -359,8 +407,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   label: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
+    ...T.label, fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
@@ -382,13 +429,7 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold', fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
+  sectionTitle: { ...T.overline, textTransform: 'uppercase' },
   settingCard: {
     borderRadius: 20,
     overflow: 'hidden',
@@ -407,7 +448,7 @@ const styles = StyleSheet.create({
   optionIconBox: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -416,12 +457,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold', fontWeight: '600',
+    ...T.headline, fontWeight: '600',
   },
   optionSubText: {
-    fontFamily: 'Poppins-Regular',
-    fontSize: 12,
+    ...T.footnote,
     marginTop: 1,
   },
   divider: {
@@ -434,8 +473,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   footerBrand: {
-    fontSize: 18,
-    fontFamily: 'Poppins-ExtraBold', fontWeight: '800',
+    ...T.title, fontWeight: '800',
     marginTop: 8,
   },
   footerVersion: {

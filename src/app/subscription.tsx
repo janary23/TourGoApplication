@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { type as T } from '../components/ui/tokens';
 import {
   getSubscription,
   getPlan,
@@ -52,7 +53,7 @@ export default function SubscriptionScreen() {
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           <Ionicons name="chevron-back" size={22} color={colors.brand} />
-          <Text style={{ fontSize: 15, fontFamily: 'Poppins-Medium', color: colors.brand }}>Settings</Text>
+          <Text style={{ ...T.body, color: colors.brand }}>Settings</Text>
         </TouchableOpacity>
       </View>
 
@@ -75,15 +76,15 @@ export default function SubscriptionScreen() {
                   <Ionicons name="ribbon-outline" size={22} color={colors.brand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                  <Text style={{ ...T.titleSm, color: colors.text }}>
                     {currentPlan.name}
                   </Text>
-                  <Text style={{ fontSize: 12, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 1 }}>
+                  <Text style={{ ...T.footnote, color: colors.textMuted, marginTop: 1 }}>
                     {currentPlan.tagline}
                   </Text>
                 </View>
-                <View style={[styles.statusPill, { backgroundColor: '#22C55E20' }]}>
-                  <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: '#16A34A' }}>
+                <View style={[styles.statusPill, { backgroundColor: colors.successSurface }]}>
+                  <Text style={{ ...T.microStrong, color: colors.success }}>
                     {(sub?.status ?? 'active').toUpperCase()}
                   </Text>
                 </View>
@@ -128,16 +129,16 @@ export default function SubscriptionScreen() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.text }}>
+                      <Text style={{ ...T.bodyStrong, color: colors.text }}>
                         {plan.name}
                       </Text>
-                      <Text style={{ fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, marginTop: 1 }}>
+                      <Text style={{ ...T.caption, color: colors.textMuted, marginTop: 1 }}>
                         {plan.priceLabel}
                       </Text>
                     </View>
                     {isCurrent && (
                       <View style={[styles.statusPill, { backgroundColor: colors.brandLight }]}>
-                        <Text style={{ fontSize: 10, fontFamily: 'Poppins-Bold', color: colors.brand }}>
+                        <Text style={{ ...T.microStrong, color: colors.brand }}>
                           CURRENT
                         </Text>
                       </View>
@@ -149,13 +150,12 @@ export default function SubscriptionScreen() {
                       <Ionicons
                         name={b.available ? 'checkmark-circle' : 'ellipse-outline'}
                         size={15}
-                        color={b.available ? '#22C55E' : colors.textMuted}
+                        color={b.available ? colors.success : colors.textMuted}
                       />
                       <Text
                         style={{
                           flex: 1,
-                          fontSize: 12,
-                          fontFamily: 'Poppins-Regular',
+                          ...T.footnote,
                           color: b.available ? colors.text : colors.textMuted,
                         }}
                       >
@@ -167,7 +167,7 @@ export default function SubscriptionScreen() {
                   {!plan.purchasable && !isCurrent && (
                     <View style={[styles.notice, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
                       <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-                      <Text style={{ flex: 1, fontSize: 11, fontFamily: 'Poppins-Regular', color: colors.textMuted, lineHeight: 16 }}>
+                      <Text style={{ flex: 1, ...T.caption, color: colors.textMuted, lineHeight: 16 }}>
                         This plan isn’t available for purchase yet — billing hasn’t been connected to TourGo.
                       </Text>
                     </View>
@@ -195,8 +195,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   scroll: { padding: 20, paddingBottom: 60 },
-  title: { fontSize: 26, fontFamily: 'Poppins-Bold', letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, fontFamily: 'Poppins-Regular', marginTop: 2, marginBottom: 22 },
+  title: { ...T.display, letterSpacing: -0.5 },
+  subtitle: { ...T.subhead, marginTop: 2, marginBottom: 22 },
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -219,11 +219,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 5,
   },
-  detailLabel: { fontSize: 12, fontFamily: 'Poppins-Regular' },
-  detailValue: { fontSize: 12, fontFamily: 'Poppins-SemiBold' },
+  detailLabel: { ...T.footnote },
+  detailValue: { ...T.label },
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     letterSpacing: 0.8,
     marginTop: 10,
     marginBottom: 10,
@@ -240,12 +239,11 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
   },
   footnote: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     lineHeight: 17,
     marginTop: 6,
     textAlign: 'center',

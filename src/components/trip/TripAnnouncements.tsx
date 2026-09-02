@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, ScrollView, Alert, Switch } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { addAnnouncement as dbAddAnnouncement } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  ScreenHeader, Section, SectionLabel, Card, EmptyState, Sheet, Field,
-  Txt, Badge, Avatar, Divider,
+  ScreenHeader, Section, SectionLabel, Card, EmptyState, Sheet, Field, Txt, Badge, Avatar, Divider, AppSwitch,
 } from '../ui/primitives';
 import { space, hairline, stripEmoji } from '../ui/tokens';
+import { notify } from '../ui/Feedback';
 
 interface TripAnnouncementsProps {
   trip: any;
@@ -44,7 +44,7 @@ export default function TripAnnouncements({
     setSaving(true);
     try {
       const { error } = await dbAddAnnouncement(trip.id, title.trim(), content.trim(), important);
-      if (error) { Alert.alert('Could not post', error); return; }
+      if (error) { notify(error, 'error'); return; }
       reset();
       setSheetOpen(false);
       loadTrip();
@@ -91,7 +91,7 @@ export default function TripAnnouncements({
         {announcements.length === 0 ? (
           <EmptyState
             icon="megaphone-outline"
-            title="No announcements"
+            title="No announcements yet"
             description={
               isOrganizer
                 ? 'Post a notice to reach everyone on the trip at once.'
@@ -146,12 +146,7 @@ export default function TripAnnouncements({
               Keeps this notice above the rest.
             </Txt>
           </View>
-          <Switch
-            value={important}
-            onValueChange={setImportant}
-            trackColor={{ false: colors.cardBorder, true: colors.brand }}
-            thumbColor="#FFFFFF"
-          />
+          <AppSwitch value={important} onValueChange={setImportant} />
         </View>
       </Sheet>
     </View>

@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import type { ThemeColors } from '../../context/ThemeContext';
 import type { PhilippinesProvince } from '../../services/philippinesMapData';
 import type { Destination, Municipality } from '../../services/destinations';
+import { type as T } from '../ui/tokens';
+import { InlineEmpty } from '../ui/primitives';
 
 interface ProvinceSheetContentProps {
   province: PhilippinesProvince;
@@ -89,12 +91,12 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
                 styles.toggle,
                 {
                   backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                  borderColor: '#10B981',
+                  borderColor: colors.success,
                 },
               ]}
             >
-              <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-              <Text style={[styles.toggleText, { color: '#10B981' }]}>Explored</Text>
+              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <Text style={[styles.toggleText, { color: colors.success }]}>Explored</Text>
             </View>
           ) : null}
           <TouchableOpacity
@@ -229,7 +231,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
         {isLoadingDests ? (
           <View style={{ paddingVertical: 20, alignItems: 'center' }}>
             <ActivityIndicator size="small" color={colors.brand} />
-            <Text style={{ marginTop: 8, fontSize: 12, color: colors.textMuted, fontFamily: 'Poppins-Regular' }}>
+            <Text style={{ marginTop: 8, ...T.footnote, color: colors.textMuted }}>
               Fetching top spots from Google Places...
             </Text>
           </View>
@@ -264,7 +266,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
             );
           })
         ) : (
-          <Text style={[styles.emptyHint, { color: colors.textMuted }]}>No destinations logged here yet.</Text>
+          <InlineEmpty icon="map-outline" label="No destinations logged here yet." />
         )}
       </View>
     </ScrollView>
@@ -300,14 +302,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
+    ...T.display,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   context: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    ...T.label,
     marginTop: 1,
   },
   actions: {
@@ -324,8 +324,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   toggleText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
   },
   stampCard: {
@@ -355,21 +354,18 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-12deg' }],
   },
   stampSealText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-ExtraBold',
+    ...T.microStrong,
     fontWeight: '900',
     color: '#D97706',
     letterSpacing: 0.5,
   },
   stampStatusTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
+    ...T.emphasis,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   stampStatusSub: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
   },
   dividerLine: {
     borderBottomWidth: 1,
@@ -384,13 +380,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNum: {
-    fontSize: 20,
-    fontFamily: 'Poppins-Bold',
+    ...T.title,
     fontWeight: '800',
   },
   statLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    ...T.micro,
     marginTop: 2,
   },
   unexploredCard: {
@@ -404,14 +398,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   unexploredTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+    ...T.titleSm,
     fontWeight: '700',
     marginBottom: 6,
   },
   unexploredText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    ...T.footnote,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 16,
@@ -425,8 +417,7 @@ const styles = StyleSheet.create({
   },
   planButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
+    ...T.label,
     fontWeight: '700',
   },
   tripCard: {
@@ -439,8 +430,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tripTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    ...T.bodyStrong,
     fontWeight: '700',
   },
   tripInfoRow: {
@@ -450,12 +440,10 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
   },
   tripInfoText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
   },
   sectionLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     fontWeight: '700',
     letterSpacing: 1,
     marginBottom: 10,
@@ -466,15 +454,14 @@ const styles = StyleSheet.create({
   muniChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 6,
     paddingHorizontal: 10,
     marginRight: 6,
   },
   muniChipText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.caption,
     fontWeight: '600',
   },
   row: {
@@ -493,13 +480,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowName: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    ...T.body,
     fontWeight: '600',
   },
   rowTags: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
+    ...T.caption,
     marginTop: 1,
   },
   ratingWrap: {
@@ -508,13 +493,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   ratingText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     fontWeight: '700',
-  },
-  emptyHint: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    paddingVertical: 8,
   },
 });

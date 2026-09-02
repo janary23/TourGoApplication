@@ -1,8 +1,14 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, ImageBackground, Animated } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, ImageBackground, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { type as T } from '../ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface FeaturedTripCardProps {
   trip: any;
@@ -33,7 +39,7 @@ export default function FeaturedTripCard({
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.95,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -42,7 +48,7 @@ export default function FeaturedTripCard({
   const onPressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: NATIVE_DRIVER,
       tension: 180,
       friction: 12,
     }).start();
@@ -112,7 +118,7 @@ export default function FeaturedTripCard({
                   }
                 ]}
               >
-                <Text style={styles.tripDestinationText}>{destination.toUpperCase()}</Text>
+                <Text style={[styles.tripDestinationText, { color: colors.brand }]}>{destination.toUpperCase()}</Text>
                 <Text style={styles.tripTitleText} numberOfLines={2}>{title}</Text>
 
                 {/* Stats and Avatars Stack */}
@@ -234,8 +240,7 @@ const styles = StyleSheet.create({
   },
   countdownBadgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     letterSpacing: 0.8,
   },
   roleBadge: {
@@ -245,13 +250,12 @@ const styles = StyleSheet.create({
   },
   roleBadgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     letterSpacing: 0.5,
   },
   bottomGlassOverlay: {
     width: '100%',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 14,
     borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
@@ -260,15 +264,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   tripDestinationText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
-    color: '#38BDF8', // Accent sky blue color
+    ...T.microStrong,
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   tripTitleText: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
+    ...T.title,
     color: '#FFFFFF',
     lineHeight: 24,
     marginBottom: 10,
@@ -294,8 +295,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    ...T.caption,
   },
   statDot: {
     width: 3,
@@ -329,13 +329,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarFallbackText: {
-    fontSize: 9,
-    fontFamily: 'Poppins-Bold',
+    ...T.microStrong,
     color: '#FFFFFF',
   },
   membersCountText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
+    ...T.overline,
     color: '#FFFFFF',
   },
   cardDivider: {
@@ -350,8 +348,7 @@ const styles = StyleSheet.create({
   },
   enterWorkspaceText: {
     color: 'rgba(255, 255, 255, 0.95)',
-    fontFamily: 'Poppins-Bold',
-    fontSize: 11,
+    ...T.overline,
     letterSpacing: 0.2,
   },
 });

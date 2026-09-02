@@ -3,8 +3,9 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image, ActivityIndicator, View, Animated, Dimensions, Easing, TouchableOpacity, PanResponder, KeyboardAvoidingView, TextInput, Platform, Modal, SafeAreaView, Text, ScrollView } from 'react-native';
-import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { ThemeProvider, useTheme, palette } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { FeedbackProvider } from '../components/ui/Feedback';
 import { mockService } from '../services/mockData';
 import { useFonts } from 'expo-font';
 import {
@@ -29,6 +30,12 @@ import { GEMINI_API_KEY } from '../config/env';
 import { storageGet, storageSet } from '../services/storage';
 import { subscribeOnboardingActive, subscribeGlobalLoading } from '../services/mascotBridge';
 import { WalkthroughModal, shouldShowWalkthrough, markWalkthroughDone, onboardingKeyFor } from '../components/WalkthroughModal';
+import { type as T } from '../components/ui/tokens';
+
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -48,12 +55,12 @@ const TypingIndicator = ({ colors, isDark }: { colors: any; isDark: boolean }) =
           Animated.timing(dot, {
             toValue: 1,
             duration: 400,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(dot, {
             toValue: 0.3,
             duration: 400,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
         ])
       );
@@ -83,7 +90,7 @@ const TypingIndicator = ({ colors, isDark }: { colors: any; isDark: boolean }) =
         backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderRadius: 18,
+        borderRadius: 20,
         borderBottomLeftRadius: 4,
         marginVertical: 6,
         gap: 6,
@@ -93,7 +100,7 @@ const TypingIndicator = ({ colors, isDark }: { colors: any; isDark: boolean }) =
         source={require('../../assets/images/EagleMascotS5.png')}
         style={{ width: 18, height: 18, marginRight: 2, resizeMode: 'contain' }}
       />
-      <Text style={{ fontSize: 13, fontFamily: 'Poppins-Medium', color: colors.textMuted, marginRight: 2 }}>
+      <Text style={{ ...T.emphasis, color: colors.textMuted, marginRight: 2 }}>
         Thinking
       </Text>
       <Animated.View
@@ -155,8 +162,7 @@ const renderMessageText = (text: string, isAi: boolean, colors: any) => {
   return (
     <Text
       style={{
-        fontSize: 15,
-        fontFamily: 'Poppins-Regular',
+        ...T.body,
         color: isAi ? colors.text : '#FFFFFF',
         lineHeight: 22,
       }}
@@ -180,11 +186,60 @@ const renderMessageText = (text: string, isAi: boolean, colors: any) => {
   );
 };
 
+interface ChatButton {
+  label: string;
+  action: string;
+  icon?: string;
+}
+
+const parseMessageWithButtons = (rawText: string): { cleanText: string; buttons: ChatButton[] } => {
+  const buttons: ChatButton[] = [];
+  const regex = /\[BUTTON:\s*([^\|\]]+)\s*\|\s*([^\]]+)\s*\]/gi;
+
+  let match;
+  while ((match = regex.exec(rawText)) !== null) {
+    buttons.push({ label: match[1].trim(), action: match[2].trim() });
+  }
+
+  const cleanText = rawText.replace(regex, '').trim();
+
+  // Smart context buttons if no explicit button tag was provided by AI
+  if (buttons.length === 0) {
+    const lower = rawText.toLowerCase();
+    if (
+      lower.includes('flight animation') ||
+      lower.includes('flying bird') ||
+      lower.includes('flying eagle') ||
+      lower.includes('disable bird') ||
+      lower.includes('disable the bird') ||
+      lower.includes('turn off bird') ||
+      lower.includes('stop flying') ||
+      lower.includes('still in my badge') ||
+      lower.includes('mascot flight')
+    ) {
+      buttons.push({ label: 'Toggle Flight Animation', action: 'toggle_flight', icon: 'airplane' });
+      buttons.push({ label: 'Open Profile Settings', action: '/profile', icon: 'settings-outline' });
+    } else if (lower.includes('create a trip') || lower.includes('create trip') || lower.includes('start a trip')) {
+      buttons.push({ label: 'Create a Trip', action: '/trip/create', icon: 'add-circle-outline' });
+    } else if (lower.includes('join a trip') || lower.includes('join trip') || lower.includes('trip code') || lower.includes('invite code')) {
+      buttons.push({ label: 'Join with Code', action: '/trip/join', icon: 'enter-outline' });
+    } else if (lower.includes('1-minute') || lower.includes('1 minute') || lower.includes('day plan') || lower.includes('spontaneous')) {
+      buttons.push({ label: '1-Minute Planner', action: '/day-plan', icon: 'flash-outline' });
+    } else if (lower.includes('explore') || lower.includes('destinations') || lower.includes('tourist spots')) {
+      buttons.push({ label: 'Explore Destinations', action: '/explore', icon: 'compass-outline' });
+    } else if (lower.includes('my trips') || lower.includes('trips tab') || lower.includes('view trips')) {
+      buttons.push({ label: 'View Trips', action: '/trips', icon: 'map-outline' });
+    }
+  }
+
+  return { cleanText, buttons };
+};
+
 function GlobalMascot({ hide }: { hide?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { colors, isDark, mascotFlightEnabled } = useTheme();
+  const { colors, isDark, mascotFlightEnabled, toggleMascotFlight } = useTheme();
 
   // Keep the floating mascot hidden for the entire onboarding flow —
   // including when the tour is replayed from the Profile page.
@@ -242,12 +297,12 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
           Animated.timing(flapValue, {
             toValue: 1,
             duration: 250,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flapValue, {
             toValue: 0,
             duration: 250,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
         ])
       );
@@ -322,6 +377,32 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
     setChatText('');
   };
 
+  const handleChatAction = (action: string) => {
+    if (action === 'toggle_flight') {
+      toggleMascotFlight();
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-${Date.now()}`,
+          sender: 'Aguilito',
+          text: mascotFlightEnabled
+            ? 'Flying animation is now turned OFF! I will stay still inside my badge without flying across screens.'
+            : 'Flying animation is now turned ON! Watch me fly as you navigate between screens!',
+          isAi: true,
+        },
+      ]);
+      return;
+    }
+    setShowAiChat(false);
+    if (action === '/profile' || action === 'profile') router.push('/(tabs)/profile');
+    else if (action === '/trips' || action === 'trips') router.push('/(tabs)/trips');
+    else if (action === '/explore' || action === 'explore') router.push('/(tabs)/explore');
+    else if (action === '/day-plan') router.push('/day-plan');
+    else if (action === '/trip/create') router.push('/trip/create');
+    else if (action === '/trip/join') router.push('/trip/join');
+    else router.push(action as any);
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
@@ -358,43 +439,62 @@ CURRENT ACTIVE TRIP CONTEXT:
 `;
     }
 
-    const systemPrompt = `You are Aguilito (also spelled Agilito), TourGo's friendly AI travel assistant — a flying eagle mascot that floats across the app. You are extremely intelligent, warm, conversational, and helpful. You provide detailed, inspiring, and thorough travel suggestions, itineraries, and recommendations.
+    const systemPrompt = `You are Aguilito (also spelled Agilito), TourGo's friendly AI travel assistant — a flying eagle mascot that floats across the app. You are extremely intelligent, warm, conversational, and helpful. You know EVERYTHING about the TourGo app and Philippine travel.
 
-STRICT SCOPE RULE: Your ONLY job is to help users with the TourGo application — planning trips, choosing destinations, using app features (itinerary, checklist, polls, group chat, documents, members), and answering questions about the app itself. ALWAYS stay on topic. If a user asks about anything unrelated to TourGo or travel planning in TourGo (e.g. coding, general trivia, current events, math, science, politics, news, non-travel topics), do NOT answer it. Instead, politely redirect them back with: "I'm just TourGo's travel eagle, so I only help with your trips and the app! Want me to suggest a destination or check your itinerary?" Never break out of this scope.
+TOURGO SYSTEM KNOWLEDGE (Answer accurately when asked how to do anything in the app):
+1. FLYING BIRD / EAGLE FLIGHT ANIMATION:
+   - Question: "How to disable/enable flying bird/eagle?" or "Stop the bird from flying?"
+   - Answer: Tell the user: "You can turn off my flying animation anytime! Go to your Profile tab -> scroll to Settings -> toggle off 'Eagle flight animation'. When disabled, I will stay peacefully inside my badge without flying across screens during page transitions."
+   - Always include the action buttons: [BUTTON:Toggle Flight Animation|toggle_flight] [BUTTON:Open Profile Settings|/profile]
 
-ABOUT TOURGO APP:
-- TourGo is a collaborative travel planning app for groups of friends and families.
-- TABS: Home (dashboard with recent trips), Trips (list of all trips), Explore (discover PH destinations + map), Activity (notifications/feed), Profile.
-- TRIPS: Users can create trips with title, destination, dates, cover photo, and invite members via unique code or QR.
-- TRIP FEATURES: Itinerary planner, Group Chat, Shared Documents/Files, Member management, Checklist tasks, Group polls, Photo sharing.
-- EXPLORE: Interactive SVG map of the Philippines, browse by region (Luzon/Visayas/Mindanao), trending destinations, recommended places, real destination cards with Wikipedia images.
-- ACTIVITY: Feed of all trip events — new members, itinerary updates, document uploads, chat messages, etc.
-- PROFILE: View/edit user profile, toggle dark mode, see stats.
-- AUTHENTICATION: Email/password sign-up & login via Supabase.
-- TECH STACK: React Native + Expo, Supabase (auth + database), Google Places API (New), Wikipedia API for images.
+2. 1-MINUTE SPONTANEOUS DAY PLANNER:
+   - Tap '1 MIN' on the Home dashboard or open the 1-Minute Day Planner (/day-plan).
+   - Allows users to enter a destination, choose an optional time window (Start Time and End Time), pick travel vibes (Food, Nature, Sightseeing, etc.), and select companions.
+   - Powered by Gemini AI to build an instant realistic one-day itinerary.
+   - When a plan is created, it saves to the database and appears as an active floating icon on the Home page. Tapping it lets users review stops or mark it as finished to dismiss it.
+   - Action button: [BUTTON:1-Minute Planner|/day-plan]
 
-REAL TOURGO DESTINATIONS IN THE DATABASE (Recommend these to users!):
-1. Big Lagoon (El Nido, Palawan) - A majestic lagoon in El Nido enclosed by towering limestone cliffs, best explored by kayak at sunrise. Rating: 4.9. Best time: Nov – May. Tags: Lagoon, Kayaking, Island.
-2. Kayangan Lake (Coron, Palawan) - Crystal-clear freshwater lake in Coron framed by dramatic karst cliffs, a must-snorkel spot. Rating: 4.8. Best time: Dec – May. Tags: Lake, Snorkeling, Viewpoint.
-3. White Beach (Boracay, Aklan) - Boracay's iconic powder-white sand beach stretching four kilometers along calm turquoise water. Rating: 4.7. Best time: Nov – Apr. Tags: Beach, Sunset, Nightlife.
-4. Banaue Rice Terraces (Banaue, Ifugao) - 2,000-year-old hand-carved rice terraces that climb the mountains like giant green steps. Rating: 4.8. Best time: Dec – Apr. Tags: Heritage, Trekking, Viewpoint.
-5. Basco Lighthouse (Basco, Batanes) - A scenic lighthouse overlooking the rolling green hills and crashing waves of Batanes. Rating: 4.9. Best time: Mar – Jun. Tags: Lighthouse, Coastline, Views.
-6. Cloud 9 Boardwalk (Siargao, Surigao del Norte) - World-famous surf break in Siargao with a wooden boardwalk leading to the iconic viewing tower. Rating: 4.8. Best time: Aug – Nov. Tags: Surfing, Boardwalk, Sunset.
-7. Underground River (Puerto Princesa, Palawan) - An 8.2-km navigable underground river winding through a spectacular limestone cave system. Rating: 4.7. Best time: Dec – May. Tags: Cave, River, UNESCO.
-8. Chocolate Hills (Carmen, Bohol) - Over 1,200 perfectly cone-shaped hills that turn chocolate-brown during the dry season. Rating: 4.7. Best time: Dec – May. Tags: Hills, Viewpoint, Nature.
-9. Tarsier Sanctuary (Tagbilaran, Bohol) - Meet the tiny, wide-eyed Philippine tarsier in its natural forest habitat. Rating: 4.5. Best time: Year-round. Tags: Wildlife, Tarsier, Forest.
-10. Loboc River Cruise (Loboc, Bohol) - A floating restaurant cruise up the emerald Loboc River flanked by jungle. Rating: 4.4. Best time: Nov – May. Tags: River, Cruise, Food.
-11. Sardine Run (Moalboal, Cebu) - Swim through a giant shimmering bait ball of sardines just meters off the shore. Rating: 4.8. Best time: Year-round. Tags: Diving, Snorkeling, Marine.
+3. CREATE & JOIN TRIPS:
+   - Create Trip: Tap 'Create' on the Trips tab or top bar (/trip/create). Add title, destination, dates, cover photo, and invite friends.
+   - Join Trip: Tap 'Join' on the Trips tab (/trip/join) and enter the 6-character code provided by the organizer.
+   - Action buttons: [BUTTON:Create a Trip|/trip/create] [BUTTON:Join a Trip|/trip/join]
 
-RECOMMENDATION RULE: When a user asks for tourist spots, sightseeing places, or travel recommendations for any province or city (e.g. Bulacan, Rizal, Cavite, Baguio, Cebu), you must ALWAYS provide at least 3-5 distinct perfect options, highlighting why each option is great, rather than just returning one single destination.
+4. TRIP WORKSPACE FEATURES:
+   - Itinerary: Schedule activities with time, location, duration, and reordering.
+   - Checklist: Shared packing lists and to-do tasks with assignees.
+   - Group Chat & Polls: Chat with all trip members and create polls with images.
+   - Documents: Store booking vouchers, airline tickets, and ID copies.
+   - Members: View attendees, share invite QR/code, manage permissions.
+   - Safety Hub & Radar: Local emergency contacts, hospitals, police stations, 7-day weather forecast, and live Safety Radar with our custom Mercator Raster Tile Map Viewer (Google Roads, Google Satellite/Hybrid, CartoDB).
+   - Scrapbook: Post-trip memory photo collection album.
 
-You can also recommend other famous tourist attractions in the Philippines (e.g. Vigan Heritage Village, Apo Reef, Mount Pulag, Kawasan Falls, Mayon Volcano) and tell the user they can search for them using the search bar in the Explore tab.
+5. EXPLORE TAB:
+   - Interactive SVG map of Luzon, Visayas, and Mindanao. Search bar for Philippine attractions, trending destinations, and regional highlights.
+   - Action button: [BUTTON:Explore Destinations|/explore]
+
+6. PROFILE & SETTINGS:
+   - View profile, trip stats, customize Theme & Appearance (Light, Dark, or System Default), and toggle Eagle Flight Animation.
+   - Action button: [BUTTON:Open Profile Settings|/profile]
+
+INTERACTIVE ACTION BUTTONS RULE:
+Whenever you guide the user on how to do something or go somewhere in the app, append 1 or 2 relevant action buttons at the end of your response using this EXACT syntax:
+[BUTTON:Button Label|action]
+Available actions:
+- 'toggle_flight' (instantly toggles flying bird on/off!)
+- '/profile' (opens Profile Settings)
+- '/trip/create' (opens Create Trip)
+- '/trip/join' (opens Join Trip)
+- '/day-plan' (opens 1-Minute Day Planner)
+- '/explore' (opens Explore screen)
+- '/trips' (opens Trips list)
+
+STRICT SCOPE RULE: Your ONLY job is to help users with TourGo and travel planning. If a user asks about anything unrelated to TourGo or travel (e.g. coding, math, general trivia, politics), politely redirect them back with: "I'm just TourGo's travel eagle, so I only help with your trips and the app! Want me to suggest a destination or check your itinerary?"
 
 ${tripContext}
-Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Always give in-depth, inspiring travel tips and complete, structured recommendations with bullet points to guide the user perfectly!`;
+Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Always give in-depth, warm, structured answers with bullet points and helpful action buttons!`;
 
     try {
-      const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
 
       // Build conversation history in Gemini format (alternating user/model)
       const history = chatMessages
@@ -423,8 +523,11 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       });
 
       const json = await response.json();
+      const parts = json?.candidates?.[0]?.content?.parts || [];
+      const nonThoughtPart = parts.slice().reverse().find((p: any) => !p.thought && p.text);
       const replyText =
-        json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+        nonThoughtPart?.text?.trim() ||
+        parts[parts.length - 1]?.text?.trim() ||
         "Sorry, I couldn't reach my wings right now. Try again in a moment!";
 
       setChatMessages((prev) => [
@@ -464,12 +567,12 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.timing(hoverAnim, {
           toValue: 1,
           duration: 1600,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(hoverAnim, {
           toValue: 0,
           duration: 1600,
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ])
     ).start();
@@ -515,13 +618,13 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.parallel([
           Animated.spring(badgeX, {
             toValue: targetSnapX,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
             tension: 40,
             friction: 7,
           }),
           Animated.spring(badgeY, {
             toValue: targetSnapY,
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
             tension: 40,
             friction: 7,
           }),
@@ -590,19 +693,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
             toValue: targetBirdX,
             duration: 2000,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(birdY, {
             toValue: targetBirdY,
             duration: 2000,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flightProgress, {
             toValue: 1,
             duration: 2000,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
+            useNativeDriver: NATIVE_DRIVER,
           }),
         ]).start(({ finished }) => {
           if (finished) {
@@ -644,19 +747,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
           toValue: dashPerchX,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(birdY, {
           toValue: dashPerchY,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
         Animated.timing(flightProgress, {
           toValue: 1,
           duration: 2000,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: NATIVE_DRIVER,
         }),
       ]).start(({ finished }) => {
         if (finished) {
@@ -709,19 +812,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         toValue: dashPerchX,
         duration: 2200,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(birdY, {
         toValue: dashPerchY,
         duration: 2200,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(flightProgress, {
         toValue: 1,
         duration: 2200,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: NATIVE_DRIVER,
       }),
     ]).start(({ finished }) => {
       if (finished) {
@@ -940,7 +1043,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                     width: 10,
                     height: 10,
                     borderRadius: 5,
-                    backgroundColor: '#22C55E',
+                    backgroundColor: colors.success,
                     borderWidth: 1.5,
                     borderColor: colors.card,
                   }}
@@ -949,8 +1052,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
               <View style={{ justifyContent: 'center' }}>
                 <Text
                   style={{
-                    fontSize: 18,
-                    fontFamily: 'Poppins-Bold',
+                    ...T.title,
                     color: colors.text,
                   }}
                 >
@@ -958,9 +1060,8 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 </Text>
                 <Text
                   style={{
-                    fontSize: 12,
-                    fontFamily: 'Poppins-Medium',
-                    color: '#22C55E',
+                    ...T.label,
+                    color: colors.success,
                     marginTop: 1,
                   }}
                 >
@@ -981,7 +1082,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 }}
               >
                 <Ionicons name="add" size={16} color={colors.brand} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text }}>
+                <Text style={{ ...T.emphasis, color: colors.text }}>
                   New chat
                 </Text>
               </TouchableOpacity>
@@ -1016,8 +1117,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 />
                 <Text
                   style={{
-                    fontSize: 20,
-                    fontFamily: 'Poppins-Bold',
+                    ...T.title,
                     color: colors.text,
                     marginBottom: 8,
                     textAlign: 'center',
@@ -1027,8 +1127,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 </Text>
                 <Text
                   style={{
-                    fontSize: 14,
-                    fontFamily: 'Poppins-Regular',
+                    ...T.body,
                     color: colors.textMuted,
                     marginBottom: 24,
                     textAlign: 'center',
@@ -1045,10 +1144,10 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                   style={{ flexGrow: 0, width: '100%' }}
                 >
                   {[
-                    { text: 'Weather details?', icon: 'sunny' },
-                    { text: 'What should I pack?', icon: 'briefcase' },
-                    { text: 'Flight guidelines?', icon: 'airplane' },
-                    { text: 'Show my itinerary', icon: 'calendar' },
+                    { text: 'How to disable flying bird?', icon: 'airplane' },
+                    { text: 'Plan a 1-minute trip', icon: 'flash' },
+                    { text: 'Top Philippine destinations', icon: 'compass' },
+                    { text: 'How to create a trip?', icon: 'add-circle' },
                   ].map((chip, idx) => (
                     <TouchableOpacity
                       key={idx}
@@ -1068,8 +1167,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                       <Ionicons name={chip.icon as any} size={14} color={colors.brand} style={{ marginRight: 6 }} />
                       <Text
                         style={{
-                          fontSize: 13,
-                          fontFamily: 'Poppins-Medium',
+                          ...T.emphasis,
                           color: colors.text,
                         }}
                       >
@@ -1080,33 +1178,85 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                 </ScrollView>
               </View>
             )}
-            {chatMessages.map((msg) => (
-              <View
-                key={msg.id}
-                style={{
-                  alignSelf: msg.isAi ? 'flex-start' : 'flex-end',
-                  maxWidth: '80%',
-                  marginVertical: 6,
-                }}
-              >
+            {chatMessages.map((msg) => {
+              const { cleanText, buttons } = msg.isAi ? parseMessageWithButtons(msg.text) : { cleanText: msg.text, buttons: [] };
+              return (
                 <View
+                  key={msg.id}
                   style={{
-                    backgroundColor: msg.isAi
-                      ? isDark
-                        ? '#1E293B'
-                        : '#F1F5F9'
-                      : colors.brand,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    borderRadius: 18,
-                    borderBottomLeftRadius: msg.isAi ? 4 : 18,
-                    borderBottomRightRadius: msg.isAi ? 18 : 4,
+                    alignSelf: msg.isAi ? 'flex-start' : 'flex-end',
+                    maxWidth: '85%',
+                    marginVertical: 6,
                   }}
                 >
-                  {renderMessageText(msg.text, msg.isAi, colors)}
+                  <View
+                    style={{
+                      backgroundColor: msg.isAi
+                        ? isDark
+                          ? '#1E293B'
+                          : '#F1F5F9'
+                        : colors.brand,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderRadius: 20,
+                      borderBottomLeftRadius: msg.isAi ? 4 : 18,
+                      borderBottomRightRadius: msg.isAi ? 18 : 4,
+                    }}
+                  >
+                    {renderMessageText(cleanText, msg.isAi, colors)}
+
+                    {msg.isAi && buttons.length > 0 && (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          flexWrap: 'wrap',
+                          gap: 8,
+                          marginTop: 12,
+                          paddingTop: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                        }}
+                      >
+                        {buttons.map((btn, bIdx) => {
+                          const isSpecialToggle = btn.action === 'toggle_flight';
+                          return (
+                            <TouchableOpacity
+                              key={bIdx}
+                              onPress={() => handleChatAction(btn.action)}
+                              activeOpacity={0.8}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: isSpecialToggle ? (isDark ? '#334155' : '#E2E8F0') : colors.brand,
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 16,
+                                gap: 5,
+                              }}
+                            >
+                              <Ionicons
+                                name={(btn.icon || (isSpecialToggle ? 'airplane' : 'arrow-forward')) as any}
+                                size={14}
+                                color={isSpecialToggle ? colors.brand : '#FFFFFF'}
+                              />
+                              <Text
+                                style={{
+                                  ...T.caption,
+                                  fontWeight: '700',
+                                  color: isSpecialToggle ? colors.text : '#FFFFFF',
+                                }}
+                              >
+                                {btn.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
             {isTyping && (
               <TypingIndicator colors={colors} isDark={isDark} />
             )}
@@ -1141,8 +1291,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
                   backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
                   paddingHorizontal: 16,
                   color: colors.text,
-                  fontFamily: 'Poppins-Medium',
-                  fontSize: 14,
+                  ...T.body,
                   marginRight: 12,
                 }}
                 onSubmitEditing={handleSendChat}
@@ -1175,10 +1324,16 @@ function RootStack() {
   const pathname = usePathname();
   const [showWalkthrough, setShowWalkthrough] = useState(false);
 
+  // The mascot and its floating control are companions for the signed-in app.
+  // On the auth screens they have nothing to accompany, and they overlap the
+  // form — the bird sat across the title and the floating button landed on top
+  // of the password field.
+  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || pathname === '/' || pathname === '/index' || pathname === '';
+
   // Redirect to login if unauthenticated and not already on an auth screen
   useEffect(() => {
     if (isLoading) return;
-    const isAuthRoute = pathname.startsWith('/(auth)') || pathname === '/';
+    const isAuthRoute = isAuthScreen;
     if (!session && !isAuthRoute) {
       router.replace('/(auth)/login');
     }
@@ -1223,7 +1378,7 @@ function RootStack() {
         <Stack.Screen name="trip/settings" options={{ headerShown: false }} />
         <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
       </Stack>
-      <GlobalMascot hide={showWalkthrough} />
+      <GlobalMascot hide={showWalkthrough || isAuthScreen} />
       <WalkthroughModal
         visible={showWalkthrough}
         colors={colors}
@@ -1238,7 +1393,41 @@ function RootStack() {
 }
 
 
+/**
+ * Web only: React Native Web leaves the browser's own focus ring on inputs, so
+ * a focused field showed a UA outline on top of our brand border — two rings
+ * saying the same thing in different colours.
+ *
+ * Pointer focus loses the ring (the field's border already shows focus).
+ * Keyboard focus keeps one, in the brand colour, because removing it outright
+ * would strand keyboard users with no focus indicator at all.
+ */
+function useWebFocusRing() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const id = 'tourgo-focus-ring';
+    if (document.getElementById(id)) return;
+    const el = document.createElement('style');
+    el.id = id;
+    el.textContent = `
+      input:focus, textarea:focus, select:focus, [contenteditable]:focus { outline: none; }
+      input:focus-visible, textarea:focus-visible, select:focus-visible, [contenteditable]:focus-visible {
+        outline: 2px solid ${palette.light.brand};
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      @media (prefers-color-scheme: dark) {
+        input:focus-visible, textarea:focus-visible, select:focus-visible, [contenteditable]:focus-visible {
+          outline-color: ${palette.dark.brand};
+        }
+      }
+    `;
+    document.head.appendChild(el);
+  }, []);
+}
+
 export default function RootLayout() {
+  useWebFocusRing();
   const [fontsLoaded] = useFonts({
     'Poppins-Regular': Outfit_400Regular,
     'Poppins-Medium': Outfit_500Medium,
@@ -1255,8 +1444,15 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#38BDF8" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: palette.light.background }}>
+        <Image
+          source={require('../../assets/images/TourGoLogo.png')}
+          style={{ width: 175, height: 175 }}
+          resizeMode="contain"
+        />
+        <Text style={{ fontSize: 34, fontWeight: '800', color: palette.light.brand, marginTop: 16, letterSpacing: -0.5 }}>
+          TourGo
+        </Text>
       </View>
     );
   }
@@ -1265,7 +1461,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <RootStack />
+          <FeedbackProvider>
+            <RootStack />
+          </FeedbackProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
