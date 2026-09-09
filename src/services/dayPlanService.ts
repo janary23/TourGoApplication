@@ -8,12 +8,17 @@ export interface ActiveDayPlan {
   dateStr: string;
   timeRange?: string;
   group?: string;
+  budget?: string;
   createdAt: number;
   plan: SpontaneousDayPlan;
   status?: 'active' | 'finished';
 }
 
-const ACTIVE_DAY_PLAN_KEY = 'tourgo.active.dayplan.v1';
+const LEGACY_DAY_PLAN_KEY = 'tourgo.active.dayplan.v1';
+
+function getStorageKey(userId?: string | null): string {
+  return userId ? `tourgo.active.dayplan.${userId}.v2` : 'tourgo.active.dayplan.guest.v2';
+}
 
 type DayPlanListener = (plan: ActiveDayPlan | null) => void;
 const listeners: Set<DayPlanListener> = new Set();
@@ -33,29 +38,36 @@ function notifyListeners(plan: ActiveDayPlan | null) {
   });
 }
 
+// Clear legacy unscoped key on initial load
+storageRemove(LEGACY_DAY_PLAN_KEY).catch(() => {});
+
+// Listen for Supabase auth state changes to keep active plan isolated per user
+supabase.auth.onAuthStateChange(() => {
+  getActiveDayPlan().then((plan) => {
+    notifyListeners(plan);
+  }).catch(() => {});
+});
+
 /**
- * Loads the active day plan. First returns local storage for instant responsiveness,
- * then checks Supabase database in background to sync if authenticated.
+ * Loads the active day plan for the currently logged-in user.
+ * Queries Supabase database for the user's active plan, keeping it strictly isolated per account.
  */
 export async function getActiveDayPlan(): Promise<ActiveDayPlan | null> {
-  let localPlan: ActiveDayPlan | null = null;
-  try {
-    const raw = await storageGet(ACTIVE_DAY_PLAN_KEY);
-    if (raw) {
-      localPlan = JSON.parse(raw);
-    }
-  } catch (e) {
-    console.warn('Failed reading local active day plan:', e);
-  }
-
-  // Also query Supabase if logged in
+  let userId: string | null = null;
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+    userId = user?.id || null;
+  } catch {}
+
+  const storageKey = getStorageKey(userId);
+
+  // If user is authenticated, query Supabase database first for accuracy
+  if (userId) {
+    try {
       const { data, error } = await supabase
         .from('active_day_plans')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -68,24 +80,34 @@ export async function getActiveDayPlan(): Promise<ActiveDayPlan | null> {
           dateStr: data.date_str,
           timeRange: data.time_range,
           group: data.group_type,
+          budget: data.budget,
           createdAt: new Date(data.created_at).getTime(),
           plan: data.plan_json,
           status: data.status,
         };
-        // Update local cache to match remote
-        await storageSet(ACTIVE_DAY_PLAN_KEY, JSON.stringify(remotePlan));
-        notifyListeners(remotePlan);
+        await storageSet(storageKey, JSON.stringify(remotePlan));
         return remotePlan;
-      } else if (!error && !data && localPlan) {
-        // If DB has no active plan but local has one that was finished remotely, clear local
-        // (Only if user has DB connection)
+      } else if (!error && !data) {
+        // User has NO active plan in database; clear any stale local cache for this user
+        await storageRemove(storageKey);
+        return null;
       }
+    } catch (e) {
+      console.warn('Network error checking active day plan in DB:', e);
     }
-  } catch (e) {
-    // Network or table missing fallback to local
   }
 
-  return localPlan;
+  // Fallback to user-scoped local cache (e.g. offline)
+  try {
+    const raw = await storageGet(storageKey);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('Failed reading local active day plan:', e);
+  }
+
+  return null;
 }
 
 export function createPlanId(): string {
@@ -97,27 +119,35 @@ export function createPlanId(): string {
 }
 
 /**
- * Saves the active 1-day itinerary both locally and in Supabase database.
+ * Saves the active 1-day itinerary both locally (user-scoped) and in Supabase database.
  */
 export async function saveActiveDayPlan(item: ActiveDayPlan): Promise<void> {
-  // 1. Instant local storage update
+  let userId: string | null = null;
   try {
-    await storageSet(ACTIVE_DAY_PLAN_KEY, JSON.stringify(item));
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id || null;
+  } catch {}
+
+  const storageKey = getStorageKey(userId);
+
+  // 1. Instant local storage update (user-scoped)
+  try {
+    await storageSet(storageKey, JSON.stringify(item));
     notifyListeners(item);
   } catch (e) {
     console.error('Error saving day plan locally:', e);
   }
 
   // 2. Persist to Supabase database
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+  if (userId) {
+    try {
       const payload: any = {
-        user_id: user.id,
+        user_id: userId,
         destination: item.destination,
         date_str: item.dateStr,
         time_range: item.timeRange || null,
         group_type: item.group || null,
+        budget: item.budget || null,
         plan_json: item.plan,
         status: 'active',
       };
@@ -125,9 +155,9 @@ export async function saveActiveDayPlan(item: ActiveDayPlan): Promise<void> {
         payload.id = item.id;
       }
       await supabase.from('active_day_plans').insert(payload);
+    } catch (e) {
+      console.warn('Could not save day plan to Supabase:', e);
     }
-  } catch (e) {
-    console.warn('Could not save day plan to Supabase:', e);
   }
 }
 
@@ -136,23 +166,31 @@ export async function saveActiveDayPlan(item: ActiveDayPlan): Promise<void> {
  * and updates Supabase database status to 'finished', causing the home floating icon to disappear.
  */
 export async function finishActiveDayPlan(): Promise<void> {
+  let userId: string | null = null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id || null;
+  } catch {}
+
+  const storageKey = getStorageKey(userId);
+
   let activeId: string | null = null;
   try {
-    const raw = await storageGet(ACTIVE_DAY_PLAN_KEY);
+    const raw = await storageGet(storageKey);
     if (raw) {
       const p = JSON.parse(raw);
       activeId = p?.id || null;
     }
-    await storageRemove(ACTIVE_DAY_PLAN_KEY);
+    await storageRemove(storageKey);
+    await storageRemove(LEGACY_DAY_PLAN_KEY);
     notifyListeners(null);
   } catch (e) {
     console.warn('Error clearing local active day plan:', e);
   }
 
   // Supabase update to 'finished'
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+  if (userId) {
+    try {
       if (activeId && activeId.includes('-') && activeId.length === 36) {
         await supabase
           .from('active_day_plans')
@@ -162,11 +200,11 @@ export async function finishActiveDayPlan(): Promise<void> {
         await supabase
           .from('active_day_plans')
           .update({ status: 'finished', updated_at: new Date().toISOString() })
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('status', 'active');
       }
+    } catch (e) {
+      console.warn('Could not update active_day_plans status in Supabase:', e);
     }
-  } catch (e) {
-    console.warn('Could not update active_day_plans status in Supabase:', e);
   }
 }

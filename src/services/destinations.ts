@@ -1,4 +1,5 @@
-
+import { fetchOverpassPlaces, ATTRACTION_OVERPASS_TAGS } from './overpassService';
+import { fetchGeoapifyPlaces, ATTRACTION_GEOAPIFY_CATEGORIES } from './geoapifyService';
 
 export interface ProvinceGeo {
   id: string;
@@ -479,49 +480,108 @@ export async function fetchGooglePlacesForProvince(
       d => d.provinceId === provinceId && (!municipalityId || d.municipalityId === municipalityId)
     );
 
-    // Live query OpenStreetMap via Photon for spots in this province
-    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent('tourist spots in ' + queryName + ' Philippines')}&limit=12`;
-    const res = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
-    
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.features)) {
-        const osmPlaces: Destination[] = data.features
-          .filter((f: any) => f.properties?.name && f.geometry?.coordinates?.length === 2)
-          .map((f: any) => {
-            const p = f.properties;
-            const [lon, lat] = f.geometry.coordinates;
-            const name = p.name;
-            const category = p.osm_value || p.osm_key || 'Attraction';
-            const addressParts = [p.name, p.street, p.city || p.district, p.state, p.country || 'Philippines'].filter(Boolean);
+    // Live query OpenStreetMap via Photon for spots whose NAME matches this
+    // search text (e.g. "El Nido Resort"). Also doubles as a geocoder: its
+    // first hit's coordinates anchor the Overpass tag search below.
+    let anchorCoords: { latitude: number; longitude: number } | null = null;
+    let osmPlaces: Destination[] = [];
+    try {
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent('tourist spots in ' + queryName + ' Philippines')}&limit=12`;
+      const res = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.features)) {
+          osmPlaces = data.features
+            .filter((f: any) => f.properties?.name && f.geometry?.coordinates?.length === 2)
+            .map((f: any) => {
+              const p = f.properties;
+              const [lon, lat] = f.geometry.coordinates;
+              if (!anchorCoords) anchorCoords = { latitude: lat, longitude: lon };
+              const name = p.name;
+              const category = p.osm_value || p.osm_key || 'Attraction';
+              const addressParts = [p.name, p.street, p.city || p.district, p.state, p.country || 'Philippines'].filter(Boolean);
 
-            return {
-              id: `osm-${p.osm_id}`,
-              provinceId,
-              municipalityId: municipalityId || '',
-              name,
-              latitude: lat,
-              longitude: lon,
-              tags: [category, 'Attraction', 'Must-Visit'],
-              rating: '4.7',
-              bestTime: 'Oct – May',
-              description: `A live destination in ${queryName} registered on OpenStreetMap.`,
-              image: getPlaceImageUrl(name, [category]),
-              address: addressParts.slice(1).join(', ') || `${queryName}, Philippines`,
-            };
-          });
+              return {
+                id: `osm-${p.osm_id}`,
+                provinceId,
+                municipalityId: municipalityId || '',
+                name,
+                latitude: lat,
+                longitude: lon,
+                tags: [category, 'Attraction', 'Must-Visit'],
+                rating: '4.7',
+                bestTime: 'Oct – May',
+                description: `A live destination in ${queryName} registered on OpenStreetMap.`,
+                image: getPlaceImageUrl(name, [category]),
+                address: addressParts.slice(1).join(', ') || `${queryName}, Philippines`,
+              };
+            });
+        }
+      }
+    } catch (err) {
+      console.warn('Photon search failed for ' + queryName, err);
+    }
 
-        const combined = [...localMatches];
-        for (const osm of osmPlaces) {
-          if (!combined.some(c => c.name.toLowerCase() === osm.name.toLowerCase())) {
-            combined.push(osm);
+    // Plain geocode fallback if the phrase search above found nothing to anchor on.
+    if (!anchorCoords) {
+      try {
+        const geoUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(queryName + ', Philippines')}&limit=1`;
+        const geoRes = await fetch(geoUrl, { headers: { 'Accept': 'application/json' } });
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          const feat = geoData?.features?.[0];
+          if (feat?.geometry?.coordinates?.length === 2) {
+            const [lon, lat] = feat.geometry.coordinates;
+            anchorCoords = { latitude: lat, longitude: lon };
           }
         }
-        return combined;
+      } catch (err) {
+        console.warn('Photon geocode failed for ' + queryName, err);
       }
     }
 
-    return localMatches;
+    // Geoapify (primary) + Overpass (waterfalls, plus full fallback if
+    // Geoapify has no key/quota): real tagged attractions (beaches,
+    // waterfalls, heritage sites, museums, parks, viewpoints) near this
+    // exact location — the part Photon's name-only text search can't do,
+    // since most spots aren't literally named "tourist spot".
+    let overpassPlaces: Destination[] = [];
+    if (anchorCoords) {
+      const radiusMeters = municipalityId ? 8000 : 25000;
+      const limit = municipalityId ? 15 : 20;
+      const geoapifyFound = await fetchGeoapifyPlaces(ATTRACTION_GEOAPIFY_CATEGORIES, anchorCoords, radiusMeters, limit);
+      const waterfallFound = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], anchorCoords, radiusMeters, 5);
+      let found = [...geoapifyFound];
+      for (const w of waterfallFound) {
+        if (!found.some(f => f.name.toLowerCase() === w.name.toLowerCase())) found.push(w);
+      }
+      if (found.length === 0) {
+        // Geoapify unavailable/empty — fall back to Overpass entirely.
+        found = await fetchOverpassPlaces(ATTRACTION_OVERPASS_TAGS, anchorCoords, radiusMeters, limit);
+      }
+      overpassPlaces = found.slice(0, limit).map(p => ({
+        id: p.id,
+        provinceId,
+        municipalityId: municipalityId || '',
+        name: p.name,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        tags: [p.label, 'Attraction', 'Must-Visit'],
+        rating: '4.7',
+        bestTime: 'Oct – May',
+        description: `A ${p.label.toLowerCase()} in ${queryName}, verified on OpenStreetMap.`,
+        image: getPlaceImageUrl(p.name, [p.label]),
+        address: p.address || `${queryName}, Philippines`,
+      }));
+    }
+
+    const combined = [...localMatches];
+    for (const d of [...overpassPlaces, ...osmPlaces]) {
+      if (!combined.some(c => c.name.toLowerCase() === d.name.toLowerCase())) {
+        combined.push(d);
+      }
+    }
+    return combined;
   } catch (error) {
     console.error('Error fetching live places for ' + queryName, error);
     return DESTINATIONS.filter(d => d.provinceId === provinceId);

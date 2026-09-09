@@ -8,20 +8,24 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  TextInput,
+  Share as RNShare,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { shareToFacebook, shareTrip, shareTripCardImage, saveTripCardImage } from '../../services/tripShare';
+import { shareTrip, shareTripCardImage, saveTripCardImage, shareToFacebook, buildTripShareMessage } from '../../services/tripShare';
 import TripShareCard, { SHARE_CARD_WIDTH } from './TripShareCard';
 import { Sheet, Button, Txt, Press, InlineEmpty } from '../ui/primitives';
 import { deleteTrip } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
 import { space, radius, hairline, type as T, stripEmoji } from '../ui/tokens';
 import { notify, confirmAction } from '../ui/Feedback';
+import { getPlaceImageUrl } from '../../services/destinations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HERO_HEIGHT = 280;
+const HERO_HEIGHT = 310;
 
 interface TripScrapbookViewProps {
   trip: any;
@@ -63,8 +67,10 @@ function calculateDays(start?: string | null, end?: string | null): number {
 export default function TripScrapbookView({
   trip,
   currentUserName,
+  loadTrip,
 }: TripScrapbookViewProps) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
 
   const totalDays = calculateDays(trip.startDate, trip.endDate);
   const itinerary = trip.itinerary || [];
@@ -74,6 +80,7 @@ export default function TripScrapbookView({
   const announcements = trip.announcements || [];
 
   const totalSpend = expenses.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+  const isOrganizer = trip.role === 'organizer';
 
   // Group itinerary by dayIndex
   const itineraryByDay: Record<number, any[]> = {};
@@ -87,43 +94,65 @@ export default function TripScrapbookView({
     .map(Number)
     .sort((a, b) => a - b);
 
-  const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDeleteTrip = () => {
-    confirmAction({
-        title: 'Delete Trip',
-        message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
-        confirmLabel: 'Delete',
-        destructive: true,
-      }).then(async (ok) => {
-        if (!ok) return;
-        setIsDeleting(true);
-        const { error } = await deleteTrip(trip.id);
-        if (error) {
-          setIsDeleting(false);
-          notify(error, 'error');
-        } else {
-          router.replace('/(tabs)/trips');
-        }
-      });
-  };
-
-  // ── Share ──
-  // One entry point: Share -> preview the card -> pick a destination.
+  // ── Share & Caption States ──
   const [shareOpen, setShareOpen] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
   const [savingImage, setSavingImage] = useState(false);
+  const [sharingFacebookImage, setSharingFacebookImage] = useState(false);
   const shareCardRef = useRef<View>(null);
 
-  /** Share the rendered card as an image — the trip itself, not a link. */
+  // Pre-configured caption templates (Clean, no emojis)
+  const captionPresets = [
+    {
+      id: 'highlight',
+      label: 'Story Highlights',
+      text: `What an adventure! Just finished our trip to ${trip.destination || 'the Philippines'} with the barkada. So many core memories made!`,
+    },
+    {
+      id: 'wanderlust',
+      label: 'Wanderlust',
+      text: `Sun, sea, and unforgettable spots. TourGo made exploring ${trip.destination || 'the country'} so seamless and fun. Until the next trip!`,
+    },
+    {
+      id: 'barkada',
+      label: 'Barkada Vibes',
+      text: `Squad goals unlocked! "${trip.title}" was one for the books with the best travel crew. Cherishing these memories forever.`,
+    },
+    {
+      id: 'grateful',
+      label: 'Grateful',
+      text: `Grateful for the sights, the laughs, and every single moment of "${trip.title}". Here is to more shared journeys!`,
+    },
+  ];
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('highlight');
+  const [customCaption, setCustomCaption] = useState<string>(captionPresets[0].text);
+
+  const handleSelectPreset = (preset: typeof captionPresets[0]) => {
+    setSelectedPresetId(preset.id);
+    setCustomCaption(preset.text);
+  };
+
+  /** Share rendered card with chosen caption */
   const handleShareImage = async () => {
     setSharingImage(true);
     try {
-      const { error } = await shareTripCardImage(shareCardRef, trip);
+      const { error } = await shareTripCardImage(shareCardRef, trip, customCaption);
       if (error) notify(error, 'error');
     } finally {
       setSharingImage(false);
+    }
+  };
+
+  const handleFacebookShare = async () => {
+    setSharingFacebookImage(true);
+    try {
+      const { error } = await shareToFacebook(trip, customCaption, shareCardRef);
+      if (error) notify(error, 'error');
+    } finally {
+      setSharingFacebookImage(false);
     }
   };
 
@@ -132,27 +161,55 @@ export default function TripScrapbookView({
     try {
       const { saved, error } = await saveTripCardImage(shareCardRef);
       if (error) notify(error, 'error');
-      else if (saved) notify('Saved. Trip card saved to your photos.', 'success');
+      else if (saved) notify('Saved! Trip memory card saved to your photos.', 'success');
     } finally {
       setSavingImage(false);
     }
   };
 
-  // Existing Facebook path, preserved.
-  const handleFacebookShare = async () => {
-    const { error } = await shareToFacebook(trip);
-    if (error) notify(error, 'error');
-  };
-
-  // Existing text share, preserved as the "no image" fallback.
   const handleGeneralShare = async () => {
-    const { error } = await shareTrip(trip);
+    const { error } = await shareTrip(trip, customCaption);
     if (error) notify(error, 'error');
   };
 
-  const coverImage = trip.image && trip.image.trim() !== ''
-    ? trip.image
-    : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200';
+  const handleCopyCaption = async () => {
+    const fullMessage = buildTripShareMessage(trip, customCaption);
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(fullMessage);
+        notify('Caption copied to clipboard!', 'success');
+      } else {
+        await RNShare.share({ message: fullMessage });
+      }
+    } catch {
+      notify('Caption ready to share!', 'info');
+    }
+  };
+
+  const handleDeleteTrip = () => {
+    confirmAction({
+      title: 'Delete Scrapbook Memory',
+      message: `Are you sure you want to permanently delete "${trip.title}"? This will remove all memories and records.`,
+      confirmLabel: 'Delete Permanently',
+      destructive: true,
+    }).then(async (ok) => {
+      if (!ok) return;
+      setIsDeleting(true);
+      const { error } = await deleteTrip(trip.id);
+      if (error) {
+        setIsDeleting(false);
+        notify(error, 'error');
+      } else {
+        notify('Trip deleted', 'info');
+        router.replace('/(tabs)/trips');
+      }
+    });
+  };
+
+  const defaultDestinationPhoto = getPlaceImageUrl(trip.destination || trip.title || 'Philippines');
+  const rawCover = trip.image || trip.image_url;
+  const isGeneric = !rawCover || String(rawCover).trim() === '' || String(rawCover).includes('photo-1469854523086');
+  const [heroImageUri, setHeroImageUri] = useState<string>(isGeneric ? defaultDestinationPhoto : rawCover);
 
   return (
     <ScrollView
@@ -160,89 +217,124 @@ export default function TripScrapbookView({
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* ═══ 1. HERO COVER & MEMORY STAMP ═══ */}
-      <View style={styles.heroWrapper}>
-        <Image source={{ uri: coverImage }} style={styles.heroImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.92)']}
-          locations={[0, 0.35, 0.7, 1]}
-          style={StyleSheet.absoluteFillObject}
-        />
+      {/* ═══ 1. VINTAGE SCRAPBOOK HERO COVER ═══ */}
+      <View style={styles.heroOuterWrapper}>
+        <View style={[styles.heroCardFrame, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.heroImageContainer}>
+            <Image
+              source={{ uri: heroImageUri }}
+              onError={() => setHeroImageUri(defaultDestinationPhoto)}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.92)']}
+              locations={[0, 0.35, 0.65, 1]}
+              style={StyleSheet.absoluteFillObject}
+            />
 
-        {/* Vintage Scrapbook Stamp Badge */}
-        <View style={styles.heroStamp}>
-          <View style={styles.stampBadge}>
-            <Ionicons name="sparkles" size={13} color="#FFD700" />
-            <Text style={styles.stampBadgeText}>MEMORIES SCRAPBOOK</Text>
+            {/* Vintage Scrapbook Stamp Badge */}
+            <View style={styles.heroStamp}>
+              <View style={styles.stampBadge}>
+                <Ionicons name="sparkles" size={13} color="#FFD700" />
+                <Text style={styles.stampBadgeText}>MEMORIES SCRAPBOOK</Text>
+              </View>
+            </View>
+
+            {/* Quick Status Tag */}
+            <View style={styles.heroStatusPill}>
+              <Ionicons name="checkmark-done-circle" size={13} color="#10B981" />
+              <Text style={styles.heroStatusText}>COMPLETED</Text>
+            </View>
+
+            {/* Hero Title & Info */}
+            <View style={styles.heroContent}>
+              {!!trip.destination && (
+                <View style={styles.destPillRow}>
+                  <Ionicons name="location-sharp" size={12} color="#FFD700" />
+                  <Text style={styles.heroDestination} numberOfLines={1}>
+                    {trip.destination.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.heroTitle} numberOfLines={2}>
+                {trip.title}
+              </Text>
+              <Text style={styles.heroDateRange}>
+                {formatRange(trip.startDate, trip.endDate)} · {totalDays} {totalDays === 1 ? 'Day' : 'Days'}
+              </Text>
+            </View>
           </View>
-        </View>
-
-        {/* Hero Title & Info */}
-        <View style={styles.heroContent}>
-          {!!trip.destination && (
-            <Text style={styles.heroDestination} numberOfLines={1}>
-              {trip.destination.toUpperCase()}
-            </Text>
-          )}
-          <Text style={styles.heroTitle} numberOfLines={2}>
-            {trip.title}
-          </Text>
-          <Text style={styles.heroDateRange}>
-            {formatRange(trip.startDate, trip.endDate)} · {totalDays} {totalDays === 1 ? 'Day' : 'Days'}
-          </Text>
         </View>
       </View>
 
-      {/* ═══ 2. SHARE ═══ */}
+      {/* ═══ 2. QUICK ACTION BAR: SHARE ═══ */}
       <View style={styles.shareActionBar}>
         <TouchableOpacity
-          style={[styles.facebookButton, { backgroundColor: colors.brand }]}
+          style={[styles.primaryShareBtn, { backgroundColor: colors.brand }]}
           onPress={() => setShareOpen(true)}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
         >
-          <Ionicons name="share-social" size={17} color="#FFFFFF" />
-          <Text style={styles.facebookButtonText}>Share this trip</Text>
+          <Ionicons name="share-social" size={18} color="#FFFFFF" />
+          <Text style={styles.primaryShareBtnText}>Share Scrapbook & Card</Text>
         </TouchableOpacity>
       </View>
 
       {/* ═══ 3. JOURNEY MILESTONES STATS ═══ */}
       <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.brand }]}>{totalDays}</Text>
+          <View style={[styles.statIconBox, { backgroundColor: 'rgba(2, 139, 235, 0.12)' }]}>
+            <Ionicons name="calendar" size={16} color="#028BEB" />
+          </View>
+          <Text style={[styles.statValue, { color: colors.text }]}>{totalDays}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>
             {totalDays === 1 ? 'Day Trip' : 'Days Total'}
           </Text>
         </View>
+
         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.success }]}>{itinerary.length}</Text>
+          <View style={[styles.statIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+            <Ionicons name="pin" size={16} color="#10B981" />
+          </View>
+          <Text style={[styles.statValue, { color: colors.text }]}>{itinerary.length}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>
             {itinerary.length === 1 ? 'Stop Visited' : 'Stops Visited'}
           </Text>
         </View>
+
         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: colors.warning }]}>{members.length || 1}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Travelers</Text>
+          <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+            <Ionicons name="people" size={16} color="#F59E0B" />
+          </View>
+          <Text style={[styles.statValue, { color: colors.text }]}>{members.length || 1}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Buddies</Text>
         </View>
+
         {totalSpend > 0 && (
           <>
             <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.brand }]}>
+              <View style={[styles.statIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
+                <Ionicons name="wallet" size={16} color="#8B5CF6" />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>
                 ₱{Math.round(totalSpend).toLocaleString()}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Spent</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total Spent</Text>
             </View>
           </>
         )}
       </View>
 
-      {/* ═══ 4. THE TRAVEL CREW ═══ */}
+      {/* ═══ 4. THE TRAVEL CREW (POLAROID CARDS) ═══ */}
       {members.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="people-outline" size={16} color={colors.brand} />
+            <Ionicons name="people-outline" size={18} color={colors.brand} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel Buddies</Text>
             <Text style={[styles.sectionCount, { color: colors.textMuted }]}>({members.length})</Text>
           </View>
@@ -252,7 +344,10 @@ export default function TripScrapbookView({
               const avatarUri = m.avatar_url && m.avatar_url.trim() !== '' ? m.avatar_url : null;
               const isLead = m.role === 'organizer';
               return (
-                <View key={m.id || index} style={[styles.crewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <View
+                  key={m.id || index}
+                  style={[styles.crewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                >
                   <View style={styles.crewAvatarWrap}>
                     {avatarUri ? (
                       <Image source={{ uri: avatarUri }} style={styles.crewAvatar} />
@@ -282,11 +377,11 @@ export default function TripScrapbookView({
         </View>
       )}
 
-      {/* ═══ 5. COMPLETE CHRONOLOGICAL ITINERARY TIMELINE ═══ */}
+      {/* ═══ 5. CHRONOLOGICAL ITINERARY TIMELINE ═══ */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="map-outline" size={16} color={colors.brand} />
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Timeline & Places Visited</Text>
+          <Ionicons name="map-outline" size={18} color={colors.brand} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Places Visited & Timeline</Text>
         </View>
 
         {sortedDays.length === 0 ? (
@@ -299,10 +394,11 @@ export default function TripScrapbookView({
                 {/* Day Header Marker */}
                 <View style={styles.dayHeaderRow}>
                   <View style={[styles.dayBadge, { backgroundColor: colors.brandLight, borderColor: colors.brand }]}>
+                    <Ionicons name="calendar-outline" size={12} color={colors.brand} />
                     <Text style={[styles.dayBadgeText, { color: colors.brand }]}>DAY {dayIdx + 1}</Text>
                   </View>
                   <Text style={[styles.dayStopCount, { color: colors.textMuted }]}>
-                    {stops.length} {stops.length === 1 ? 'place visited' : 'places visited'}
+                    {stops.length} {stops.length === 1 ? 'place recorded' : 'places recorded'}
                   </Text>
                 </View>
 
@@ -328,19 +424,31 @@ export default function TripScrapbookView({
                               </View>
                             )}
                             {!!stop.location && (
-                              <Text style={[styles.locationText, { color: colors.brand }]} numberOfLines={1}>
-                                <Ionicons name="location-outline" size={11} color={colors.brand} /> {stop.location}
-                              </Text>
+                              <View style={[styles.locationPill, { backgroundColor: 'rgba(2, 139, 235, 0.08)' }]}>
+                                <Ionicons name="location-outline" size={11} color={colors.brand} />
+                                <Text style={[styles.locationText, { color: colors.brand }]} numberOfLines={1}>
+                                  {stop.location}
+                                </Text>
+                              </View>
                             )}
                           </View>
 
-                          <Text style={[styles.stopTitle, { color: colors.text }]}>{stop.title}</Text>
+                          <View style={styles.stopCardBodyRow}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <Text style={[styles.stopTitle, { color: colors.text }]}>{stop.title}</Text>
 
-                          {!!stop.description && (
-                            <Text style={[styles.stopDescription, { color: colors.textSecondary }]}>
-                              {stop.description}
-                            </Text>
-                          )}
+                              {!!stop.description && (
+                                <Text style={[styles.stopDescription, { color: colors.textSecondary }]}>
+                                  {stop.description}
+                                </Text>
+                              )}
+                            </View>
+                            <Image
+                              source={{ uri: getPlaceImageUrl(stop.title || stop.location || trip.destination) }}
+                              style={styles.stopThumbnail}
+                              resizeMode="cover"
+                            />
+                          </View>
                         </View>
                       </View>
                     );
@@ -352,21 +460,26 @@ export default function TripScrapbookView({
         )}
       </View>
 
-      {/* ═══ 6. EXPENSES SUMMARY ═══ */}
+      {/* ═══ 6. EXPENSES RECAP ═══ */}
       {expenses.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="wallet-outline" size={16} color={colors.brand} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Expenses Summary</Text>
+            <Ionicons name="wallet-outline" size={18} color={colors.brand} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trip Financial Recap</Text>
           </View>
 
           <View style={[styles.expensesCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <View style={styles.expensesTopRow}>
               <View>
-                <Text style={[styles.expensesLabel, { color: colors.textMuted }]}>TOTAL TRIP COST</Text>
+                <Text style={[styles.expensesLabel, { color: colors.textMuted }]}>TOTAL TRIP EXPENDITURE</Text>
                 <Text style={[styles.expensesTotal, { color: colors.text }]}>
                   ₱{Math.round(totalSpend).toLocaleString()}
                 </Text>
+                {members.length > 1 && (
+                  <Text style={[styles.expenseAvgText, { color: colors.textSecondary }]}>
+                    ~₱{Math.round(totalSpend / members.length).toLocaleString()} per traveler
+                  </Text>
+                )}
               </View>
               <View style={[styles.expensesCountBadge, { backgroundColor: colors.surface }]}>
                 <Text style={[styles.expensesCountText, { color: colors.textSecondary }]}>
@@ -377,10 +490,9 @@ export default function TripScrapbookView({
 
             <View style={[styles.expenseDivider, { backgroundColor: colors.cardBorder }]} />
 
-            {/* List top expenses */}
-            {expenses.slice(0, 4).map((exp: any, i: number) => (
+            {expenses.slice(0, 5).map((exp: any, i: number) => (
               <View key={exp.id || i} style={styles.expenseRow}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginRight: 10 }}>
                   <Text style={[styles.expenseTitle, { color: colors.text }]} numberOfLines={1}>
                     {exp.title}
                   </Text>
@@ -399,12 +511,12 @@ export default function TripScrapbookView({
         </View>
       )}
 
-      {/* ═══ 7. POLLS & DECISIONS ARCHIVE ═══ */}
+      {/* ═══ 7. POLLS & GROUP DECISIONS ARCHIVE ═══ */}
       {polls.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="checkbox-outline" size={16} color={colors.brand} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Group Decisions</Text>
+            <Ionicons name="checkbox-outline" size={18} color={colors.brand} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Group Decisions & Polls</Text>
           </View>
 
           {polls.map((poll: any, idx: number) => (
@@ -432,80 +544,146 @@ export default function TripScrapbookView({
         </View>
       )}
 
-      {/* ═══ 8. MANAGE / DELETE TRIP ═══ */}
-      <View style={[styles.section, { marginTop: space.sm }]}>
-        <TouchableOpacity
-          style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}
-          onPress={handleDeleteTrip}
-          disabled={isDeleting}
-          activeOpacity={0.8}
-        >
-          {isDeleting ? (
-            <ActivityIndicator size="small" color={colors.danger} />
-          ) : (
-            <>
-              <Ionicons name="trash-outline" size={16} color={colors.danger} />
-              <Text style={[styles.deleteButtonText, { color: colors.danger }]}>Delete Trip Memory</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* ═══ 8. ORGANIZER ACTIONS (DELETE) ═══ */}
+      {isOrganizer && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}
+            onPress={handleDeleteTrip}
+            disabled={isDeleting}
+            activeOpacity={0.8}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={[styles.deleteButtonText, { color: colors.danger }]}>Delete Trip Memory</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ═══ 9. SCRAPBOOK WATERMARK FOOTER ═══ */}
       <View style={styles.footer}>
-        <Ionicons name="book-outline" size={20} color={colors.textMuted} />
+        <View style={[styles.footerSeal, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+          <Ionicons name="book" size={16} color={colors.brand} />
+          <Text style={[styles.footerSealText, { color: colors.text }]}>TOURGO MEMORIES SCRAPBOOK</Text>
+        </View>
         <Text style={[styles.footerTagline, { color: colors.textMuted }]}>
-          Every stamp is a story · Preserved in TourGo Albums
+          Every stamp is a story · Preserved forever in your Albums
         </Text>
       </View>
 
-      {/* Off-screen capture target — full size, never visible. Rendering it in
-          the normal tree (rather than inside the modal) is what makes
-          captureRef reliable on Android. */}
+      {/* Off-screen capture target */}
       <View collapsable={false} style={styles.captureHost} pointerEvents="none">
         <View ref={shareCardRef} collapsable={false}>
           <TripShareCard trip={trip} />
         </View>
       </View>
 
-      {/* Preview -> choose destination */}
-      <Sheet visible={shareOpen} onClose={() => setShareOpen(false)} title="Share your trip">
-        <View style={{ alignItems: 'center' }}>
-          <TripShareCard trip={trip} scale={0.86} />
-        </View>
+      {/* ═══ 10. SHARE SHEET WITH CAPTION CUSTOMIZER ═══ */}
+      <Sheet visible={shareOpen} onClose={() => setShareOpen(false)} title="Share Your Scrapbook">
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.75 }}>
+          <View style={{ alignItems: 'center', marginVertical: space.sm }}>
+            <TripShareCard trip={trip} scale={0.82} />
+          </View>
 
-        <View style={{ marginTop: space.xl, gap: space.sm }}>
-          <Button
-            label="Share image"
-            icon="image-outline"
-            onPress={handleShareImage}
-            loading={sharingImage}
-            fullWidth
-          />
-          <Button
-            label="Share to Facebook"
-            variant="secondary"
-            icon="logo-facebook"
-            onPress={handleFacebookShare}
-            fullWidth
-          />
-          <Button
-            label="Save to photos"
-            variant="secondary"
-            icon="download-outline"
-            onPress={handleSaveImage}
-            loading={savingImage}
-            fullWidth
-          />
-          <Button
-            label="Share as text"
-            variant="plain"
-            onPress={handleGeneralShare}
-            fullWidth
-          />
-        </View>
+          {/* Caption Customizer Box */}
+          <View style={[styles.captionSection, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+            <View style={styles.captionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.brand} />
+                <Text style={[styles.captionTitle, { color: colors.text }]}>Story Caption</Text>
+              </View>
+              <TouchableOpacity onPress={handleCopyCaption} activeOpacity={0.7} style={styles.copyBtn}>
+                <Ionicons name="copy-outline" size={13} color={colors.brand} />
+                <Text style={[styles.copyBtnText, { color: colors.brand }]}>Copy</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Caption Presets */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+              {captionPresets.map((preset) => {
+                const active = selectedPresetId === preset.id;
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    onPress={() => handleSelectPreset(preset)}
+                    style={[
+                      styles.presetChip,
+                      active
+                        ? { backgroundColor: colors.brand, borderColor: colors.brand }
+                        : { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        { color: active ? '#FFFFFF' : colors.textSecondary },
+                      ]}
+                    >
+                      {preset.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Editable Caption Input */}
+            <TextInput
+              style={[
+                styles.captionInput,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.cardBorder,
+                  color: colors.text,
+                },
+              ]}
+              value={customCaption}
+              onChangeText={setCustomCaption}
+              multiline
+              numberOfLines={3}
+              placeholder="Write a custom memory caption..."
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          {/* Share Action Buttons */}
+          <View style={{ marginTop: space.lg, gap: space.sm, paddingBottom: space.md }}>
+            <Button
+              label="Share Photo Card & Caption"
+              icon="image-outline"
+              onPress={handleShareImage}
+              loading={sharingImage}
+              fullWidth
+            />
+            <Button
+              label="Share to Facebook"
+              variant="secondary"
+              icon="logo-facebook"
+              onPress={handleFacebookShare}
+              loading={sharingFacebookImage}
+              fullWidth
+            />
+            <Button
+              label="Save Card to Photos"
+              variant="secondary"
+              icon="download-outline"
+              onPress={handleSaveImage}
+              loading={savingImage}
+              fullWidth
+            />
+            <Button
+              label="Share Text Summary"
+              variant="plain"
+              onPress={handleGeneralShare}
+              fullWidth
+            />
+          </View>
+        </ScrollView>
       </Sheet>
-
     </ScrollView>
   );
 }
@@ -514,13 +692,34 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingBottom: 60 },
 
-  // Hero
-  heroWrapper: {
+  // Hero Outer Frame
+  heroOuterWrapper: {
+    width: '100%',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  heroCardFrame: {
+    width: '100%',
+    borderRadius: 0,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    borderWidth: 0,
+    borderBottomWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  heroImageContainer: {
     height: HERO_HEIGHT,
     width: '100%',
     position: 'relative',
     justifyContent: 'flex-end',
-    padding: space.xl,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.lg,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,
@@ -529,15 +728,15 @@ const styles = StyleSheet.create({
   },
   heroStamp: {
     position: 'absolute',
-    top: space.lg,
-    left: space.xl,
+    top: space.md,
+    left: space.md,
   },
   stampBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(15, 23, 42, 0.82)',
-    borderColor: 'rgba(255, 215, 0, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderColor: 'rgba(255, 215, 0, 0.7)',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -548,13 +747,38 @@ const styles = StyleSheet.create({
     ...T.microStrong,
     letterSpacing: 0.8,
   },
+  heroStatusPill: {
+    position: 'absolute',
+    top: space.md,
+    right: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: '#10B981',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  heroStatusText: {
+    color: '#10B981',
+    ...T.microStrong,
+    letterSpacing: 0.5,
+  },
   heroContent: {
-    gap: 3,
+    gap: 4,
+  },
+  destPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   heroDestination: {
     ...T.overline,
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: '#FFD700',
     letterSpacing: 1.2,
+    fontWeight: '700',
   },
   heroTitle: {
     ...T.display,
@@ -564,7 +788,7 @@ const styles = StyleSheet.create({
   },
   heroDateRange: {
     ...T.label,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
   },
 
@@ -578,45 +802,38 @@ const styles = StyleSheet.create({
   },
   shareActionBar: {
     flexDirection: 'row',
-    paddingHorizontal: space.xl,
+    paddingHorizontal: space.lg,
     paddingTop: space.md,
-    paddingBottom: space.sm,
+    paddingBottom: space.xs,
     gap: 10,
   },
-  facebookButton: {
+  primaryShareBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 16,
-    shadowColor: '#1877F2',
+    shadowColor: '#028BEB',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
   },
-  facebookButtonText: {
+  primaryShareBtnText: {
     color: '#FFFFFF',
     ...T.emphasis,
-  },
-  systemShareButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // Stats Card
   statsCard: {
     flexDirection: 'row',
-    marginHorizontal: space.xl,
+    marginHorizontal: space.lg,
     marginTop: space.md,
     marginBottom: space.lg,
-    padding: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.sm,
     borderRadius: 20,
     borderWidth: 1,
     justifyContent: 'space-around',
@@ -625,6 +842,15 @@ const styles = StyleSheet.create({
   statItem: {
     alignItems: 'center',
     flex: 1,
+    gap: 3,
+  },
+  statIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   statValue: {
     ...T.titleSm,
@@ -634,22 +860,21 @@ const styles = StyleSheet.create({
     ...T.micro,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginTop: 2,
   },
   statDivider: {
     width: 1,
-    height: 24,
+    height: 32,
   },
 
   // Section
   section: {
-    marginHorizontal: space.xl,
+    marginHorizontal: space.lg,
     marginBottom: space.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginBottom: space.md,
   },
   sectionTitle: {
@@ -663,13 +888,14 @@ const styles = StyleSheet.create({
   // Crew
   crewScroll: {
     gap: 10,
+    paddingRight: space.md,
   },
   crewCard: {
     alignItems: 'center',
-    width: 86,
+    width: 90,
     paddingVertical: 12,
     paddingHorizontal: 8,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
   },
   crewAvatarWrap: {
@@ -677,14 +903,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   crewAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   crewAvatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -722,9 +948,12 @@ const styles = StyleSheet.create({
     marginBottom: space.md,
   },
   dayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
   },
   dayBadgeText: {
@@ -767,7 +996,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
+    flexWrap: 'wrap',
   },
   timePill: {
     flexDirection: 'row',
@@ -780,17 +1010,36 @@ const styles = StyleSheet.create({
   timeText: {
     ...T.micro,
   },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
   locationText: {
     ...T.microStrong,
-    flex: 1,
+  },
+  stopCardBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  stopThumbnail: {
+    width: 62,
+    height: 62,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
   },
   stopTitle: {
     ...T.emphasis,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   stopDescription: {
     ...T.caption,
-    lineHeight: 16,
+    lineHeight: 17,
   },
 
   // Expenses
@@ -802,7 +1051,7 @@ const styles = StyleSheet.create({
   expensesTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   expensesLabel: {
     ...T.microStrong,
@@ -811,6 +1060,10 @@ const styles = StyleSheet.create({
   expensesTotal: {
     ...T.display,
     fontWeight: '800',
+    marginTop: 2,
+  },
+  expenseAvgText: {
+    ...T.caption,
     marginTop: 2,
   },
   expensesCountBadge: {
@@ -860,7 +1113,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 12,
   },
   pollOptionText: {
@@ -870,7 +1123,20 @@ const styles = StyleSheet.create({
     ...T.microStrong,
   },
 
-  // Delete Button
+  // Buttons
+  reopenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  reopenButtonText: {
+    ...T.emphasis,
+  },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -890,10 +1156,72 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: space.xl,
+    gap: 8,
+  },
+  footerSeal: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  footerSealText: {
+    ...T.microStrong,
+    letterSpacing: 0.8,
   },
   footerTagline: {
     ...T.micro,
     fontStyle: 'italic',
+  },
+
+  // Share Caption Section
+  captionSection: {
+    marginTop: space.md,
+    padding: space.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+  },
+  captionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  captionTitle: {
+    ...T.label,
+    fontWeight: '700',
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  copyBtnText: {
+    ...T.microStrong,
+  },
+  presetRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    ...T.microStrong,
+  },
+  captionInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: space.sm,
+    ...T.caption,
+    textAlignVertical: 'top',
+    minHeight: 64,
   },
 });

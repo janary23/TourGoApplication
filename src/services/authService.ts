@@ -4,6 +4,10 @@
 import { supabase } from './supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export interface UserProfile {
   id: string;
@@ -44,9 +48,8 @@ export async function signIn(
 // (Authentication > Providers > Google) with the redirect URL returned by
 // getOAuthRedirectUrl() added to Authentication > URL Configuration.
 //
-// Uses expo-linking rather than an in-app browser so no extra dependency is
-// needed: we open the consent screen in the system browser and catch the
-// redirect back into the app as a deep link.
+// Uses expo-web-browser to provide a seamless in-app authentication experience
+// that captures the OAuth redirect and sets the Supabase session.
 
 /** The deep link Supabase should send the user back to after Google consent. */
 export function getOAuthRedirectUrl(): string {
@@ -54,27 +57,52 @@ export function getOAuthRedirectUrl(): string {
 }
 
 /**
- * Start the Google sign-in flow. Resolves once the browser has been opened —
- * the session itself arrives via the deep link handled by completeOAuthSignIn.
+ * Start the Google sign-in flow.
+ * Handles in-app browser on mobile and direct redirect on web.
  */
 export async function signInWithGoogle(): Promise<{ error: string | null }> {
-  const redirectTo = getOAuthRedirectUrl();
+  try {
+    const redirectTo = getOAuthRedirectUrl();
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo, skipBrowserRedirect: true },
-  });
+    if (Platform.OS === 'web') {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? window.location.origin : redirectTo,
+        },
+      });
+      if (error) return { error: error.message };
+      return { error: null };
+    }
 
-  if (error) return { error: error.message };
-  if (!data?.url) {
-    return { error: 'Google sign-in is not configured for this project yet.' };
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) return { error: error.message };
+    if (!data?.url) {
+      return { error: 'Google sign-in is not configured for this project in Supabase yet.' };
+    }
+
+    const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+    if (res.type === 'success' && res.url) {
+      const { error: sessionError } = await completeOAuthSignIn(res.url);
+      if (sessionError) return { error: sessionError };
+      return { error: null };
+    } else if (res.type === 'cancel' || res.type === 'dismiss') {
+      // User cancelled
+      return { error: null };
+    }
+
+    return { error: null };
+  } catch (err: any) {
+    return { error: err?.message || 'Could not complete Google sign-in.' };
   }
-
-  const opened = await Linking.canOpenURL(data.url).catch(() => false);
-  if (!opened) return { error: 'Could not open the Google sign-in page.' };
-
-  await Linking.openURL(data.url);
-  return { error: null };
 }
 
 /**
@@ -135,17 +163,36 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
     .from('profiles')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) return null;
+  if (data) {
+    return {
+      id: data.id,
+      name: data.name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || '',
+      email: data.email || user.email || '',
+      avatar_url: data.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
+      home_city: data.home_city || '',
+    };
+  }
 
-  return {
-    id: data.id,
-    name: data.name || '',
-    email: data.email || user.email || '',
-    avatar_url: data.avatar_url || '',
-    home_city: data.home_city || '',
+  // Auto-create/upsert profile row if it doesn't exist yet (e.g. Google OAuth new user)
+  const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Traveler';
+  const fallbackAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
+  const newProfile: UserProfile = {
+    id: user.id,
+    name: fallbackName,
+    email: user.email || '',
+    avatar_url: fallbackAvatar,
+    home_city: '',
   };
+
+  const { data: upserted } = await supabase
+    .from('profiles')
+    .upsert(newProfile)
+    .select()
+    .maybeSingle();
+
+  return upserted || newProfile;
 }
 
 /** Update the current user's profile (name, home_city, avatar_url). */

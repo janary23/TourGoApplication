@@ -22,7 +22,8 @@ import {
   createPlanId,
   type ActiveDayPlan,
 } from '../services/dayPlanService';
-import { resolvePlaceCoords } from '../services/travelEstimate';
+import { resolvePlaceCoords, geocodePlace } from '../services/travelEstimate';
+import { searchPhotonPlaces } from '../services/freePlacesService';
 import RasterTileMapViewer from '../components/common/RasterTileMapViewer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -32,12 +33,18 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // per platform keeps that explicit instead of relying on the fallback.
 const NATIVE_DRIVER = Platform.OS !== 'web';
 
-const DAY_OPTIONS = ['Food & Coffee', 'Sightseeing', 'Nature', 'Adventure', 'Shopping', 'Nightlife', 'Relaxation', 'Culture & History'];
+const DAY_OPTIONS = ['Food & Coffee', 'Sightseeing', 'Nature', 'Adventure', 'Shopping', 'Nightlife', 'Relaxation', 'Culture & History', 'Other'];
 const GROUP_OPTIONS = [
   { id: 'solo', label: 'Just me' },
   { id: 'partner', label: 'Partner' },
   { id: 'friends', label: 'Friends' },
   { id: 'family', label: 'Family' },
+];
+const BUDGET_OPTIONS = [
+  { id: 'budget', label: '₱ Budget-Friendly' },
+  { id: 'moderate', label: '₱₱ Moderate' },
+  { id: 'luxury', label: '₱₱₱ Luxury' },
+  { id: 'other', label: 'Other / Custom' },
 ];
 const POPULAR_SPOTS = ['Tagaytay', 'Baguio', 'Batangas', 'La Union', 'Boracay', 'Siargao'];
 
@@ -190,7 +197,10 @@ export default function DayPlanScreen() {
   const [endTime, setEndTime] = useState('8:00 PM');
   const [date] = useState<Date>(new Date());
   const [prefs, setPrefs] = useState<string[]>([]);
+  const [customPref, setCustomPref] = useState('');
   const [group, setGroup] = useState<string>('');
+  const [budget, setBudget] = useState<string>('');
+  const [customBudget, setCustomBudget] = useState('');
   const [plan, setPlan] = useState<SpontaneousDayPlan | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [statusIdx, setStatusIdx] = useState(0);
@@ -242,10 +252,10 @@ export default function DayPlanScreen() {
   };
 
   const [viewMode, setViewMode] = useState<'timeline' | 'map'>('timeline');
-  const planRef = useRef<{ destination: string; date: Date; prefs: string[]; group: string; startTime: string; endTime: string } | null>(null);
+  const planRef = useRef<{ destination: string; date: Date; prefs: string[]; group: string; budget: string; startTime: string; endTime: string } | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const statusTimer = useRef<any>(null);
-  const metaRef = useRef({ destination: '', date: new Date(), group: '', timeRange: '' });
+  const metaRef = useRef({ destination: '', date: new Date(), group: '', budget: '', timeRange: '' });
 
   const destCenterCoords = useMemo(() => {
     const target = metaRef.current.destination || destination || 'Tagaytay';
@@ -253,24 +263,85 @@ export default function DayPlanScreen() {
     return coords ? { lat: coords.latitude, lng: coords.longitude } : { lat: 14.5995, lng: 120.9842 };
   }, [metaRef.current.destination, destination]);
 
-  const mapRouteStops = useMemo(() => {
-    if (!plan?.stops) return [];
-    const base = destCenterCoords;
-    return plan.stops.map((stop, idx) => {
-      const resolved = resolvePlaceCoords(stop.title);
-      const lat = resolved ? resolved.latitude : base.lat + (idx - (plan.stops.length - 1) / 2) * 0.007;
-      const lng = resolved ? resolved.longitude : base.lng + (idx % 2 === 0 ? 0.005 : -0.005);
-      return {
-        stopNumber: idx + 1,
-        title: stop.title,
-        time: stop.time,
-        lat,
-        lng,
-        description: stop.description,
-        category: stop.category,
-      };
-    });
+  // ── Route stops: geocode each stop title against real place data ──
+  // `resolved` marks whether `lat`/`lng` is the stop's genuine location —
+  // when nothing resolves it, `lat`/`lng` are never set at all, so a wrong
+  // guess never gets treated as if it were the real place. Only resolved
+  // stops go on the map; the mini-list below still shows every stop, with an
+  // "Exact spot not found" note on ones that didn't resolve.
+  const [mapRouteStops, setMapRouteStops] = useState<Array<{
+    stopNumber: number; title: string; time?: string;
+    lat?: number; lng?: number; description?: string; category?: string;
+    resolved: boolean;
+  }>>([]);
+
+  useEffect(() => {
+    if (!plan?.stops || plan.stops.length === 0) { setMapRouteStops([]); return; }
+    let cancelled = false;
+    const destination = metaRef.current.destination || '';
+    const hint = destination ? `${destination}, Philippines` : 'Philippines';
+
+    (async () => {
+      // First pass: the offline table is instant, so the map isn't blank
+      // while live lookups for everything else are still in flight.
+      const quick = plan.stops.map((stop: any, idx: number) => {
+        const offline = resolvePlaceCoords(stop.title);
+        return {
+          stopNumber: idx + 1,
+          title: stop.title,
+          time: stop.time,
+          lat: offline?.latitude,
+          lng: offline?.longitude,
+          description: stop.description,
+          category: stop.category,
+          resolved: !!offline,
+        };
+      });
+      if (!cancelled) setMapRouteStops(quick);
+      if (quick.every((s) => s.resolved)) return; // nothing left to look up live
+
+      // Second pass: for every stop the offline table missed, geocode it for
+      // real — sequentially, not all at once. Nominatim's usage policy caps
+      // requests at ~1/second; firing every stop in parallel (the previous
+      // Promise.all) risked getting throttled, silently leaving several
+      // stops on a made-up position with no sign anything had gone wrong.
+      // Photon goes first — same free OSM-backed geocoder already used
+      // elsewhere in the app, and proved more consistently reachable than
+      // Nominatim's public instance in testing — with Nominatim (which
+      // tries the destination-hinted query too) as the fallback.
+      const refined = [...quick];
+      for (let idx = 0; idx < plan.stops.length; idx++) {
+        if (cancelled) return;
+        if (refined[idx].resolved) continue;
+        const title = plan.stops[idx].title;
+
+        const photonHits = await searchPhotonPlaces(`${title}, ${hint}`).catch(() => []);
+        if (photonHits.length > 0) {
+          refined[idx] = { ...refined[idx], lat: photonHits[0].latitude, lng: photonHits[0].longitude, resolved: true };
+        } else {
+          const live = await geocodePlace(title, hint).catch(() => null);
+          if (live) {
+            refined[idx] = { ...refined[idx], lat: live.latitude, lng: live.longitude, resolved: true };
+          }
+          // Neither source found it — leave lat/lng unset. It stays out of
+          // the map's pins rather than landing on a guessed position.
+        }
+        if (!cancelled) setMapRouteStops([...refined]);
+        // A short pause between stops keeps both free services comfortably
+        // within their fair-use limits.
+        if (idx < plan.stops.length - 1) await new Promise((r) => setTimeout(r, 300));
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [plan?.stops, destCenterCoords]);
+
+  // Only genuinely-resolved stops get a pin — never a fabricated position.
+  const resolvedMapRouteStops = useMemo(
+    () => mapRouteStops.filter((s): s is typeof s & { lat: number; lng: number } => s.resolved && s.lat != null && s.lng != null),
+    [mapRouteStops]
+  );
+
 
   const entrance = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -285,6 +356,7 @@ export default function DayPlanScreen() {
             destination: active.destination,
             date: new Date(),
             group: active.group || '',
+            budget: active.budget || '',
             timeRange: active.timeRange || '',
           };
           setPhase('result');
@@ -328,10 +400,11 @@ export default function DayPlanScreen() {
         ref.prefs,
         ref.group,
         optimize,
-        { start: ref.startTime, end: ref.endTime }
+        { start: ref.startTime, end: ref.endTime },
+        ref.budget
       );
       const timeStr = ref.startTime && ref.endTime ? `${ref.startTime} - ${ref.endTime}` : '';
-      metaRef.current = { destination: next.destination || ref.destination, date: ref.date, group: ref.group, timeRange: timeStr };
+      metaRef.current = { destination: next.destination || ref.destination, date: ref.date, group: ref.group, budget: ref.budget, timeRange: timeStr };
       setPlan(next);
       setPhase('result');
       if (optimize) {
@@ -346,6 +419,7 @@ export default function DayPlanScreen() {
         dateStr: dateLabelFor(ref.date),
         timeRange: timeStr,
         group: ref.group,
+        budget: ref.budget,
         createdAt: Date.now(),
         plan: next,
         status: 'active',
@@ -361,11 +435,72 @@ export default function DayPlanScreen() {
   const handleGenerate = () => {
     const dest = destination.trim();
     if (!dest) return;
-    planRef.current = { destination: dest, date, prefs, group, startTime, endTime };
+
+    // Effective preferences including custom text if provided
+    const effectivePrefs = prefs.filter((p) => p !== 'Other');
+    if (customPref.trim()) {
+      effectivePrefs.push(customPref.trim());
+    }
+
+    // Effective budget including custom budget text if provided
+    const effectiveBudget = budget === 'other'
+      ? (customBudget.trim() ? `Custom (₱${customBudget.trim().replace(/^₱\s*/, '')})` : 'Custom Budget')
+      : budget;
+
+    planRef.current = {
+      destination: dest,
+      date,
+      prefs: effectivePrefs,
+      group,
+      budget: effectiveBudget,
+      startTime,
+      endTime,
+    };
     runGenerate(false);
   };
 
+  const handleRemoveDayPlanStop = (idx: number) => {
+    if (!plan || !plan.stops) return;
+    const stopToRemove = plan.stops[idx];
+    const confirmMsg = `Remove "${stopToRemove?.title || 'this stop'}" from your 1-day plan?`;
+
+    const executeRemove = async () => {
+      const nextStops = plan.stops.filter((_, i) => i !== idx);
+      const updatedPlan = { ...plan, stops: nextStops };
+      setPlan(updatedPlan);
+
+      await saveActiveDayPlan({
+        id: createPlanId(),
+        destination: metaRef.current.destination,
+        dateStr: dateLabelFor(metaRef.current.date),
+        timeRange: metaRef.current.timeRange,
+        group: metaRef.current.group,
+        budget: metaRef.current.budget,
+        createdAt: Date.now(),
+        plan: updatedPlan,
+        status: 'active',
+      });
+    };
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm(confirmMsg) : true;
+      if (ok) executeRemove();
+      return;
+    }
+
+    Alert.alert('Remove Stop', confirmMsg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: executeRemove },
+    ]);
+  };
+
   const groupLabelFor = (g: string) => GROUP_OPTIONS.find((o) => o.id === g)?.label || '';
+  const budgetLabelFor = (b: string) => {
+    if (!b) return '';
+    if (b.startsWith('Custom')) return b;
+    const found = BUDGET_OPTIONS.find((o) => o.id === b);
+    return found ? found.label : b;
+  };
 
   const totalMinutes = (plan?.stops || []).reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
 
@@ -541,12 +676,56 @@ export default function DayPlanScreen() {
               ))}
             </View>
 
+            {prefs.includes('Other') && (
+              <View style={[styles.customFieldWrap, { backgroundColor: colors.card, borderColor: colors.brand }]}>
+                <Ionicons name="sparkles-outline" size={17} color={colors.brand} style={{ marginRight: 8 }} />
+                <TextInput
+                  value={customPref}
+                  onChangeText={setCustomPref}
+                  placeholder="Specify custom activities, hobbies, or vibes..."
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.inputText, { color: colors.text }]}
+                />
+                {customPref.length > 0 && (
+                  <TouchableOpacity onPress={() => setCustomPref('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Who are you going with? <Text style={{ color: colors.textMuted, fontSize: 12 }}>(optional)</Text></Text>
             <View style={styles.chipWrap}>
               {GROUP_OPTIONS.map((o) => (
                 <Chip key={o.id} label={o.label} selected={group === o.id} onPress={() => setGroup(group === o.id ? '' : o.id)} colors={colors} />
               ))}
             </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>What is your target budget? <Text style={{ color: colors.textMuted, fontSize: 12 }}>(optional)</Text></Text>
+            <View style={styles.chipWrap}>
+              {BUDGET_OPTIONS.map((o) => (
+                <Chip key={o.id} label={o.label} selected={budget === o.id} onPress={() => setBudget(budget === o.id ? '' : o.id)} colors={colors} />
+              ))}
+            </View>
+
+            {budget === 'other' && (
+              <View style={[styles.customFieldWrap, { backgroundColor: colors.card, borderColor: colors.brand }]}>
+                <Text style={[styles.currencyPrefix, { color: colors.brand }]}>₱</Text>
+                <TextInput
+                  value={customBudget}
+                  onChangeText={setCustomBudget}
+                  placeholder="Enter custom budget (e.g. 500, 1500 max, 2500/pax)"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="default"
+                  style={[styles.inputText, { color: colors.text }]}
+                />
+                {customBudget.length > 0 && (
+                  <TouchableOpacity onPress={() => setCustomBudget('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.generateBtn, { backgroundColor: colors.brand, opacity: destination.trim() ? 1 : 0.5 }]}
@@ -593,7 +772,24 @@ export default function DayPlanScreen() {
                   {dateLabelFor(metaRef.current.date)}
                   {metaRef.current.timeRange ? ` · ${metaRef.current.timeRange}` : ''}
                   {metaRef.current.group ? ` · ${groupLabelFor(metaRef.current.group)}` : ''}
+                  {metaRef.current.budget ? ` · ${budgetLabelFor(metaRef.current.budget)}` : ''}
                 </Text>
+
+                {/* ── Budget Summary Banner ── */}
+                {!!(plan?.estimatedTotalCost || plan?.budgetTier) && (
+                  <View style={[styles.budgetBanner, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <View style={[styles.budgetIconCircle, { backgroundColor: colors.brandLight }]}>
+                      <Ionicons name="wallet-outline" size={16} color={colors.brand} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={[styles.budgetBannerLabel, { color: colors.textMuted }]}>ESTIMATED DAY EXPENSES</Text>
+                      <Text style={[styles.budgetBannerValue, { color: colors.text }]}>
+                        {plan.estimatedTotalCost || 'Varies by stop'}
+                        {plan.budgetTier ? ` · ${plan.budgetTier}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
                 {/* ── View Toggle: Timeline vs Route Map ── */}
                 <View style={[styles.viewToggleRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -622,7 +818,7 @@ export default function DayPlanScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="navigate-circle" size={18} color={colors.brand} />
                       <Text style={[styles.mapHeaderTitle, { color: colors.text }]}>
-                        {optimizing ? 'AI Optimizing Route...' : `Smart Route · ${mapRouteStops.length} Stops`}
+                        {optimizing ? 'AI Optimizing Route...' : `Smart Route · ${resolvedMapRouteStops.length} of ${mapRouteStops.length} Stops pinned`}
                       </Text>
                     </View>
                     <View style={[styles.mapChip, { backgroundColor: colors.brandLight }]}>
@@ -633,7 +829,7 @@ export default function DayPlanScreen() {
                   <RasterTileMapViewer
                     height={320}
                     width={SCREEN_WIDTH - 44}
-                    routeStops={mapRouteStops}
+                    routeStops={resolvedMapRouteStops}
                     initialCenter={destCenterCoords}
                     initialZoom={14}
                     showLayerSelector={true}
@@ -645,13 +841,16 @@ export default function DayPlanScreen() {
                   <View style={styles.mapStopsList}>
                     {mapRouteStops.map((st) => (
                       <View key={st.stopNumber} style={[styles.mapMiniStopCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                        <View style={[styles.miniStopBadge, { backgroundColor: colors.brand }]}>
+                        <View style={[styles.miniStopBadge, { backgroundColor: st.resolved ? colors.brand : colors.textMuted }]}>
                           <Text style={styles.miniStopBadgeText}>{st.stopNumber}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.miniStopTitle, { color: colors.text }]} numberOfLines={1}>{st.title}</Text>
-                          <Text style={[styles.miniStopSub, { color: colors.textSecondary }]}>{st.time || ''} · {st.category || ''}</Text>
+                          <Text style={[styles.miniStopSub, { color: st.resolved ? colors.textSecondary : colors.textMuted }]}>
+                            {st.resolved ? `${st.time || ''} · ${st.category || ''}` : 'Exact spot not found — not shown on the map'}
+                          </Text>
                         </View>
+                        {!st.resolved && <Ionicons name="location-outline" size={15} color={colors.textMuted} />}
                       </View>
                     ))}
                   </View>
@@ -709,15 +908,33 @@ export default function DayPlanScreen() {
                               <Text numberOfLines={1} style={[T.headline, { flex: 1, color: colors.text }]}>
                                 {stop.title}
                               </Text>
+                              <TouchableOpacity
+                                onPress={() => handleRemoveDayPlanStop(i)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={{ padding: 4 }}
+                                accessibilityLabel="Remove this stop"
+                              >
+                                <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+                              </TouchableOpacity>
                             </View>
 
-                            {!!stop.category && (
-                              <View style={[styles.stopCategoryChip, { backgroundColor: colors.surface }]}>
-                                <Text style={[styles.stopCategoryChipText, { color: colors.textSecondary }]}>
-                                  {stop.category}
-                                </Text>
-                              </View>
-                            )}
+                            <View style={styles.stopPillsRow}>
+                              {!!stop.category && (
+                                <View style={[styles.stopCategoryChip, { backgroundColor: colors.surface }]}>
+                                  <Text style={[styles.stopCategoryChipText, { color: colors.textSecondary }]}>
+                                    {stop.category}
+                                  </Text>
+                                </View>
+                              )}
+                              {!!stop.estimatedCost && (
+                                <View style={[styles.stopCostChip, { backgroundColor: isDark ? 'rgba(71, 173, 245, 0.12)' : '#E9F4FE', borderColor: colors.brand }]}>
+                                  <Ionicons name="pricetag-outline" size={10} color={colors.brand} style={{ marginRight: 3 }} />
+                                  <Text style={[styles.stopCostChipText, { color: colors.brand }]}>
+                                    {stop.estimatedCost}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
 
                             {!!stop.description && (
                               <Text numberOfLines={2} style={[styles.stopDesc, { color: colors.textMuted }]}>
@@ -996,6 +1213,20 @@ const styles = StyleSheet.create({
   fieldLabel: { ...T.body, marginBottom: 8, marginTop: 20 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, height: 52 },
   inputText: { flex: 1, ...T.body },
+  customFieldWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    height: 48,
+    marginTop: 10,
+  },
+  currencyPrefix: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 6,
+  },
   popularRow: { gap: 8, marginTop: 10, paddingRight: 8 },
   popChip: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 },
   popChipText: { ...T.label },
@@ -1052,6 +1283,33 @@ const styles = StyleSheet.create({
   resultTagText: { ...T.footnote },
   resultTitle: { ...T.display, letterSpacing: -0.5, lineHeight: 34 },
   resultMeta: { ...T.subhead, marginTop: 4 },
+
+  budgetBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  budgetIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  budgetBannerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  budgetBannerValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 1,
+  },
 
   stopBlock: {
     flexDirection: 'row',
@@ -1118,16 +1376,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.sm,
   },
+  stopPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+    marginTop: 4,
+  },
   stopCategoryChip: {
     alignSelf: 'flex-start',
     paddingHorizontal: space.sm,
     paddingVertical: 2,
     borderRadius: radius.sm - 2,
-    marginTop: 4,
   },
   stopCategoryChipText: {
     ...T.microStrong,
     letterSpacing: 0.2,
+  },
+  stopCostChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.sm - 2,
+    borderWidth: hairline,
+  },
+  stopCostChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   stopDesc: {
     ...T.footnote,

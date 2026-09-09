@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { joinTrip } from '../../services/tripService';
@@ -14,8 +14,15 @@ import { NavBar } from '../../components/ui/primitives';
 export default function JoinTripScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [code, setCode] = useState('');
+  const params = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState(params?.code ? String(params.code).toUpperCase() : '');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (params?.code) {
+      setCode(String(params.code).toUpperCase());
+    }
+  }, [params?.code]);
 
   const handleJoin = async () => {
     if (!code.trim()) {

@@ -34,6 +34,7 @@ export interface Trip {
   role: 'organizer' | 'member';
   status?: string;
   trip_status?: string;
+  geofenceRadiusMeters: number | null;
   features: TripFeatureSettings;
   members: any[];
   itinerary: any[];
@@ -75,6 +76,7 @@ export async function getTrips(): Promise<TripWithRole[]> {
       end_date,
       code,
       image_url,
+      status,
       created_by,
       created_at,
       trip_members (
@@ -98,7 +100,7 @@ export async function getTrips(): Promise<TripWithRole[]> {
 
     const { data: fallbackData } = await supabase
       .from('trips')
-      .select('id, title, destination, start_date, end_date, code, image_url, created_by, created_at')
+      .select('id, title, destination, start_date, end_date, code, image_url, status, created_by, created_at')
       .in('id', tripIds)
       .order('created_at', { ascending: false });
 
@@ -114,6 +116,7 @@ export async function getTrips(): Promise<TripWithRole[]> {
         code: t.code,
         image: t.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
         role: (membershipMap.get(t.id) as 'organizer' | 'member') || 'member',
+        status: (t as any).status || (t as any).trip_status,
         trip_status: (t as any).trip_status || (t as any).status,
         created_by: t.created_by,
         created_at: t.created_at,
@@ -134,6 +137,7 @@ export async function getTrips(): Promise<TripWithRole[]> {
         code: t.code,
         image: t.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
         role,
+        status: (t as any).status || (t as any).trip_status,
         trip_status: (t as any).trip_status || (t as any).status,
         created_by: t.created_by,
         created_at: t.created_at,
@@ -211,6 +215,7 @@ export async function getTripById(tripId: string): Promise<Trip> {
     role,
     status: trip.status || trip.trip_status,
     trip_status: trip.trip_status || trip.status,
+    geofenceRadiusMeters: trip.geofence_radius_meters ?? null,
     features,
     members: (membersRes.data || []).map((m: any) => {
       const loc = locationsMap.get(m.user_id);
@@ -240,6 +245,7 @@ export async function getTripById(tripId: string): Promise<Trip> {
       title: item.title,
       description: item.description,
       location: item.location,
+      photoUrl: item.photo_url || null,
     })),
     expenses: (expensesRes.data || []).map((exp: any) => ({
       id: exp.id,
@@ -248,6 +254,8 @@ export async function getTripById(tripId: string): Promise<Trip> {
       paidBy: exp.paid_by,
       splitWith: (exp.expense_splits || []).map((s: any) => s.user_id),
       date: exp.expense_date,
+      category: exp.category || null,
+      isSettled: exp.is_settled || false,
     })),
     announcements: (announcementsRes.data || []).map((ann: any) => ({
       id: ann.id,
@@ -303,6 +311,8 @@ export async function getTripById(tripId: string): Promise<Trip> {
         completed: item.is_completed,
         assignedTo: assignedToName,      // resolved display name (null if former member)
         assignedToId,                    // raw user ID for "mine" filter & former-member detection
+        scope: item.scope || 'group',    // pre-migration rows have no column yet — treat as group
+        createdBy: item.created_by || null,
       };
     }),
     documents: (documentsRes.data || []).map((doc: any) => ({
@@ -339,10 +349,10 @@ function getPresetAnnouncement(tripId: string, authorId: string, tripType: strin
 
 function getPresetChecklistItems(tripId: string, userId: string, tripType: string, tripSubtype: string) {
   const common = [
-    { text: 'Government ID / Student ID', is_completed: false, assigned_to: userId },
-    { text: 'Cash & Emergency Funds', is_completed: false, assigned_to: userId },
-    { text: 'Phone Charger & Power Bank', is_completed: false, assigned_to: userId },
-    { text: 'Personal Medications & First Aid', is_completed: false, assigned_to: userId },
+    { text: 'Government ID / Student ID', is_completed: false, assigned_to: null },
+    { text: 'Cash & Emergency Funds', is_completed: false, assigned_to: null },
+    { text: 'Phone Charger & Power Bank', is_completed: false, assigned_to: null },
+    { text: 'Personal Medications & First Aid', is_completed: false, assigned_to: null },
   ];
   return common.map(item => ({ trip_id: tripId, ...item }));
 }
@@ -399,7 +409,7 @@ export async function createTrip(
       trip_id: tripId,
       text,
       is_completed: false,
-      assigned_to: uid
+      assigned_to: null   // unassigned — any member can claim
     }))
     : getPresetChecklistItems(tripId, uid, tripType, tripSubtype);
 
@@ -647,6 +657,18 @@ export async function deleteExpense(expenseId: string): Promise<{ error: string 
   return { error: null };
 }
 
+export async function markExpenseSettled(
+  expenseId: string,
+  settled: boolean
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('expenses')
+    .update({ is_settled: settled })
+    .eq('id', expenseId);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 // ── Announcements ─────────────────────────────────────────────────────────────
 
 export async function addAnnouncement(
@@ -796,15 +818,34 @@ export function subscribeToChatMessages(
 
 // ── Checklist ─────────────────────────────────────────────────────────────────
 
+export type ChecklistScope = 'group' | 'personal';
+
 export async function addChecklistItem(
   tripId: string,
   text: string,
-  assignedToUserId?: string
+  assignedToUserId?: string,
+  scope: ChecklistScope = 'group'
 ): Promise<{ error: string | null }> {
+  const uid = await currentUserId();
   const { error } = await supabase.from('checklist_items').insert({
     trip_id: tripId, text, is_completed: false,
-    assigned_to: assignedToUserId || null,
+    // A personal item is always "assigned to" its own creator — that's what
+    // makes it show up under "mine" and lets the same row shape (and RLS
+    // policy) serve both group and personal items without a second table.
+    assigned_to: scope === 'personal' ? uid : (assignedToUserId || null),
+    scope,
+    created_by: uid,
   });
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+/** Claim an unassigned group task, hand it to someone else (organizer), or unassign it (pass null). */
+export async function assignChecklistItem(itemId: string, userId: string | null): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('checklist_items')
+    .update({ assigned_to: userId })
+    .eq('id', itemId);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -870,9 +911,31 @@ export async function updateUserLocation(
   longitude: number
 ): Promise<{ error: string | null }> {
   const uid = await currentUserId();
-  const { error } = await supabase.from('member_locations').upsert({
-    trip_id: tripId, user_id: uid, latitude, longitude, updated_at: new Date().toISOString(),
-  });
+  // onConflict must match the unique index from scripts/fix_member_locations.sql
+  // — without it, Postgres falls back to the table's primary key, which isn't
+  // (trip_id, user_id), so every share would INSERT a new row instead of
+  // updating your existing one.
+  const { error } = await supabase.from('member_locations').upsert(
+    { trip_id: tripId, user_id: uid, latitude, longitude, updated_at: new Date().toISOString() },
+    { onConflict: 'trip_id,user_id' }
+  );
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
+/**
+ * Sets (or clears, with null) the trip's Guardian "safe zone" radius. Needs
+ * scripts/add_geofence_to_trips.sql to have been run — see that script for
+ * the trips.geofence_radius_meters column it adds.
+ */
+export async function updateGeofenceRadius(
+  tripId: string,
+  radiusMeters: number | null
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('trips')
+    .update({ geofence_radius_meters: radiusMeters })
+    .eq('id', tripId);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -1146,6 +1209,30 @@ export async function previewTripByCode(
   const trimmed = code.trim();
   if (!trimmed) return { data: null, error: 'Enter a trip code.' };
 
+  // 1. Try secure RPC first (bypasses membership-only RLS without compromising write permissions)
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('preview_trip_by_code', {
+      p_code: trimmed,
+    });
+    if (!rpcError && rpcData && rpcData.trip) {
+      const stops = Array.isArray(rpcData.stops) ? rpcData.stops : [];
+      const dayCount = stops.reduce((max: number, s: any) => Math.max(max, Number(s.dayIndex) || 1), 1);
+      return {
+        data: {
+          trip: {
+            ...rpcData.trip,
+            dayCount,
+          },
+          stops,
+        },
+        error: null,
+      };
+    }
+  } catch {
+    // Fall back to direct query
+  }
+
+  // 2. Direct query fallback
   const { data: trip, error: findError } = await supabase
     .from('trips')
     .select('id, title, destination, code, start_date, end_date, image_url')

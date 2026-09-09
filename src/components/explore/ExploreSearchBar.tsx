@@ -134,7 +134,7 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
 
           {googleResults.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>GOOGLE PLACES</Text>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LIVE PLACES</Text>
               {googleResults.map(place => (
                 <Pressable
                   key={place.id}

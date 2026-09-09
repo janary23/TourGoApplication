@@ -33,6 +33,24 @@ export default function ActiveDayPlanFloatingWidget() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
 
+  // finishActiveDayPlan() notifies listeners with `null` synchronously,
+  // before its Supabase call even starts — well before handleFinish gets a
+  // chance to close the modal itself. If the modal's content were driven
+  // directly by activePlan, that early null would hit the `!activePlan`
+  // guard below and unmount the whole component — Modal included — while
+  // it's still visible, leaving an empty sheet on screen until the pending
+  // network call finally lets handleFinish call setModalVisible(false).
+  // displayPlan keeps the last known plan around so the modal keeps
+  // rendering its content until it's actually told to close.
+  const [displayPlan, setDisplayPlan] = useState<ActiveDayPlan | null>(null);
+  useEffect(() => {
+    if (activePlan) {
+      setDisplayPlan(activePlan);
+    } else if (!modalVisible) {
+      setDisplayPlan(null);
+    }
+  }, [activePlan, modalVisible]);
+
   // Entrance & pulse animation
   const bounceAnim = useRef(new Animated.Value(0)).current;
 
@@ -91,64 +109,71 @@ export default function ActiveDayPlanFloatingWidget() {
     router.push('/day-plan');
   };
 
-  if (!activePlan || !activePlan.plan) {
+  // Gate on displayPlan (last known plan), not activePlan directly — this
+  // is what lets the modal keep its content while finishing/closing (see
+  // the comment above displayPlan's declaration).
+  if (!displayPlan || !displayPlan.plan) {
     return null;
   }
 
-  const stops = activePlan.plan.stops || [];
+  const stops = displayPlan.plan.stops || [];
 
   return (
     <>
       {/* ── FLOATING PILL BUTTON ON HOME SCREEN ── */}
-      <Animated.View
-        style={[
-          styles.floatingContainer,
-          {
-            bottom: Math.max(insets.bottom, 12) + 74,
-            transform: [{ scale: bounceAnim }],
-            opacity: bounceAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={() => setModalVisible(true)}
+      {/* Only shown while a plan is actually active — hides immediately
+          once finished, independent of the modal's own closing transition. */}
+      {activePlan && (
+        <Animated.View
           style={[
-            styles.floatingPill,
+            styles.floatingContainer,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.brand,
-              shadowColor: colors.brand,
+              bottom: Math.max(insets.bottom, 12) + 74,
+              transform: [{ scale: bounceAnim }],
+              opacity: bounceAnim,
             },
           ]}
         >
-          {/* Glowing Icon Badge */}
-          <LinearGradient
-            colors={[colors.brand, '#0284C7']}
-            style={styles.iconCircle}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => setModalVisible(true)}
+            style={[
+              styles.floatingPill,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.brand,
+                shadowColor: colors.brand,
+              },
+            ]}
           >
-            <Ionicons name="flash" size={16} color="#FFFFFF" />
-          </LinearGradient>
+            {/* Glowing Icon Badge */}
+            <LinearGradient
+              colors={[colors.brand, '#0284C7']}
+              style={styles.iconCircle}
+            >
+              <Ionicons name="flash" size={16} color="#FFFFFF" />
+            </LinearGradient>
 
-          {/* Info Details */}
-          <View style={styles.pillTextWrap}>
-            <View style={styles.activeTagRow}>
-              <View style={styles.activeDot} />
-              <Text style={[styles.activeTagText, { color: colors.brand }]}>
-                DAY PLAN
+            {/* Info Details */}
+            <View style={styles.pillTextWrap}>
+              <View style={styles.activeTagRow}>
+                <View style={styles.activeDot} />
+                <Text style={[styles.activeTagText, { color: colors.brand }]}>
+                  DAY PLAN
+                </Text>
+              </View>
+              <Text style={[styles.pillDestText, { color: colors.text }]} numberOfLines={1}>
+                {activePlan.destination}
               </Text>
             </View>
-            <Text style={[styles.pillDestText, { color: colors.text }]} numberOfLines={1}>
-              {activePlan.destination}
-            </Text>
-          </View>
 
-          {/* Action indicator */}
-          <View style={[styles.pillActionBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
-            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
+            {/* Action indicator */}
+            <View style={[styles.pillActionBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+              <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* ── ACTIVE DAY PLAN PREVIEW SHEET ── */}
       <Modal
@@ -185,10 +210,12 @@ export default function ActiveDayPlanFloatingWidget() {
                   </Text>
                 </View>
                 <Text style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={1}>
-                  {activePlan.destination}
+                  {displayPlan.destination}
                 </Text>
                 <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                  {activePlan.dateStr || 'Today'} {activePlan.timeRange ? `· ${activePlan.timeRange}` : ''} · {stops.length} Stops
+                  {displayPlan.dateStr || 'Today'} {displayPlan.timeRange ? `· ${displayPlan.timeRange}` : ''}
+                  {displayPlan.plan?.estimatedTotalCost ? ` · Est: ${displayPlan.plan.estimatedTotalCost}` : ''}
+                  {` · ${stops.length} Stops`}
                 </Text>
               </View>
 
@@ -238,13 +265,22 @@ export default function ActiveDayPlanFloatingWidget() {
                             {stop.title}
                           </Text>
                         </View>
-                        {!!stop.category && (
-                          <View style={[styles.categoryBadge, { backgroundColor: colors.card }]}>
-                            <Text style={[styles.categoryBadgeText, { color: colors.textSecondary }]}>
-                              {stop.category}
-                            </Text>
-                          </View>
-                        )}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          {!!stop.category && (
+                            <View style={[styles.categoryBadge, { backgroundColor: colors.card }]}>
+                              <Text style={[styles.categoryBadgeText, { color: colors.textSecondary }]}>
+                                {stop.category}
+                              </Text>
+                            </View>
+                          )}
+                          {!!stop.estimatedCost && (
+                            <View style={[styles.categoryBadge, { backgroundColor: isDark ? 'rgba(71, 173, 245, 0.12)' : '#E9F4FE' }]}>
+                              <Text style={[styles.categoryBadgeText, { color: colors.brand, fontWeight: '700' }]}>
+                                {stop.estimatedCost}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                         {stop.description ? (
                           <Text style={[styles.stopDescText, { color: colors.textMuted }]} numberOfLines={2}>
                             {stop.description}

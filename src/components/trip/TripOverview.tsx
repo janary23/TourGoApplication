@@ -17,13 +17,14 @@ import {
   completeTrip,
   statusLabel,
 } from "../../services/tripStatus";
-import { shareTrip, shareToFacebook } from "../../services/tripShare";
+import { shareTrip, shareTripCardImage } from "../../services/tripShare";
+import TripShareCard from "./TripShareCard";
 import {
   analyzeDayProgress,
   currentDayIndex,
   type Adjustment,
 } from "../../services/tripProgress";
-import { Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card, Button, IconButton, Badge, Avatar, ProgressBar, EmptyState, InlineEmpty } from "../ui/primitives";
+import { Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card, Button, IconButton, Badge, Avatar, ProgressBar, EmptyState, InlineEmpty, Divider } from "../ui/primitives";
 import { space, radius, hairline, type as T, stateColor, stripEmoji } from "../ui/tokens";
 import { useTheme } from "../../context/ThemeContext";
 import { confirmAction, notify } from '../ui/Feedback';
@@ -106,14 +107,26 @@ export default function TripOverview({
   const [fabOpen, setFabOpen] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [sharingFacebookImage, setSharingFacebookImage] = useState(false);
+  const shareCardRef = useRef<View>(null);
 
   // ── Trip lifecycle: the organizer starts and completes the trip ──
   const lifecycle = deriveTripStatus(trip);
   const isScrapbook = isScrapbookProp || lifecycle === 'completed' || tripPhase.phase === 'after';
 
+  // Facebook's web sharer can only carry a text quote — no way to attach a
+  // locally-generated image — so the post came through with no visual at
+  // all. This captures the same TripShareCard rendered off-screen below and
+  // hands the PNG to the OS share sheet instead, so Facebook (picked from
+  // that sheet) gets the actual card.
   const handleFacebookShare = async () => {
-    const { error } = await shareToFacebook(trip);
-    if (error) notify(error, 'error');
+    setSharingFacebookImage(true);
+    try {
+      const { error } = await shareTripCardImage(shareCardRef, trip);
+      if (error) notify(error, 'error');
+    } finally {
+      setSharingFacebookImage(false);
+    }
   };
 
   const runLifecycleAction = async (
@@ -688,11 +701,18 @@ export default function TripOverview({
                     {/* Share to Facebook button */}
                     <TouchableOpacity
                       onPress={handleFacebookShare}
-                      style={[styles.facebookShareBtn, { backgroundColor: '#1877F2' }]}
+                      disabled={sharingFacebookImage}
+                      style={[styles.facebookShareBtn, { backgroundColor: '#1877F2', opacity: sharingFacebookImage ? 0.7 : 1 }]}
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="logo-facebook" size={18} color="#FFFFFF" />
-                      <Text style={styles.facebookShareText}>Share to Facebook</Text>
+                      {sharingFacebookImage ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Ionicons name="logo-facebook" size={18} color="#FFFFFF" />
+                      )}
+                      <Text style={styles.facebookShareText}>
+                        {sharingFacebookImage ? 'Preparing image…' : 'Share to Facebook'}
+                      </Text>
                     </TouchableOpacity>
 
                     {/* General Share */}
@@ -755,18 +775,36 @@ export default function TripOverview({
                     <Txt variant="caption" tone="accent">See all</Txt>
                   </TouchableOpacity>
                 </View>
-                <ListGroup>
-                  {boardNotes.map((note: any) => (
-                    <ListRow
-                      key={note.id}
-                      title={stripEmoji(note.title)}
-                      subtitle={`${note.author} · ${note.date}`}
-                      leading={<Avatar name={note.author} uri={memberNamed(note.author)?.avatar_url || undefined} size={30} />}
-                      onPress={() => goToPeople('announcements')}
-                      trailing={note.important ? <Badge label="Pinned" tone="accent" /> : undefined}
-                    />
-                  ))}
-                </ListGroup>
+                <View style={{ gap: space.sm }}>
+                  {boardNotes.map((note: any) => {
+                    const authorAvatar = memberNamed(note.author)?.avatar_url || undefined;
+                    return (
+                      <UiPress key={note.id} onPress={() => goToPeople('announcements')}>
+                        <Card style={{ padding: space.md }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                            <Avatar name={note.author} uri={authorAvatar} size={30} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Txt variant="emphasis" numberOfLines={1}>{note.author}</Txt>
+                              <Txt variant="caption" tone="muted" numberOfLines={1}>{note.date}</Txt>
+                            </View>
+                            {note.important && <Badge label="Pinned" tone="accent" />}
+                          </View>
+
+                          <View style={{ marginTop: space.sm, marginBottom: space.sm }}>
+                            <Divider />
+                          </View>
+
+                          <Txt variant="headline">{stripEmoji(note.title)}</Txt>
+                          {!!note.content && (
+                            <Txt variant="body" tone="secondary" style={{ marginTop: space.xs }}>
+                              {stripEmoji(note.content)}
+                            </Txt>
+                          )}
+                        </Card>
+                      </UiPress>
+                    );
+                  })}
+                </View>
               </Section>
             )}
 
@@ -780,31 +818,50 @@ export default function TripOverview({
               </View>
 
               {itineraryPreview.length > 0 ? (
-                <ListGroup>
+                <View style={{ gap: space.sm }}>
                   {itineraryPreview.map((item: any) => {
-                    const [tv, ap] = (item.time || 'TBD').split(' ');
+                    const dayLabel = item.dayIndex !== undefined ? `Day ${item.dayIndex + 1}` : undefined;
                     return (
-                      <ListRow
-                        key={item.id}
-                        title={item.title}
-                        subtitle={item.location || undefined}
-                        onPress={goToPlan}
-                        leading={
-                          <View style={{ width: 46 }}>
-                            <Txt variant="emphasis">{tv}</Txt>
-                            <Txt variant="caption" tone="muted">{ap || ''}</Txt>
+                      <UiPress key={item.id} onPress={goToPlan}>
+                        <Card style={{ padding: space.md, backgroundColor: colors.card, borderColor: colors.cardBorder }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Ionicons name="time-outline" size={14} color={colors.brand} />
+                              <Txt variant="emphasis">{item.time || 'TBD'}</Txt>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              {item.isNow && <Badge label="Happening now" tone="accent" />}
+                              {dayLabel && <Badge label={dayLabel} />}
+                            </View>
                           </View>
-                        }
-                      />
+
+                          <View style={{ marginTop: space.sm, marginBottom: space.sm }}>
+                            <Divider />
+                          </View>
+
+                          <Txt variant="headline">{stripEmoji(item.title)}</Txt>
+                          {!!(item.location || item.description) && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: space.xs }}>
+                              <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+                              <Txt variant="body" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
+                                {stripEmoji(item.location || item.description)}
+                              </Txt>
+                            </View>
+                          )}
+                        </Card>
+                      </UiPress>
                     );
                   })}
-                  {remainingStops > 0 ? (
-                    <ListRow
-                      title={`${remainingStops} more stop${remainingStops !== 1 ? 's' : ''}`}
+                  {remainingStops > 0 && (
+                    <Button
+                      label={`View ${remainingStops} more stop${remainingStops !== 1 ? 's' : ''}`}
+                      icon="calendar-outline"
+                      variant="secondary"
                       onPress={goToPlan}
+                      fullWidth
                     />
-                  ) : null}
-                </ListGroup>
+                  )}
+                </View>
               ) : (
                 <InlineEmpty icon="add" label="Plan your first stop" onPress={goToPlan} />
               )}
@@ -927,6 +984,14 @@ export default function TripOverview({
           </Animated.View>
         </TouchableOpacity>
       </Animated.View>
+
+      {/* Rendered off-screen, never shown — exists only so handleFacebookShare
+          can capture it as the image that actually gets shared. */}
+      <View style={styles.hiddenShareCard} pointerEvents="none">
+        <View ref={shareCardRef} collapsable={false}>
+          <TripShareCard trip={trip} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -934,6 +999,7 @@ export default function TripOverview({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrollContent: { paddingBottom: 110 },
+  hiddenShareCard: { position: 'absolute', top: -9999, left: 0, opacity: 0 },
 
   /* ── Hero ── */
   heroWrap: { height: HERO_HEIGHT, overflow: 'hidden', position: 'relative', marginHorizontal: 16, borderRadius: 26, marginTop: 4 },

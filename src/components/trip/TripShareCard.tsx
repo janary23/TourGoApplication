@@ -1,21 +1,11 @@
-// src/components/trip/TripShareCard.tsx
-//
-// The visual "trip completed" card that gets shared — the thing people post,
-// rather than a bare link.
-//
-// Every value here comes from the trip record that already exists. Nothing is
-// invented: a field that isn't present is simply omitted, so a sparse trip
-// produces a shorter card instead of a card full of placeholders.
-
 import React from 'react';
 import { StyleSheet, View, Text, Image, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { deriveTripStatus } from '../../services/tripStatus';
+import { getPlaceImageUrl } from '../../services/destinations';
 
 export const SHARE_CARD_WIDTH = 340;
-
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200';
 
 interface TripShareCardProps {
   trip: any;
@@ -48,8 +38,11 @@ function dayCount(start?: string | null, end?: string | null): number | null {
 }
 
 export default function TripShareCard({ trip, scale = 1 }: TripShareCardProps) {
-  const cover =
-    trip?.image && String(trip.image).trim() !== '' ? trip.image : FALLBACK_IMAGE;
+  const rawCover = trip?.image || trip?.image_url;
+  const isGeneric = !rawCover || String(rawCover).trim() === '' || String(rawCover).includes('photo-1469854523086');
+  const cover = isGeneric
+    ? getPlaceImageUrl(trip?.destination || trip?.title || 'Philippines')
+    : rawCover;
 
   const range = formatRange(trip?.startDate ?? trip?.start_date, trip?.endDate ?? trip?.end_date);
   const days = dayCount(trip?.startDate ?? trip?.start_date, trip?.endDate ?? trip?.end_date);
@@ -75,6 +68,20 @@ export default function TripShareCard({ trip, scale = 1 }: TripShareCardProps) {
 
   const s = (n: number) => n * scale;
 
+  // The card is reused for planned/active trips (shared from the trip
+  // overview, before anything's "completed") as well as finished ones —
+  // the badge has to reflect which, or an upcoming trip would misleadingly
+  // announce itself as already done.
+  const status = deriveTripStatus(trip);
+  const badge =
+    status === 'completed'
+      ? { icon: 'checkmark-circle' as const, label: 'TRIP COMPLETED' }
+      : status === 'active'
+      ? { icon: 'navigate' as const, label: 'TRIP IN PROGRESS' }
+      : status === 'cancelled'
+      ? { icon: 'close-circle' as const, label: 'TRIP CANCELLED' }
+      : { icon: 'calendar' as const, label: 'UPCOMING TRIP' };
+
   return (
     <View
       style={[
@@ -90,10 +97,10 @@ export default function TripShareCard({ trip, scale = 1 }: TripShareCardProps) {
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Completed marker */}
+        {/* Status marker */}
         <View style={[styles.badge, { top: s(16), left: s(16), paddingHorizontal: s(10), paddingVertical: s(5), borderRadius: s(8) }]}>
-          <Ionicons name="checkmark-circle" size={s(12)} color="#FFFFFF" />
-          <Text style={[styles.badgeTxt, { fontSize: s(9), letterSpacing: s(1) }]}>TRIP COMPLETED</Text>
+          <Ionicons name={badge.icon} size={s(12)} color="#FFFFFF" />
+          <Text style={[styles.badgeTxt, { fontSize: s(9), letterSpacing: s(1) }]}>{badge.label}</Text>
         </View>
 
         {/* Title block */}

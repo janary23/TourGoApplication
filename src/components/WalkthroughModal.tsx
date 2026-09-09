@@ -324,7 +324,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
     }).start();
 
     const nestX = 44;
-    const nestY = (insets?.top || 0) + 168;
+    const nestY = (insets?.top || 0) + 136 + 38; // matches dashPerchY center
     const startX = SCREEN_W / 2;
     const startY = SCREEN_H * 0.44;
 
@@ -458,22 +458,27 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
 
   // Coordinates for tab bar / top search bar spotlights
   const tab_width = (SCREEN_W - 32) / 5;
+  // Mirror the real CustomTabBar: bottom = max(insets.bottom, 12), height = 64
+  const tabBarBottom = Math.max(insets.bottom, 12);
+  const tabBarCenterY = SCREEN_H - tabBarBottom - 32; // 32 = half of 64px height
 
   const getSpotlightCoords = () => {
-    // Step 4 — Top Search Bar AI Button (my nest)
+    // Step 4 — Aguilito's Home nest button (top-left of home screen)
+    // dashPerchX = 6, dashPerchY = insets.top + 136; bird is ~76px wide/tall
+    // so the center of the badge is at ~(6+38, insets.top+136+38)
     if (currentStep === 4) {
-      const buttonX = 44;
-      const buttonY = (insets?.top || 0) + 174;
-      const r = 26;
+      const buttonX = 44;                          // 6 + half of 76px bird
+      const buttonY = (insets.top || 0) + 136 + 38; // perch top + half bird height
+      const r = 34;
       return { cx: buttonX, cy: buttonY, rx: r, ry: r };
     }
-    // Steps 5-8 — individual tab highlight, hugging the navbar pill
+    // Steps 5-8 — individual tab highlight, hugging the real navbar pill
     if (currentStep >= 5 && currentStep <= 8) {
       const tabIndex = currentStep === 5 ? 1 : currentStep === 6 ? 2 : currentStep === 7 ? 3 : 4;
       const tabX = 16 + (tabIndex * tab_width) + (tab_width / 2);
-      const tabY = SCREEN_H - 20 - 32;
-      const rx = Math.min(tab_width / 2 + 2, 44);
-      const ry = 22;
+      const tabY = tabBarCenterY;
+      const rx = Math.min(tab_width / 2 + 4, 50);
+      const ry = 26;
       return { cx: tabX, cy: tabY, rx, ry };
     }
     return { cx: 0, cy: 0, rx: 0, ry: 0 };

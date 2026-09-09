@@ -12,7 +12,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tourgo.app"
+      "bundleIdentifier": "com.tourgo.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\"."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +26,14 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\"."
+        }
+      ],
+      "expo-web-browser"
     ],
     "scheme": "tourgo"
   }

@@ -595,12 +595,13 @@ export default function CreateTripScreen() {
     setCodePreview(null);
     try {
       const { data, error } = await previewTripByCode(codeInput);
-      if (error || !data) { setCodeError(error || 'No trip found with that code.'); return; }
-      if (data.stops.length === 0) {
-        setCodeError('That trip has no itinerary to copy yet.');
+      if (error || !data) {
+        setCodeError(error || 'No trip found with that code. Please verify the code.');
         return;
       }
       setCodePreview(data);
+    } catch (err: any) {
+      setCodeError(err?.message || 'Failed to lookup trip code.');
     } finally {
       setCodeLoading(false);
     }
@@ -610,14 +611,22 @@ export default function CreateTripScreen() {
    *  the original trip — this is a copy, not a join. */
   const handleAdoptItinerary = () => {
     if (!codePreview) return;
-    setItineraryStops(codePreview.stops.map(st => ({ ...st, isAiSuggested: false })));
-    setImportedFrom(codePreview.trip.code);
-    if ((!destination || destination === 'TBD') && codePreview.trip.destination) {
+    if (codePreview.stops.length > 0) {
+      setItineraryStops(codePreview.stops.map(st => ({ ...st, isAiSuggested: false })));
+      setImportedFrom(codePreview.trip.code);
+    }
+    if (codePreview.trip.destination && (!destination || destination === 'TBD')) {
       setDestination(codePreview.trip.destination);
     }
     setCodeSheetOpen(false);
     setCodePreview(null);
     setCodeInput('');
+    notify(
+      codePreview.stops.length > 0
+        ? `Imported ${codePreview.stops.length} stops from ${codePreview.trip.code}!`
+        : `Copied trip details from ${codePreview.trip.code}!`,
+      'success'
+    );
   };
 
   const clearImport = () => {
@@ -1485,10 +1494,16 @@ export default function CreateTripScreen() {
       <Sheet
         visible={codeSheetOpen}
         onClose={() => { setCodeSheetOpen(false); setCodePreview(null); setCodeError(null); }}
-        title="Import an itinerary"
+        title="Import with trip code"
         primaryAction={
           codePreview
-            ? { label: `Use these ${codePreview.stops.length} stops`, onPress: handleAdoptItinerary }
+            ? {
+                label:
+                  codePreview.stops.length > 0
+                    ? `Copy ${codePreview.stops.length} stops`
+                    : `Use ${codePreview.trip.destination || 'trip details'}`,
+                onPress: handleAdoptItinerary,
+              }
             : { label: 'Find trip', onPress: handleLookupCode, loading: codeLoading, disabled: !codeInput.trim() }
         }
       >
@@ -1496,46 +1511,86 @@ export default function CreateTripScreen() {
           label="Trip code"
           value={codeInput}
           onChangeText={(v) => { setCodeInput(v); setCodeError(null); }}
-          placeholder="BAGUI123"
+          placeholder="e.g. COOLBAGUIO"
+          autoCapitalize="characters"
           autoFocus
         />
 
         {!!codeError && (
-          <Txt variant="footnote" tone="destructive" style={{ marginTop: space.sm }}>{codeError}</Txt>
+          <View style={{ marginTop: space.sm }}>
+            <Txt variant="footnote" tone="destructive">{codeError}</Txt>
+          </View>
         )}
 
-        {codeLoading && <Loading label="Looking up that code" />}
+        {codeLoading && <Loading label="Looking up that code..." />}
 
         {codePreview && (
-          <View style={{ marginTop: space.xl }}>
+          <View style={{ marginTop: space.lg }}>
             <Txt variant="headline">{codePreview.trip.title}</Txt>
             <Txt variant="subhead" tone="muted" style={{ marginTop: 2 }}>
-              {codePreview.trip.destination} · {codePreview.stops.length} stops across {codePreview.trip.dayCount} days
+              {codePreview.trip.destination || 'Destination TBD'} · {codePreview.stops.length} {codePreview.stops.length === 1 ? 'stop' : 'stops'}
             </Txt>
 
-            <View style={{ marginTop: space.lg }}>
-              <ListGroup>
-                {codePreview.stops.slice(0, 6).map((st, i) => (
-                  <ListRow
-                    key={i}
-                    title={st.title}
-                    subtitle={`Day ${st.dayIndex + 1} · ${st.time}`}
-                    showChevron={false}
-                  />
-                ))}
-                {codePreview.stops.length > 6 ? (
-                  <ListRow
-                    title={`+${codePreview.stops.length - 6} more stops`}
-                    showChevron={false}
-                  />
-                ) : null}
-              </ListGroup>
+            {codePreview.stops.length > 0 ? (
+              <>
+                <View style={{ marginTop: space.md }}>
+                  <ListGroup>
+                    {codePreview.stops.slice(0, 5).map((st, i) => (
+                      <ListRow
+                        key={i}
+                        title={st.title}
+                        subtitle={`Day ${st.dayIndex + 1} · ${st.time}`}
+                        showChevron={false}
+                      />
+                    ))}
+                    {codePreview.stops.length > 5 ? (
+                      <ListRow
+                        title={`+${codePreview.stops.length - 5} more stops`}
+                        showChevron={false}
+                      />
+                    ) : null}
+                  </ListGroup>
+                </View>
+
+                <Txt variant="footnote" tone="muted" style={{ marginTop: space.sm }}>
+                  These stops are copied into your own new trip. Changes you make will not affect the original.
+                </Txt>
+              </>
+            ) : (
+              <View
+                style={{
+                  marginTop: space.md,
+                  padding: space.md,
+                  borderRadius: 12,
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.cardBorder,
+                }}
+              >
+                <Txt variant="body" style={{ color: colors.text }}>
+                  📍 This trip has no itinerary stops added yet, but you can copy its destination ({codePreview.trip.destination || 'TBD'}) to start planning!
+                </Txt>
+              </View>
+            )}
+
+            {/* If user wanted to join the trip rather than copy it */}
+            <View style={{ marginTop: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.cardBorder, gap: space.sm }}>
+              <Txt variant="caption" tone="muted">
+                Looking to travel together in this group instead of making a new trip?
+              </Txt>
+              <UiButton
+                label="Join as a Member"
+                variant="secondary"
+                icon="enter-outline"
+                onPress={() => {
+                  const targetCode = codePreview.trip.code || codeInput.trim();
+                  setCodeSheetOpen(false);
+                  setCodePreview(null);
+                  router.push(`/trip/join?code=${targetCode}` as any);
+                }}
+                fullWidth
+              />
             </View>
-
-            <Txt variant="footnote" tone="muted" style={{ marginTop: space.md }}>
-              These stops are copied into your own trip. You are not joining theirs, and
-              changes you make will not affect the original.
-            </Txt>
           </View>
         )}
       </Sheet>

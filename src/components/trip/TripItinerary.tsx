@@ -37,8 +37,8 @@ import {
   type WishlistSuggestion
 } from '../../services/wishlistSuggestions';
 import { useTheme } from '../../context/ThemeContext';
-import { Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button, Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section, InlineEmpty } from '../ui/primitives';
-import { space, radius, hairline, type as T, stateColor, shadow } from '../ui/tokens';
+import { Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button, Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section, SectionLabel, InlineEmpty } from '../ui/primitives';
+import { space, radius, hairline, type as T, stateColor, shadow, stripEmoji } from '../ui/tokens';
 import { confirmAction, notify } from '../ui/Feedback';
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
@@ -74,14 +74,24 @@ interface WarningItem {
 const VIBE_OPTIONS = [
   { label: 'Beaches', icon: 'sunny-outline', value: 'Beaches' },
   { label: 'Nature', icon: 'leaf-outline', value: 'Nature' },
-  { label: 'Food', icon: 'restaurant-outline', value: 'Food' },
+  { label: 'Food Trip', icon: 'restaurant-outline', value: 'Food Trip' },
   { label: 'Sightseeing', icon: 'eye-outline', value: 'Sightseeing' },
   { label: 'Adventure', icon: 'bicycle-outline', value: 'Adventure' },
-  { label: 'Culture', icon: 'color-palette-outline', value: 'Culture' },
-  { label: 'Shopping', icon: 'cart-outline', value: 'Shopping' },
+  { label: 'Culture & Arts', icon: 'color-palette-outline', value: 'Culture & Arts' },
+  { label: 'Shopping', icon: 'bag-handle-outline', value: 'Shopping' },
   { label: 'Cafés', icon: 'cafe-outline', value: 'Cafés' },
   { label: 'Nightlife', icon: 'moon-outline', value: 'Nightlife' },
   { label: 'Relaxing', icon: 'sparkles-outline', value: 'Relaxing' },
+  { label: 'Hiking', icon: 'trail-sign-outline', value: 'Hiking' },
+  { label: 'Water Sports', icon: 'boat-outline', value: 'Water Sports' },
+  { label: 'Photography', icon: 'camera-outline', value: 'Photography' },
+  { label: 'History', icon: 'library-outline', value: 'History' },
+  { label: 'Spiritual', icon: 'partly-sunny-outline', value: 'Spiritual' },
+  { label: 'Local Markets', icon: 'storefront-outline', value: 'Local Markets' },
+  { label: 'Wellness & Spa', icon: 'fitness-outline', value: 'Wellness & Spa' },
+  { label: 'Family-Friendly', icon: 'people-outline', value: 'Family-Friendly' },
+  { label: 'Scenic Drives', icon: 'car-outline', value: 'Scenic Drives' },
+  { label: 'Bar Hopping', icon: 'wine-outline', value: 'Bar Hopping' },
 ];
 
 export default function TripItinerary({
@@ -673,17 +683,42 @@ export default function TripItinerary({
   };
 
   const handleRemoveActivity = async (itemId: string) => {
-    confirmAction({
-        title: 'Remove Activity Stop',
-        message: 'Do you want to permanently delete this stop?',
-        confirmLabel: 'Delete',
-        destructive: true,
-      }).then(async (ok) => {
-        if (!ok) return;
-        await dbDeleteItineraryItem(itemId);
-        setEditModalVisible(false);
+    const doDelete = async () => {
+      setEditModalVisible(false);
+      try {
+        const { error } = await dbDeleteItineraryItem(itemId);
+        if (error) {
+          notify(error, 'error');
+        } else {
+          notify('Stop removed', 'success');
+        }
+      } catch (err: any) {
+        notify(err?.message || 'Failed to remove stop', 'error');
+      } finally {
         loadTrip();
-      });
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm('Do you want to permanently remove this stop?') : true;
+      if (ok) {
+        await doDelete();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Remove Stop',
+      'Do you want to permanently remove this stop from your itinerary?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: doDelete,
+        },
+      ]
+    );
   };
 
   // Custom Stop Modal actions
@@ -1191,16 +1226,16 @@ export default function TripItinerary({
                   )}
 
                   <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Choose Vibes</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  <View style={styles.vibeGrid}>
                     {VIBE_OPTIONS.map(opt => {
                       const isSelected = selectedVibes.includes(opt.value);
                       return (
                         <TouchableOpacity
                           key={opt.value}
                           style={[
-                            styles.sheetVibeChip,
+                            styles.vibeGridChip,
                             {
-                              backgroundColor: isSelected ? colors.brand + '15' : colors.surface,
+                              backgroundColor: isSelected ? colors.brand + '18' : colors.surface,
                               borderColor: isSelected ? colors.brand : colors.cardBorder,
                             }
                           ]}
@@ -1212,8 +1247,11 @@ export default function TripItinerary({
                             }
                           }}
                         >
-                          <Ionicons name={opt.icon as any} size={12} color={isSelected ? colors.brand : colors.textSecondary} />
-                          <Text style={{ ...T.microStrong, color: isSelected ? colors.brand : colors.text }}>{opt.label}</Text>
+                          <View style={[styles.vibeIconCircle, { backgroundColor: isSelected ? colors.brand : colors.cardBorder }]}>
+                            <Ionicons name={opt.icon as any} size={14} color={isSelected ? '#FFFFFF' : colors.textSecondary} />
+                          </View>
+                          <Text numberOfLines={1} style={[T.caption, { color: isSelected ? colors.brand : colors.text, fontWeight: '700', flex: 1 }]}>{opt.label}</Text>
+                          {isSelected && <Ionicons name="checkmark-circle" size={14} color={colors.brand} />}
                         </TouchableOpacity>
                       );
                     })}
@@ -1667,63 +1705,87 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
     paddingTop: 8,
   },
-  // iOS Premium places card styles
+  vibeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 8,
+    marginBottom: 16,
+  },
+  vibeGridChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: '48.5%',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  vibeIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // iOS Premium places card styles (Clean 2-by-2 Grid)
   iosPlaceCard: {
-    width: (SCREEN_W - 52) / 2,
-    height: 190,
-    borderRadius: 18,
+    width: '48.5%',
+    height: 195,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
-    shadowRadius: 12,
+    shadowRadius: 8,
     elevation: 4,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   iosCardImage: {
     ...StyleSheet.absoluteFillObject,
   },
   iosCardGradient: {
     ...StyleSheet.absoluteFillObject,
-    padding: 12,
+    padding: 10,
     justifyContent: 'flex-end',
   },
   iosTimeBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 8,
+    left: 8,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     flexDirection: 'row',
     alignItems: 'center',
   },
   iosTimeText: {
     color: '#FFFFFF',
-    ...T.microStrong,
+    fontSize: 9.5,
+    fontWeight: '700',
   },
   iosSelectionCircle: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1,
+    top: 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 3,
   },
   cardWarningBadge: {
     position: 'absolute',
-    top: 30,
-    right: 10,
+    top: 28,
+    right: 8,
     backgroundColor: 'rgba(245, 158, 11, 0.95)',
-    borderRadius: 8,
+    borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 2,
     flexDirection: 'row',
@@ -1732,32 +1794,35 @@ const styles = StyleSheet.create({
   },
   cardWarningText: {
     color: '#FFFFFF',
-    ...T.microStrong,
+    fontSize: 9,
+    fontWeight: '700',
   },
   iosCategoryPill: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(34, 197, 94, 0.88)',
-    borderRadius: 12,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    marginBottom: 4,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 3,
   },
   iosCategoryText: {
-    ...T.microStrong,
+    fontSize: 9,
+    fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   iosCardTitle: {
-    ...T.label,
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -0.2,
     lineHeight: 15,
   },
   iosCardMeta: {
-    ...T.micro,
-    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 9.5,
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   iosCardActionRow: {
     flexDirection: 'row',
@@ -1766,21 +1831,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iosRoundActionBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iosAddActionBtn: {
-    paddingHorizontal: 12,
-    height: 24,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 22,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iosAddBtnText: {
-    ...T.microStrong,
+    fontSize: 10,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   sheetWarnCard: {

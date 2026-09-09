@@ -1,16 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+} from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  Image,
-  Pressable,
   Dimensions,
-  Platform,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import * as Location from 'expo-location';
 import { useTheme } from '../../context/ThemeContext';
+import { buildLeafletMapHtml } from './leafletMapHtml';
 
 export interface MapMarker {
   id: string;
@@ -23,9 +30,31 @@ export interface MapMarker {
   color?: string;
   badge?: string | number;
   isEmergency?: boolean;
+  /** Short text (e.g. initials) drawn on the pin instead of an icon/emoji. Presence of this (or photoUrl) switches the pin to the Life360-style "person" style: photo/initials circle + optional pulsing ring + name pill. */
+  label?: string;
+  /** Photo shown in the pin instead of the initials in `label`, if reachable. */
+  photoUrl?: string;
+  /** Short name shown in a pill under a person pin (e.g. first name). */
+  nameLabel?: string;
+  /** Pulses the pin's ring — use for someone actively sharing their location. */
+  live?: boolean;
+  /** Shows a small warning badge on the pin (e.g. outside a safe zone). */
+  outside?: boolean;
 }
 
+// Names kept from earlier map-engine iterations for backward compatibility
+// with existing callers/state. All map here every provider onto a free,
+// keyless OpenStreetMap/Esri Leaflet tile layer — see leafletMapHtml.ts.
 export type MapProvider = 'auto' | 'google-roads' | 'google-hybrid' | 'carto-dark' | 'carto-light';
+
+export interface MapViewerRef {
+  /** Animates the map to a coordinate, optionally at a new zoom level. */
+  flyTo: (lat: number, lng: number, zoom?: number) => void;
+  /** Automatically fits view to show the entire safe zone / geofence radius circle. */
+  fitGeofence: (lat: number, lng: number, radiusMeters: number) => void;
+  /** Fits bounding box rectangle. */
+  fitBounds: (minLat: number, minLng: number, maxLat: number, maxLng: number) => void;
+}
 
 export interface RasterTileMapViewerProps {
   initialCenter?: { lat: number; lng: number };
@@ -45,75 +74,53 @@ export interface RasterTileMapViewerProps {
   showLayerSelector?: boolean;
   showZoomControls?: boolean;
   showRecenterButton?: boolean;
+  /** Shows the device's live GPS position as a blue dot, if location permission is already granted. Defaults to true. */
+  showUserLocation?: boolean;
+  /** The built-in bottom info-card on marker tap. Turn off when the caller opens its own detail view via onMarkerPress instead. Defaults to true. */
+  showInfoCard?: boolean;
+  /** Optional "safe zone" circle, drawn at a real-world radius in meters. */
+  geofence?: { center: { lat: number; lng: number } | null; radiusMeters: number } | null;
   onMarkerPress?: (marker: MapMarker) => void;
   style?: any;
   selectedMarkerId?: string | null;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const TILE = 256;
 
-// ── Web Mercator Projection Math ──
-export function latLngToTile(lat: number, lng: number, zoom: number) {
-  const latRad = (lat * Math.PI) / 180;
-  const x = ((lng + 180) / 360) * Math.pow(2, zoom);
-  const y = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * Math.pow(2, zoom);
-  return { x, y };
+function layerNameForProvider(provider: MapProvider, isDark: boolean): 'street' | 'dark' | 'satellite' {
+  if (provider === 'google-roads' || provider === 'carto-light') return 'street';
+  if (provider === 'google-hybrid') return 'satellite';
+  if (provider === 'carto-dark') return 'dark';
+  return isDark ? 'dark' : 'street'; // 'auto'
 }
 
-export function tileToLatLng(x: number, y: number, zoom: number) {
-  const lng = (x / Math.pow(2, zoom)) * 360 - 180;
-  const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, zoom);
-  const lat = (180 / Math.PI) * (2 * Math.atan(Math.exp(n)) - Math.PI / 2);
-  return { lat, lng };
+// Crisp inline SVG glyphs instead of emoji — emoji render inconsistently
+// across OS/font versions (different art style per platform, sometimes
+// missing entirely), which reads as unpolished on pins like emergency
+// services. These are plain white-fill icons, sized to sit inside the pin's
+// colored circle.
+const ICON_SVG_BY_TYPE: Record<string, string> = {
+  medkit: '<svg viewBox="0 0 24 24" width="15" height="15" fill="white"><path d="M11 2h2v9h9v2h-9v9h-2v-9H2v-2h9V2z"/></svg>',
+  'shield-checkmark': '<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M12 2 4 5.5v5.7C4 16.7 7.4 21 12 22.5c4.6-1.5 8-5.8 8-11.3V5.5L12 2zm-1.4 13.4-3.3-3.3 1.4-1.4 1.9 1.9 4.7-4.7 1.4 1.4-6.1 6.1z"/></svg>',
+  'heart-circle': '<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M12 21s-7-4.5-9.5-9C1 8.5 2.5 4.5 6.5 4.5c2 0 3.5 1.3 4 2.6.5-1.3 2-2.6 4-2.6 4 0 5.5 4 4 7.5-2.5 4.5-9.5 9-9.5 9z"/></svg>',
+  location: '<svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+  flag: '<svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M6 2h1.5v20H6V2zm1.5 1.5h11l-2.3 4 2.3 4h-11v-8z"/></svg>',
+  restaurant: '<svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M6 2v7c0 1.5-1 2.7-2.5 3v10H2V12C.9 11.5 0 10.3 0 9V2h1.5v6h1V2h1v6h1V2H6zm9.5 0c-1.9 0-3.5 2.5-3.5 6s1.6 6 3.5 6h.5v10h2V2h-2.5z"/></svg>',
+  cafe: '<svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M3 4h14v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V4zm14 2h2a3 3 0 1 1 0 6h-1v-2h1a1 1 0 1 0 0-2h-2V6zM4 19h16v2H4v-2z"/></svg>',
+  bed: '<svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M2 6v13h2v-3h16v3h2v-8a4 4 0 0 0-4-4h-6v4H2V6zm5 3.5a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5z"/></svg>',
+};
+
+const EXCLAMATION_SVG = '<svg viewBox="0 0 24 24" width="4" height="14" fill="white"><rect x="0" y="0" width="4" height="15" rx="2"/><rect x="0" y="19" width="4" height="4" rx="2"/></svg>';
+
+function iconSvgForMarker(m: { icon?: any; isEmergency?: boolean }): string {
+  if (m.icon && ICON_SVG_BY_TYPE[m.icon]) return ICON_SVG_BY_TYPE[m.icon];
+  if (m.isEmergency) return EXCLAMATION_SVG;
+  return ICON_SVG_BY_TYPE.location;
 }
 
-export function latLngToPixel(
-  lat: number,
-  lng: number,
-  centerLat: number,
-  centerLng: number,
-  zoom: number,
-  mapW: number,
-  mapH: number
-) {
-  const pt = latLngToTile(lat, lng, zoom);
-  const c = latLngToTile(centerLat, centerLng, zoom);
-  return {
-    x: mapW / 2 + (pt.x - c.x) * TILE,
-    y: mapH / 2 + (pt.y - c.y) * TILE,
-  };
-}
-
-/**
- * Returns the raw raster tile image URL for Google Maps Tile API and CartoDB.
- */
-export function getTileUrl(x: number, y: number, z: number, provider: MapProvider, isDark: boolean): string {
-  const tx = Math.floor(x);
-  const ty = Math.floor(y);
-
-  if (provider === 'google-roads') {
-    return `https://mt1.google.com/vt/lyrs=m&x=${tx}&y=${ty}&z=${z}`;
-  }
-  if (provider === 'google-hybrid') {
-    return `https://mt1.google.com/vt/lyrs=y&x=${tx}&y=${ty}&z=${z}`;
-  }
-  if (provider === 'carto-dark') {
-    return `https://a.basemaps.cartocdn.com/dark_all/${z}/${tx}/${ty}.png`;
-  }
-  if (provider === 'carto-light') {
-    return `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`;
-  }
-
-  // 'auto': Follows app theme
-  return isDark
-    ? `https://a.basemaps.cartocdn.com/dark_all/${z}/${tx}/${ty}.png`
-    : `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${tx}/${ty}.png`;
-}
-
-export default function RasterTileMapViewer({
-  initialCenter = { lat: 14.5995, lng: 120.9842 },
-  initialZoom = 15,
+const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(function RasterTileMapViewer({
+  initialCenter,
+  initialZoom = 14,
   height = 360,
   width = SCREEN_W,
   markers = [],
@@ -121,128 +128,163 @@ export default function RasterTileMapViewer({
   showLayerSelector = true,
   showZoomControls = true,
   showRecenterButton = true,
+  showUserLocation = true,
+  showInfoCard = true,
+  geofence = null,
   onMarkerPress,
   style,
   selectedMarkerId,
-}: RasterTileMapViewerProps) {
+}, ref) {
   const { colors, isDark } = useTheme();
-  const [zoom, setZoom] = useState(initialZoom);
   const [provider, setProvider] = useState<MapProvider>('auto');
   const [activeMarker, setActiveMarker] = useState<any | null>(null);
+  const [ready, setReady] = useState(false);
+  const [hasLocationPermission, setHasLocationPermission] = useState(false);
+
+  const webviewRef = useRef<WebView>(null);
+  const didInitialCenter = useRef(false);
 
   const mapW = typeof width === 'number' ? width : SCREEN_W;
   const mapH = typeof height === 'number' ? height : 360;
 
-  // Calculate default center: centroid of routeStops or markers if available
+  // Prioritize initialCenter if supplied, else calculate centroid of items
   const computedCenter = useMemo(() => {
+    if (initialCenter && initialCenter.lat != null && initialCenter.lng != null) {
+      return initialCenter;
+    }
     const allPts: Array<{ lat: number; lng: number }> = [];
-    routeStops.forEach((s) => {
-      if (s.lat && s.lng) allPts.push({ lat: s.lat, lng: s.lng });
-    });
-    markers.forEach((m) => {
-      if (m.lat && m.lng) allPts.push({ lat: m.lat, lng: m.lng });
-    });
-
+    routeStops.forEach((s) => { if (s.lat != null && s.lng != null) allPts.push({ lat: s.lat, lng: s.lng }); });
+    markers.forEach((m) => { if (m.lat != null && m.lng != null) allPts.push({ lat: m.lat, lng: m.lng }); });
     if (allPts.length > 0) {
       const avgLat = allPts.reduce((acc, p) => acc + p.lat, 0) / allPts.length;
       const avgLng = allPts.reduce((acc, p) => acc + p.lng, 0) / allPts.length;
       return { lat: avgLat, lng: avgLng };
     }
-    return initialCenter;
+    return { lat: 14.5995, lng: 120.9842 };
   }, [routeStops, markers, initialCenter]);
 
-  const [mapCenter, setMapCenter] = useState(computedCenter);
+  // The HTML is built exactly once with the FIRST computed center/zoom baked
+  // in — every update after that goes through injectJavaScript, never a
+  // page reload, so panning/markers/etc. never flicker.
+  const html = useMemo(
+    () => buildLeafletMapHtml(computedCenter.lat, computedCenter.lng, initialZoom, isDark),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const inject = (js: string) => {
+    webviewRef.current?.injectJavaScript(`${js}; true;`);
+  };
+
+  useImperativeHandle(ref, () => ({
+    flyTo: (lat, lng, zoom) => inject(`window.TourGoMap.flyTo(${lat}, ${lng}${zoom != null ? `, ${zoom}` : ''});`),
+    fitGeofence: (lat, lng, radiusMeters) => inject(`window.TourGoMap.fitGeofence(${lat}, ${lng}, ${radiusMeters});`),
+    fitBounds: (minLat, minLng, maxLat, maxLng) => inject(`window.TourGoMap.fitBounds(${minLat}, ${minLng}, ${maxLat}, ${maxLng});`),
+  }));
+
   useEffect(() => {
-    setMapCenter(computedCenter);
-  }, [computedCenter.lat, computedCenter.lng]);
+    if (!ready) return;
+    inject(`window.TourGoMap.setTileLayer(${JSON.stringify(layerNameForProvider(provider, isDark))});`);
+  }, [ready, provider, isDark]);
 
-  // Touch pan handling
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const touchStart = useRef({ x: 0, y: 0 });
-  const dragging = useRef(false);
-
-  const onTouchStart = (e: any) => {
-    touchStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-    dragging.current = true;
-  };
-
-  const onTouchMove = (e: any) => {
-    if (!dragging.current) return;
-    setDragOffset({
-      x: e.nativeEvent.pageX - touchStart.current.x,
-      y: e.nativeEvent.pageY - touchStart.current.y,
-    });
-  };
-
-  const onTouchEnd = () => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    const start = latLngToTile(mapCenter.lat, mapCenter.lng, zoom);
-    setMapCenter(tileToLatLng(start.x - dragOffset.x / TILE, start.y - dragOffset.y / TILE, zoom));
-    setDragOffset({ x: 0, y: 0 });
-  };
-
-  // Center tile with pan offset
-  const centerTile = latLngToTile(mapCenter.lat, mapCenter.lng, zoom);
-  const origin = {
-    x: centerTile.x - dragOffset.x / TILE,
-    y: centerTile.y - dragOffset.y / TILE,
-  };
-
-  const cx = Math.floor(origin.x);
-  const cy = Math.floor(origin.y);
-
-  // Number of tiles needed to cover viewport
-  const tileRadiusX = Math.ceil(mapW / TILE / 2) + 1;
-  const tileRadiusY = Math.ceil(mapH / TILE / 2) + 1;
-
-  const xRange: number[] = [];
-  for (let i = -tileRadiusX; i <= tileRadiusX; i++) xRange.push(i);
-  const yRange: number[] = [];
-  for (let j = -tileRadiusY; j <= tileRadiusY; j++) yRange.push(j);
-
-  // Helper to project any coordinates to screen pixels
-  const project = (lat: number, lng: number) => {
-    const pt = latLngToTile(lat, lng, zoom);
-    return {
-      x: mapW / 2 + (pt.x - origin.x) * TILE,
-      y: mapH / 2 + (pt.y - origin.y) * TILE,
-    };
-  };
-
-  // Calculate route connections between consecutive stops
-  const routeSegments = useMemo(() => {
-    const valid = routeStops.filter((s) => s.lat != null && s.lng != null);
-    const segments: Array<{
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      idx: number;
-      fromTitle: string;
-      toTitle: string;
-    }> = [];
-
-    for (let i = 0; i < valid.length - 1; i++) {
-      const p1 = project(valid[i].lat, valid[i].lng);
-      const p2 = project(valid[i + 1].lat, valid[i + 1].lng);
-      segments.push({
-        x1: p1.x,
-        y1: p1.y,
-        x2: p2.x,
-        y2: p2.y,
-        idx: i,
-        fromTitle: valid[i].title,
-        toTitle: valid[i + 1].title,
+  useEffect(() => {
+    if (!ready) return;
+    const payload = markers
+      .filter((m) => m.lat != null && m.lng != null)
+      .map((m) => {
+        const isPersonPin = m.label != null || !!m.photoUrl;
+        return {
+          id: m.id,
+          lat: m.lat,
+          lng: m.lng,
+          color: m.color,
+          isEmergency: m.isEmergency,
+          label: m.label,
+          photoUrl: m.photoUrl,
+          nameLabel: m.nameLabel,
+          live: m.live,
+          outside: m.outside,
+          iconSvg: isPersonPin ? undefined : iconSvgForMarker(m),
+          selected: m.id === selectedMarkerId || m.id === activeMarker?.id,
+        };
       });
-    }
-    return segments;
-  }, [routeStops, origin.x, origin.y, zoom, mapW, mapH]);
+    inject(`window.TourGoMap.setMarkers(${JSON.stringify(JSON.stringify(payload))});`);
+  }, [ready, markers, selectedMarkerId, activeMarker?.id]);
 
-  const handleMarkerClick = (item: any) => {
-    setActiveMarker(item);
-    if (onMarkerPress) onMarkerPress(item);
+  useEffect(() => {
+    if (!ready) return;
+    const payload = routeStops.map((s) => ({
+      ...s,
+      selected: `stop-${s.stopNumber}` === selectedMarkerId || `stop-${s.stopNumber}` === activeMarker?.id,
+    }));
+    inject(`window.TourGoMap.setRoute(${JSON.stringify(JSON.stringify(payload))});`);
+  }, [ready, routeStops, selectedMarkerId, activeMarker?.id]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (geofence?.center && geofence.radiusMeters > 0) {
+      inject(`window.TourGoMap.setGeofence(${geofence.center.lat}, ${geofence.center.lng}, ${geofence.radiusMeters});`);
+    } else {
+      inject(`window.TourGoMap.setGeofence(null, null, 0);`);
+    }
+  }, [ready, geofence?.center?.lat, geofence?.center?.lng, geofence?.radiusMeters]);
+
+  // Recenter on the group/route centroid when it shifts AFTER the initial
+  // load (e.g. data was still loading at mount) — but not on that first
+  // paint itself, since the page already starts there.
+  useEffect(() => {
+    if (!ready) return;
+    if (!didInitialCenter.current) { didInitialCenter.current = true; return; }
+    inject(`window.TourGoMap.flyTo(${computedCenter.lat}, ${computedCenter.lng});`);
+  }, [ready, computedCenter.lat, computedCenter.lng]);
+
+  // Non-intrusive: shows the blue dot only if permission was already
+  // granted elsewhere (e.g. via "Share my location") — never prompts on
+  // its own just because a map rendered. Live-updates while mounted.
+  useEffect(() => {
+    if (!showUserLocation) return;
+    let subscription: Location.LocationSubscription | null = null;
+    let mounted = true;
+    (async () => {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (!mounted) return;
+      setHasLocationPermission(status === 'granted');
+      if (status !== 'granted') return;
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, distanceInterval: 10, timeInterval: 5000 },
+        (loc) => inject(`window.TourGoMap.setUserLocation(${loc.coords.latitude}, ${loc.coords.longitude});`)
+      );
+    })();
+    return () => {
+      mounted = false;
+      subscription?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUserLocation, ready]);
+
+  const handleMessage = (event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'ready') {
+        setReady(true);
+      } else if (data.type === 'mapPress') {
+        setActiveMarker(null);
+      } else if (data.type === 'markerPress') {
+        const stopMatch = routeStops.find((s) => `stop-${s.stopNumber}` === data.id);
+        const found = stopMatch ? { id: data.id, ...stopMatch } : markers.find((m) => m.id === data.id);
+        if (found) {
+          setActiveMarker(found);
+          onMarkerPress?.(found as MapMarker);
+        }
+      }
+    } catch {
+      // ignore malformed messages
+    }
   };
+
+  const handleRecenter = () => inject(`window.TourGoMap.flyTo(${computedCenter.lat}, ${computedCenter.lng}, ${initialZoom});`);
+  const handleZoomIn = () => inject(`window.TourGoMap.zoomBy(1);`);
+  const handleZoomOut = () => inject(`window.TourGoMap.zoomBy(-1);`);
 
   return (
     <View
@@ -255,139 +297,23 @@ export default function RasterTileMapViewer({
         },
         style,
       ]}
-      onStartShouldSetResponder={() => true}
-      onMoveShouldSetResponder={() => true}
-      onResponderGrant={onTouchStart}
-      onResponderMove={onTouchMove}
-      onResponderRelease={onTouchEnd}
     >
-      {/* ── Raster Map Tiles ── */}
-      {yRange.map((dy) =>
-        xRange.map((dx) => {
-          const tx = cx + dx;
-          const ty = cy + dy;
-          const left = mapW / 2 + (tx - origin.x) * TILE;
-          const top = mapH / 2 + (ty - origin.y) * TILE;
-          return (
-            <Image
-              key={`${tx}-${ty}-${zoom}-${provider}`}
-              source={{ uri: getTileUrl(tx, ty, zoom, provider, isDark) }}
-              style={{
-                position: 'absolute',
-                width: TILE,
-                height: TILE,
-                left,
-                top,
-              }}
-            />
-          );
-        })
-      )}
-
-      {/* ── Route Polyline Segments ── */}
-      {routeSegments.map((seg) => {
-        const dx = seg.x2 - seg.x1;
-        const dy = seg.y2 - seg.y1;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        if (length === 0) return null;
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-        const midX = (seg.x1 + seg.x2) / 2;
-        const midY = (seg.y1 + seg.y2) / 2;
-
-        return (
-          <View key={`seg-${seg.idx}`} pointerEvents="none">
-            {/* Main solid route line */}
-            <View
-              style={{
-                position: 'absolute',
-                left: midX - length / 2,
-                top: midY - 2.5,
-                width: length,
-                height: 5,
-                borderRadius: 2.5,
-                backgroundColor: colors.brand,
-                transform: [{ rotate: `${angle}deg` }],
-                opacity: 0.9,
-              }}
-            />
-          </View>
-        );
-      })}
-
-      {/* ── Route Stop Numbered Pins ── */}
-      {routeStops.map((stop) => {
-        if (stop.lat == null || stop.lng == null) return null;
-        const p = project(stop.lat, stop.lng);
-        const isSelected = activeMarker?.id === `stop-${stop.stopNumber}` || selectedMarkerId === `stop-${stop.stopNumber}`;
-
-        return (
-          <Pressable
-            key={`route-stop-${stop.stopNumber}`}
-            onPress={() => handleMarkerClick({ id: `stop-${stop.stopNumber}`, ...stop })}
-            style={{
-              position: 'absolute',
-              left: p.x - 16,
-              top: p.y - 16,
-              zIndex: isSelected ? 20 : 10,
-            }}
-          >
-            <View
-              style={[
-                styles.routeStopPin,
-                {
-                  backgroundColor: colors.brand,
-                  borderColor: '#FFFFFF',
-                  transform: [{ scale: isSelected ? 1.25 : 1 }],
-                },
-              ]}
-            >
-              <Text style={styles.routeStopNumberText}>{stop.stopNumber}</Text>
-            </View>
-          </Pressable>
-        );
-      })}
-
-      {/* ── General Markers (Emergency, Places, People) ── */}
-      {markers.map((m) => {
-        if (m.lat == null || m.lng == null) return null;
-        const p = project(m.lat, m.lng);
-        const isSelected = activeMarker?.id === m.id || selectedMarkerId === m.id;
-        const pinBg = m.color || (m.isEmergency ? '#EF4444' : colors.card);
-        const pinIcon = m.icon || (m.isEmergency ? 'medkit' : 'location');
-
-        return (
-          <Pressable
-            key={m.id}
-            onPress={() => handleMarkerClick(m)}
-            style={{
-              position: 'absolute',
-              left: p.x - 15,
-              top: p.y - 15,
-              zIndex: isSelected ? 20 : 10,
-            }}
-          >
-            <View
-              style={[
-                styles.markerPin,
-                {
-                  backgroundColor: pinBg,
-                  borderColor: isSelected ? '#FACC15' : '#FFFFFF',
-                  transform: [{ scale: isSelected ? 1.25 : 1 }],
-                },
-              ]}
-            >
-              <Ionicons
-                name={pinIcon as any}
-                size={14}
-                color={m.color || m.isEmergency ? '#FFFFFF' : colors.text}
-              />
-            </View>
-          </Pressable>
-        );
-      })}
+      <WebView
+        ref={webviewRef}
+        source={{ html }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        onMessage={handleMessage}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        mixedContentMode="always"
+        allowsInlineMediaPlayback
+        // Rebuilding the map on every reload would flicker; we intentionally
+        // never change `source` after first mount, so no key/reload here.
+      />
 
       {/* ── Selected Pin Info Card Overlay ── */}
-      {activeMarker && (
+      {showInfoCard && activeMarker && (
         <View style={styles.cardOverlay} pointerEvents="box-none">
           <View
             style={[
@@ -439,7 +365,7 @@ export default function RasterTileMapViewer({
         </View>
       )}
 
-      {/* ── Layer Selector (Google Roads, Google Hybrid, CartoDB) ── */}
+      {/* ── Layer Selector ── */}
       {showLayerSelector && (
         <View style={styles.providerRow}>
           <TouchableOpacity
@@ -517,29 +443,20 @@ export default function RasterTileMapViewer({
       <View style={styles.controlsCol}>
         {showZoomControls && (
           <View style={[styles.zoomBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <Pressable
-              onPress={() => setZoom((z) => Math.min(19, z + 1))}
-              style={styles.controlBtn}
-            >
+            <TouchableOpacity onPress={handleZoomIn} style={styles.controlBtn}>
               <Ionicons name="add" size={18} color={colors.text} />
-            </Pressable>
+            </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: colors.divider }} />
-            <Pressable
-              onPress={() => setZoom((z) => Math.max(3, z - 1))}
-              style={styles.controlBtn}
-            >
+            <TouchableOpacity onPress={handleZoomOut} style={styles.controlBtn}>
               <Ionicons name="remove" size={18} color={colors.text} />
-            </Pressable>
+            </TouchableOpacity>
           </View>
         )}
 
         {showRecenterButton && (
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => {
-              setMapCenter(computedCenter);
-              setDragOffset({ x: 0, y: 0 });
-            }}
+            onPress={handleRecenter}
             style={[styles.recenterBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           >
             <Ionicons name="locate" size={18} color={colors.brand} />
@@ -548,43 +465,14 @@ export default function RasterTileMapViewer({
       </View>
     </View>
   );
-}
+});
+
+export default RasterTileMapViewer;
 
 const styles = StyleSheet.create({
   mapContainer: {
     overflow: 'hidden',
     position: 'relative',
-  },
-  routeStopPin: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  routeStopNumberText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  markerPin: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
   },
   cardOverlay: {
     position: 'absolute',

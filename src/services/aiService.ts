@@ -506,10 +506,13 @@ export interface SpontaneousDayStop {
   category: string;       // e.g. "Coffee Shop", "Brunch", "Scenic Spot"
   description: string;    // short 1-line hook
   durationMinutes: number;
+  estimatedCost?: string; // e.g. "₱150 - ₱300" or "Free"
 }
 
 export interface SpontaneousDayPlan {
   destination: string;
+  estimatedTotalCost?: string; // e.g. "₱1,200 - ₱1,800"
+  budgetTier?: string;         // e.g. "Budget-Friendly", "Moderate", "Luxury"
   stops: SpontaneousDayStop[];
 }
 
@@ -520,40 +523,57 @@ export async function generateSpontaneousDayPlan(
   preferences: string[],
   companions: string,
   optimizeRouting: boolean = false,
-  timeRange?: { start?: string; end?: string }
+  timeRange?: { start?: string; end?: string },
+  budget?: string
 ): Promise<SpontaneousDayPlan> {
   const isAnywhere = !destination || destination.trim() === '' || destination.toLowerCase().includes('anywhere');
-  const startTime = timeRange?.start?.trim() || '8:00 AM';
-  const endTime = timeRange?.end?.trim() || '8:00 PM';
+  const budgetLabel = budget === 'budget'
+    ? 'Budget-Friendly (Under ₱1,000)'
+    : budget === 'luxury'
+    ? 'Luxury / Splurge (₱3,000+)'
+    : budget === 'moderate'
+    ? 'Moderate / Balanced (₱1,000 - ₱3,000)'
+    : budget && budget.trim()
+    ? budget.trim()
+    : 'Flexible / Any';
+
+  const startTime = timeRange?.start || '8:00 AM';
+  const endTime = timeRange?.end || '8:00 PM';
 
   const systemPrompt = `You are Agilito, a smart travel co-pilot. Build a complete, beautifully optimized ONE-DAY itinerary for a spontaneous trip.
 This is NOT a multi-day trip — only a single day. Do not include overnight stays or multiple days.
 ${isAnywhere ? 'Choose a wonderful, popular Philippine day-trip destination that best matches the traveler preferences (e.g. Tagaytay, Baguio, Rizal, Batangas, Cebu, etc.) and set it in "destination".' : ''}
-Plan 3 to 5 great stops total that fit comfortably within the requested time frame from ${startTime} to ${endTime}.
-Pick quality over quantity: the best local places that match the preferences, placed in a natural geographic order so the route flows (no backtracking).
+Plan 3 to 5 great stops total that fit comfortably within the requested time frame from ${startTime} to ${endTime} and match the traveler's budget level (${budgetLabel}).
+Pick quality over quantity: the best local places that match the preferences and budget, placed in a natural geographic order so the route flows (no backtracking).
 Return ONLY a JSON object matching this structure:
 {
   "destination": "the clean destination name",
+  "estimatedTotalCost": "e.g. ₱1,200 - ₱1,800 / person",
+  "budgetTier": "${budgetLabel.split(' (')[0]}",
   "stops": [
     {
       "time": "8:30 AM",
       "title": "place name",
       "category": "short type e.g. Coffee Shop, Brunch, Scenic Spot, Museum, Rooftop Bar",
       "description": "one punchy sentence describing what to do there",
-      "durationMinutes": 45
+      "durationMinutes": 45,
+      "estimatedCost": "e.g. ₱150 - ₱300 or Free"
     }
   ]
 }
 Guidelines:
 - "time" must be 12-hour format like "8:30 AM" or "5:30 PM".
 - "durationMinutes" must be a plain number (between 30 and 150).
+- "estimatedCost" should be in Philippine Pesos (₱) or "Free".
+- "estimatedTotalCost" should be the estimated day total cost per person in ₱.
 - Stops must be in chronological order starting around ${startTime} and concluding by ${endTime}.
-- If preferences are empty, pick a balanced mix fitting the time window (e.g. morning cafe/sightseeing, or afternoon/sunset dining).
+- If preferences are empty, pick a balanced mix fitting the time window and budget.
 - The final stop should fit the ending hour (${endTime}).`;
 
   const userPrompt = `${isAnywhere ? 'Where: Pick the best destination for my vibe' : `Where: ${destination}`}
 When: ${dateLabel}
 Available Time Range: ${startTime} to ${endTime}
+Budget: ${budgetLabel}
 Preferences: ${preferences.join(', ') || 'General mix'}
 Going with: ${companions || 'Just myself'}
 ${optimizeRouting ? 'ACTION: Re-order the same set of stops so the route is the shortest possible (no backtracking) and adjust times accordingly within the time range. Keep every stop.' : 'Build the plan now.'}`;
@@ -584,12 +604,18 @@ ${optimizeRouting ? 'ACTION: Re-order the same set of stops so the route is the 
       category: s.category || s.type || 'Experience',
       description: s.description || s.desc || 'Explore this local spot.',
       durationMinutes: typeof s.durationMinutes === 'number' ? s.durationMinutes : parseInt(s.duration || '60', 10) || 60,
+      estimatedCost: s.estimatedCost || s.cost || s.price || (budget === 'budget' ? '₱100 - ₱250' : budget === 'luxury' ? '₱800 - ₱1,500' : '₱250 - ₱500'),
     }));
 
-    return { destination: destName, stops };
+    return {
+      destination: destName,
+      estimatedTotalCost: raw?.estimatedTotalCost || (budget === 'budget' ? '₱600 - ₱1,000 / person' : budget === 'luxury' ? '₱3,500 - ₱5,500 / person' : '₱1,500 - ₱2,500 / person'),
+      budgetTier: raw?.budgetTier || budgetLabel.split(' (')[0],
+      stops,
+    };
   } catch (error: any) {
     console.warn('[TourGo AI] generateSpontaneousDayPlan using curated fallback due to:', error?.message || error);
-    return buildFallbackSpontaneousPlan(destination, startTime, endTime, preferences);
+    return buildFallbackSpontaneousPlan(destination, startTime, endTime, preferences, budget);
   }
 }
 
@@ -597,20 +623,28 @@ function buildFallbackSpontaneousPlan(
   destination: string,
   startTime: string = '8:00 AM',
   endTime: string = '8:00 PM',
-  preferences: string[] = []
+  preferences: string[] = [],
+  budget?: string
 ): SpontaneousDayPlan {
   const norm = (destination || 'Tagaytay').toLowerCase();
   const destName = destination.trim() || 'Tagaytay';
+  const isBudget = budget === 'budget';
+  const isLuxury = budget === 'luxury';
+
+  const defaultTotal = isBudget ? '₱650 - ₱950 / person' : isLuxury ? '₱3,800 - ₱5,200 / person' : '₱1,400 - ₱2,200 / person';
+  const defaultTier = isBudget ? 'Budget-Friendly' : isLuxury ? 'Luxury' : 'Moderate';
 
   if (norm.includes('baguio')) {
     return {
       destination: 'Baguio',
+      estimatedTotalCost: defaultTotal,
+      budgetTier: defaultTier,
       stops: [
-        { time: startTime || '8:30 AM', title: 'Cafe by the Ruins', category: 'Coffee & Breakfast', description: 'Cozy artisan mountain breakfast with fresh strawberries and highland coffee.', durationMinutes: 60 },
-        { time: '11:00 AM', title: 'Burnham Park & Rose Garden', category: 'Sightseeing & Boats', description: 'Scenic boat ride on the lagoon and bike rentals through lush garden trails.', durationMinutes: 75 },
-        { time: '1:30 PM', title: 'Good Shepherd Convent', category: 'Souvenirs & Delicacies', description: 'Pick up famous ube jam and enjoy peaceful mountain view overlooks.', durationMinutes: 45 },
-        { time: '3:30 PM', title: 'Camp John Hay Pine Trail', category: 'Nature Walk', description: 'Relaxing stroll among fragrant pines and crisp fresh mountain air.', durationMinutes: 90 },
-        { time: '6:00 PM', title: 'Session Road & Night Market', category: 'Food & Shopping', description: 'Taste local street food, shop thrift finds, and experience Baguio night vibes.', durationMinutes: 90 },
+        { time: startTime || '8:30 AM', title: 'Cafe by the Ruins', category: 'Coffee & Breakfast', description: 'Cozy artisan mountain breakfast with fresh strawberries and highland coffee.', durationMinutes: 60, estimatedCost: isBudget ? '₱180 - ₱250' : isLuxury ? '₱600 - ₱900' : '₱300 - ₱450' },
+        { time: '11:00 AM', title: 'Burnham Park & Rose Garden', category: 'Sightseeing & Boats', description: 'Scenic boat ride on the lagoon and bike rentals through lush garden trails.', durationMinutes: 75, estimatedCost: isBudget ? '₱100 - ₱150' : isLuxury ? '₱350' : '₱150 - ₱250' },
+        { time: '1:30 PM', title: 'Good Shepherd Convent', category: 'Souvenirs & Delicacies', description: 'Pick up famous ube jam and enjoy peaceful mountain view overlooks.', durationMinutes: 45, estimatedCost: isBudget ? '₱250' : isLuxury ? '₱800' : '₱400' },
+        { time: '3:30 PM', title: 'Camp John Hay Pine Trail', category: 'Nature Walk', description: 'Relaxing stroll among fragrant pines and crisp fresh mountain air.', durationMinutes: 90, estimatedCost: 'Free' },
+        { time: '6:00 PM', title: 'Session Road & Night Market', category: 'Food & Shopping', description: 'Taste local street food, shop thrift finds, and experience Baguio night vibes.', durationMinutes: 90, estimatedCost: isBudget ? '₱150 - ₱250' : isLuxury ? '₱1,000+' : '₱300 - ₱500' },
       ],
     };
   }
@@ -618,12 +652,14 @@ function buildFallbackSpontaneousPlan(
   if (norm.includes('el nido') || norm.includes('palawan')) {
     return {
       destination: 'El Nido',
+      estimatedTotalCost: isBudget ? '₱1,200 - ₱1,800 / person' : isLuxury ? '₱5,000+ / person' : '₱2,500 - ₱3,500 / person',
+      budgetTier: defaultTier,
       stops: [
-        { time: startTime || '8:30 AM', title: 'Artcafe El Nido', category: 'Breakfast & Cafe', description: 'Fresh tropical fruit bowls, bakery pastries, and overlooking town beach views.', durationMinutes: 60 },
-        { time: '10:30 AM', title: 'Nacpan Beach', category: 'Beach & Nature', description: 'Famous twin beach with golden sands, coconut palms, and crystal waters.', durationMinutes: 120 },
-        { time: '1:30 PM', title: 'Big Lagoon Kayaking', category: 'Adventure & Scenic', description: 'Paddle through iconic limestone walls and emerald marine waters.', durationMinutes: 90 },
-        { time: '4:30 PM', title: 'Las Cabañas Beach', category: 'Sunset & Drinks', description: 'Watch the world-class Palawan sunset with chilled fresh young coconut drinks.', durationMinutes: 90 },
-        { time: '7:00 PM', title: 'El Nido Seaside Grills', category: 'Dinner & Dining', description: 'Savor fresh caught grilled fish and seaside evening ambience.', durationMinutes: 75 },
+        { time: startTime || '8:30 AM', title: 'Artcafe El Nido', category: 'Breakfast & Cafe', description: 'Fresh tropical fruit bowls, bakery pastries, and overlooking town beach views.', durationMinutes: 60, estimatedCost: isBudget ? '₱200 - ₱300' : '₱400 - ₱600' },
+        { time: '10:30 AM', title: 'Nacpan Beach', category: 'Beach & Nature', description: 'Famous twin beach with golden sands, coconut palms, and crystal waters.', durationMinutes: 120, estimatedCost: '₱50 eco-fee' },
+        { time: '1:30 PM', title: 'Big Lagoon Kayaking', category: 'Adventure & Scenic', description: 'Paddle through iconic limestone walls and emerald marine waters.', durationMinutes: 90, estimatedCost: isBudget ? '₱300 kayak rental' : '₱500 kayak rental' },
+        { time: '4:30 PM', title: 'Las Cabañas Beach', category: 'Sunset & Drinks', description: 'Watch the world-class Palawan sunset with chilled fresh young coconut drinks.', durationMinutes: 90, estimatedCost: isBudget ? '₱150 - ₱250' : '₱400 - ₱700' },
+        { time: '7:00 PM', title: 'El Nido Seaside Grills', category: 'Dinner & Dining', description: 'Savor fresh caught grilled fish and seaside evening ambience.', durationMinutes: 75, estimatedCost: isBudget ? '₱300 - ₱450' : isLuxury ? '₱1,500+' : '₱600 - ₱900' },
       ],
     };
   }
@@ -631,24 +667,28 @@ function buildFallbackSpontaneousPlan(
   if (norm.includes('cebu')) {
     return {
       destination: 'Cebu',
+      estimatedTotalCost: defaultTotal,
+      budgetTier: defaultTier,
       stops: [
-        { time: startTime || '8:30 AM', title: 'Magellan’s Cross & Basilica', category: 'Culture & History', description: 'Historic landmark where Christianity began in the Philippines.', durationMinutes: 60 },
-        { time: '11:00 AM', title: 'House of Lechon', category: 'Local Food & Lunch', description: 'Award-winning Cebu roasted lechon with spicy vinegar and hanging rice.', durationMinutes: 75 },
-        { time: '1:30 PM', title: 'Temple of Leah', category: 'Sightseeing & View', description: 'Roman-style architectural masterpiece with panoramic city views.', durationMinutes: 60 },
-        { time: '3:30 PM', title: 'Sirao Flower Garden', category: 'Nature & Photography', description: 'Little Amsterdam with colorful celosia flowerbeds and mountain backdrops.', durationMinutes: 75 },
-        { time: '6:30 PM', title: 'Tops Lookout Cebu', category: 'Scenic Dinner', description: 'Catch the glittering Cebu City skyline lights under the evening stars.', durationMinutes: 90 },
+        { time: startTime || '8:30 AM', title: 'Magellan’s Cross & Basilica', category: 'Culture & History', description: 'Historic landmark where Christianity began in the Philippines.', durationMinutes: 60, estimatedCost: 'Free' },
+        { time: '11:00 AM', title: 'House of Lechon', category: 'Local Food & Lunch', description: 'Award-winning Cebu roasted lechon with spicy vinegar and hanging rice.', durationMinutes: 75, estimatedCost: isBudget ? '₱250 - ₱350' : isLuxury ? '₱800 - ₱1,200' : '₱400 - ₱600' },
+        { time: '1:30 PM', title: 'Temple of Leah', category: 'Sightseeing & View', description: 'Roman-style architectural masterpiece with panoramic city views.', durationMinutes: 60, estimatedCost: '₱100 entrance' },
+        { time: '3:30 PM', title: 'Sirao Flower Garden', category: 'Nature & Photography', description: 'Little Amsterdam with colorful celosia flowerbeds and mountain backdrops.', durationMinutes: 75, estimatedCost: '₱100 entrance' },
+        { time: '6:30 PM', title: 'Tops Lookout Cebu', category: 'Scenic Dinner', description: 'Catch the glittering Cebu City skyline lights under the evening stars.', durationMinutes: 90, estimatedCost: isBudget ? '₱200 - ₱350' : isLuxury ? '₱1,200+' : '₱500 - ₱800' },
       ],
     };
   }
 
   return {
     destination: destName,
+    estimatedTotalCost: defaultTotal,
+    budgetTier: defaultTier,
     stops: [
-      { time: startTime || '8:30 AM', title: `${destName} Artisan Bakery & Cafe`, category: 'Coffee & Breakfast', description: 'Hearty local breakfast with fresh brewed coffee overlooking the valley.', durationMinutes: 60 },
-      { time: '11:00 AM', title: `${destName} Scenic Ridge & Park`, category: 'Sightseeing', description: 'Take in breezy viewpoints, cool mountain air, and panoramic lookouts.', durationMinutes: 75 },
-      { time: '1:30 PM', title: `Balay Traditional Dining`, category: 'Food & Dining', description: 'Savor comforting hot bulalo soup and classic Filipino dishes.', durationMinutes: 75 },
-      { time: '4:00 PM', title: `${destName} Highland Gardens`, category: 'Nature & Relaxation', description: 'Walk through pine paths, landscaped lawns, and quiet photo spots.', durationMinutes: 60 },
-      { time: '6:30 PM', title: `${destName} Sunset Boulevard & Grills`, category: 'Dinner & Sunset', description: 'Relax with cool evening breezes and dinner to celebrate a memorable day.', durationMinutes: 90 },
+      { time: startTime || '8:30 AM', title: `${destName} Artisan Bakery & Cafe`, category: 'Coffee & Breakfast', description: 'Hearty local breakfast with fresh brewed coffee overlooking the valley.', durationMinutes: 60, estimatedCost: isBudget ? '₱150 - ₱250' : '₱350 - ₱500' },
+      { time: '11:00 AM', title: `${destName} Scenic Ridge & Park`, category: 'Sightseeing', description: 'Take in breezy viewpoints, cool mountain air, and panoramic lookouts.', durationMinutes: 75, estimatedCost: 'Free / ₱50' },
+      { time: '1:30 PM', title: `Balay Traditional Dining`, category: 'Food & Dining', description: 'Savor comforting hot bulalo soup and classic Filipino dishes.', durationMinutes: 75, estimatedCost: isBudget ? '₱250 - ₱350' : isLuxury ? '₱900 - ₱1,400' : '₱450 - ₱650' },
+      { time: '4:00 PM', title: `${destName} Highland Gardens`, category: 'Nature & Relaxation', description: 'Walk through pine paths, landscaped lawns, and quiet photo spots.', durationMinutes: 60, estimatedCost: '₱100 entrance' },
+      { time: '6:30 PM', title: `${destName} Sunset Boulevard & Grills`, category: 'Dinner & Sunset', description: 'Relax with cool evening breezes and dinner to celebrate a memorable day.', durationMinutes: 90, estimatedCost: isBudget ? '₱250 - ₱400' : isLuxury ? '₱1,200+' : '₱550 - ₱800' },
     ],
   };
 }
@@ -1156,17 +1196,18 @@ export async function suggestInteractiveStops(
   rejectedTitles: string[]
 ): Promise<InteractiveSuggestedStop[]> {
   const systemPrompt = `You are Agilito, the AI Travel Co-pilot for TourGo. You are helping the user build their itinerary step-by-step.
-Based on the current travel plan for the day, suggest exactly 3 relevant place/activity options in ${destination} for Day ${dayIndex + 1}.
+Based on the current travel plan for the day, suggest 6 diverse, high-quality place/activity options in ${destination} for Day ${dayIndex + 1} that match the user's chosen vibes and time slots.
 
 Guidelines:
-1. "time": Suggest a realistic start time (12-hour format, e.g. "10:30 AM") for this activity. It should fit logically with existing planned activities for the day: ${JSON.stringify(existingStops)}.
+1. "time": Suggest a realistic start time (12-hour format, e.g. "09:00 AM", "11:30 AM", "02:00 PM", "04:30 PM", "06:30 PM", "08:00 PM") for each activity. It should fit logically with existing planned activities for the day: ${JSON.stringify(existingStops)}.
 2. Do NOT suggest duplicate activities or places that are in this rejected list: ${JSON.stringify(rejectedTitles)}.
-3. The suggestions should match user preferences: tags: ${preferences.join(', ')}, natural prompt: "${naturalQuery}".
-4. "duration": How long the activity takes, e.g. "2 hours".
-5. "costEstimated": In PHP, e.g. "Free" or "₱300-₱500/person".
-6. "category": Primary category (must be one of: "Beach", "Nature", "Food", "Sightseeing", "Adventure", "Culture", "Shopping", "Café", "Nightlife", "Relaxing").
+3. The suggestions should match user preferences/vibes: tags: ${preferences.join(', ')}, natural prompt: "${naturalQuery}".
+4. Provide a rich variety of options across different categories (sightseeing, food/dining, adventure/outdoors, beach/nature, sunset/relaxation, cafe/nightlife).
+5. "duration": How long the activity takes, e.g. "1.5 hours" or "2 hours".
+6. "costEstimated": In PHP, e.g. "Free" or "₱250 - ₱500/person".
+7. "category": Primary category (must be one of: "Beach", "Nature", "Food", "Sightseeing", "Adventure", "Culture", "Shopping", "Café", "Nightlife", "Relaxing").
 
-Return your output ONLY as a JSON array of 3 objects with these exact fields:
+Return your output ONLY as a JSON array of 6 objects with these exact fields:
 - title: string
 - category: string
 - description: string
@@ -1181,9 +1222,9 @@ Do not wrap in markdown code blocks.`;
 Day Index: ${dayIndex}
 Time of Day context: ${timeOfDay}
 Existing activities: ${JSON.stringify(existingStops)}
-Preferences: ${preferences.join(', ')}
+Preferences/Vibes: ${preferences.join(', ')}
 User query: "${naturalQuery}"
-Please suggest 3 activities.`;
+Please suggest 6 diverse activity options.`;
 
   try {
     const text = await callGemini(systemPrompt, userPrompt);
@@ -1203,35 +1244,62 @@ Please suggest 3 activities.`;
     return enriched;
   } catch (error) {
     console.warn('suggestInteractiveStops error:', error);
-    // Fallback: simple suggestions
+    // Fallback: 6 diverse suggestions
     const seed = destination.split(',')[0].trim() || destination;
     const fallbackList = [
       {
-        title: "Sightseeing in " + seed,
+        title: "Iconic Landmarks in " + seed,
         category: "Sightseeing",
-        description: "A nice, relaxed sightseeing activity to explore the highlights.",
+        description: "Explore the most scenic views, photo spots, and cultural landmarks.",
         location: destination,
-        time: timeOfDay === 'Morning' ? '09:00 AM' : timeOfDay === 'Afternoon' ? '02:00 PM' : '06:00 PM',
+        time: "09:00 AM",
         duration: "2 hours",
         costEstimated: "Free"
       },
       {
-        title: "Lunch Spot in " + seed,
+        title: "Local Specialties Lunch at " + seed,
         category: "Food",
-        description: "Enjoy delicious local delicacies and seafood.",
+        description: "Taste authentic regional flavors, fresh seafood, and popular local dishes.",
         location: destination,
-        time: "12:30 PM",
+        time: "12:00 PM",
         duration: "1.5 hours",
-        costEstimated: "₱300 - ₱500"
+        costEstimated: "₱250 - ₱450"
       },
       {
-        title: "Afternoon Beach Trip",
-        category: "Beach",
-        description: "Relax by the shore and catch the beautiful tropical ocean view.",
+        title: "Nature & Beach Adventure",
+        category: "Nature",
+        description: "Discover hidden coves, coastal scenery, and refreshing natural swimming spots.",
         location: destination,
-        time: timeOfDay === 'Night' ? '08:30 PM' : '03:30 PM',
+        time: "02:30 PM",
         duration: "2.5 hours",
+        costEstimated: "Free - ₱150"
+      },
+      {
+        title: "Afternoon Cafe & Pastry Break",
+        category: "Café",
+        description: "Relax with artisan brewed coffee, desserts, and beautiful atmosphere.",
+        location: destination,
+        time: "04:30 PM",
+        duration: "1 hour",
+        costEstimated: "₱150 - ₱300"
+      },
+      {
+        title: "Golden Hour Sunset Viewpoint",
+        category: "Sightseeing",
+        description: "Watch the picturesque sunset colors from the best vantage point in the area.",
+        location: destination,
+        time: "05:45 PM",
+        duration: "1.5 hours",
         costEstimated: "Free"
+      },
+      {
+        title: "Night Market & Dinner Gathering",
+        category: "Food",
+        description: "Experience lively local street food, evening barbecue, and evening market vibes.",
+        location: destination,
+        time: "07:30 PM",
+        duration: "2 hours",
+        costEstimated: "₱200 - ₱400"
       }
     ];
 
@@ -1247,5 +1315,61 @@ Please suggest 3 activities.`;
   }
 }
 
+// 14. RECEIPT / BILL SCANNER — uses Gemini multimodal to parse a receipt image
+export interface ScannedReceipt {
+  title: string;        // merchant name or item description
+  amount: number;       // total amount in PHP
+  category: string;    // Food | Transport | Accommodation | Activities | Shopping | Other
+  confidence: 'high' | 'medium' | 'low';
+}
 
+export async function scanReceiptFromImage(base64Image: string, mimeType = 'image/jpeg'): Promise<ScannedReceipt> {
+  const fallback: ScannedReceipt = { title: '', amount: 0, category: 'Other', confidence: 'low' };
 
+  if (!GEMINI_API_KEY) return fallback;
+
+  const VISION_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  const systemText = `You are a receipt parser. Look at the receipt or bill image and extract:
+1. The merchant name or most descriptive item/service label (keep it short, under 40 chars)
+2. The total amount in Philippine Pesos (PHP). If the currency is USD/EUR convert approximately to PHP (1 USD ≈ 57 PHP, 1 EUR ≈ 61 PHP).
+3. The expense category: one of Food, Transport, Accommodation, Activities, Shopping, Other
+4. Your confidence: high (clear receipt), medium (partially readable), or low (blurry/unclear)
+
+Return ONLY valid JSON with exactly this shape:
+{"title":"<merchant or item>","amount":<number>,"category":"<category>","confidence":"<level>"}`;
+
+  try {
+    const response = await fetch(VISION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: systemText },
+            { inlineData: { mimeType, data: base64Image } },
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 256 },
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Receipt scan API error', response.status);
+      return fallback;
+    }
+
+    const json = await response.json();
+    const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleaned = cleanJsonResponse(raw);
+    const parsed = JSON.parse(cleaned) as ScannedReceipt;
+
+    if (typeof parsed.title === 'string' && typeof parsed.amount === 'number') {
+      return parsed;
+    }
+    return fallback;
+  } catch (err) {
+    console.warn('scanReceiptFromImage error:', err);
+    return fallback;
+  }
+}

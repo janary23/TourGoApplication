@@ -39,25 +39,34 @@ function formatDateRange(start?: string | null, end?: string | null): string {
  * Compose the share text for a trip. Completed trips get a retrospective
  * framing; planned and active trips get an invitation framing.
  */
-export function buildTripShareMessage(trip: ShareableTrip): string {
+export function buildTripShareMessage(trip: ShareableTrip, customCaption?: string): string {
   const status = deriveTripStatus(trip);
   const isDone = status === 'completed';
 
   const lines: string[] = [];
 
-  lines.push(isDone ? `Just wrapped up "${trip.title}" on TourGo!` : `${trip.title} — on TourGo`);
-  lines.push('');
+  if (customCaption && customCaption.trim()) {
+    lines.push(customCaption.trim());
+    lines.push('');
+  } else {
+    lines.push(
+      isDone
+        ? `Memories from our journey: "${trip.title}" on TourGo`
+        : `Planning our next getaway: "${trip.title}" on TourGo`
+    );
+    lines.push('');
+  }
 
-  if (trip.destination) lines.push(`Where: ${trip.destination}`);
+  if (trip.destination) lines.push(`Destination: ${trip.destination}`);
 
   const range = formatDateRange(
     trip.startDate ?? trip.start_date,
     trip.endDate ?? trip.end_date
   );
-  lines.push(`When: ${range}`);
+  lines.push(`Dates: ${range}`);
 
   const crew = trip.members?.length ?? 0;
-  if (crew > 0) lines.push(`Crew: ${crew} ${crew === 1 ? 'traveler' : 'travelers'}`);
+  if (crew > 0) lines.push(`Travel Crew: ${crew} ${crew === 1 ? 'traveler' : 'travelers'}`);
 
   // Itinerary highlights — real places from the trip, deduplicated.
   const stops = (trip.itinerary || [])
@@ -67,21 +76,24 @@ export function buildTripShareMessage(trip: ShareableTrip): string {
 
   if (uniqueStops.length > 0) {
     lines.push('');
-    lines.push(isDone ? 'Places we visited:' : 'Highlights:');
-    uniqueStops.slice(0, MAX_HIGHLIGHTS).forEach((s) => lines.push(`• ${s}`));
+    lines.push(isDone ? 'Places Visited & Memory Highlights:' : 'Planned Stops:');
+    uniqueStops.slice(0, MAX_HIGHLIGHTS).forEach((s) => lines.push(`  - ${s}`));
     const remaining = uniqueStops.length - MAX_HIGHLIGHTS;
-    if (remaining > 0) lines.push(`• +${remaining} more stop${remaining === 1 ? '' : 's'}`);
+    if (remaining > 0) lines.push(`  - +${remaining} more spot${remaining === 1 ? '' : 's'}`);
   }
 
   // The Trip Code stays the join mechanism — only worth sharing while the
   // trip can still be joined.
   if (trip.code && !isDone) {
     lines.push('');
-    lines.push(`Join us on TourGo with trip code: ${trip.code}`);
+    lines.push(`Join our group on TourGo with code: ${trip.code}`);
   } else if (trip.code) {
     lines.push('');
-    lines.push(`Planned & curated on TourGo (Trip Code: ${trip.code})`);
+    lines.push(`Preserved in TourGo Travel Memories Scrapbook`);
   }
+
+  lines.push('');
+  lines.push('#TourGo #TravelPhilippines #TravelMemories #ExplorePH #BarkadaTrip');
 
   return lines.join('\n');
 }
@@ -96,35 +108,64 @@ export function buildAlbumShareMessage(completedCount: number, provincesCount: n
     `Completed ${completedCount} journey${completedCount !== 1 ? 's' : ''} across ${provincesCount} province${provincesCount !== 1 ? 's' : ''} and ${spotsCount} spot${spotsCount !== 1 ? 's' : ''}!`,
     '',
     `Explore and plan unforgettable trips with TourGo.`,
+    '',
+    '#TourGo #TravelPhilippines #ExplorePH #TravelScrapbook',
   ].join('\n');
 }
 
 /**
  * Directly shares trip scrapbook memories to Facebook.
  */
-export async function shareToFacebook(messageOrTrip: string | ShareableTrip): Promise<{ shared: boolean; error?: string }> {
+export async function shareToFacebook(
+  messageOrTrip: string | ShareableTrip,
+  customCaption?: string,
+  cardRef?: any
+): Promise<{ shared: boolean; error?: string }> {
   try {
-    const text = typeof messageOrTrip === 'string' ? messageOrTrip : buildTripShareMessage(messageOrTrip);
-    const encodedQuote = encodeURIComponent(text);
-    // Facebook Sharer URL with quote parameter and fallback app URL
-    const fbWebSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://tourgo.app')}&quote=${encodedQuote}`;
+    const text =
+      typeof messageOrTrip === 'string'
+        ? messageOrTrip
+        : buildTripShareMessage(messageOrTrip, customCaption);
 
+    // If cardRef is provided, capture and share the rendered image card
+    let imageUri: string | null = null;
+    if (cardRef && cardRef.current) {
+      try {
+        const { captureRef } = await import('react-native-view-shot');
+        imageUri = await captureRef(cardRef, {
+          format: 'png',
+          quality: 1,
+          result: 'tmpfile',
+        });
+      } catch {
+        // Fall back to text sharing
+      }
+    }
+
+    if (imageUri) {
+      const result = await Share.share(
+        Platform.OS === 'ios'
+          ? { url: imageUri, message: text }
+          : { url: imageUri, message: text, title: typeof messageOrTrip === 'object' ? messageOrTrip.title : 'TourGo Memory' },
+        { dialogTitle: 'Share to Facebook' }
+      );
+      return { shared: result.action === Share.sharedAction };
+    }
+
+    // Direct mobile app intent or native share sheet
     if (Platform.OS === 'web') {
-      window.open(fbWebSharerUrl, '_blank', 'width=620,height=580');
+      const fbWebUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://tourgo.app')}`;
+      window.open(fbWebUrl, '_blank', 'width=620,height=580');
       return { shared: true };
     }
 
-    const canOpen = await Linking.canOpenURL(fbWebSharerUrl).catch(() => false);
-    if (canOpen) {
-      await Linking.openURL(fbWebSharerUrl);
-      return { shared: true };
-    }
-
-    // Fallback to native OS share sheet if direct URL is restricted
-    const result = await Share.share({ message: text });
+    const result = await Share.share(
+      { message: text, title: typeof messageOrTrip === 'object' ? messageOrTrip.title : 'TourGo Memory' },
+      { dialogTitle: 'Share to Facebook' }
+    );
     return { shared: result.action === Share.sharedAction };
   } catch (err: any) {
-    return { shared: false, error: err?.message || 'Could not open Facebook share.' };
+    return { shared: false, error: err?.message || 'Could not complete Facebook share.' };
   }
 }
 
@@ -132,9 +173,12 @@ export async function shareToFacebook(messageOrTrip: string | ShareableTrip): Pr
  * Open the OS share sheet for a trip. The user picks the destination app
  * (Facebook, Messenger, Instagram, mail, ...) from the sheet themselves.
  */
-export async function shareTrip(trip: ShareableTrip): Promise<{ shared: boolean; error?: string }> {
+export async function shareTrip(
+  trip: ShareableTrip,
+  customCaption?: string
+): Promise<{ shared: boolean; error?: string }> {
   try {
-    const message = buildTripShareMessage(trip);
+    const message = buildTripShareMessage(trip, customCaption);
     const result = await Share.share(
       { message, title: trip.title },
       { dialogTitle: `Share "${trip.title}"` }
@@ -156,7 +200,8 @@ export async function shareTrip(trip: ShareableTrip): Promise<{ shared: boolean;
  */
 export async function shareTripCardImage(
   cardRef: any,
-  trip: ShareableTrip
+  trip: ShareableTrip,
+  customCaption?: string
 ): Promise<{ shared: boolean; error?: string }> {
   try {
     const { captureRef } = await import('react-native-view-shot');
@@ -166,7 +211,7 @@ export async function shareTripCardImage(
       result: 'tmpfile',
     });
 
-    const message = buildTripShareMessage(trip);
+    const message = buildTripShareMessage(trip, customCaption);
 
     // iOS takes url + message together; Android puts the image in `url` and
     // ignores a second attachment, so the caption rides along as the message.

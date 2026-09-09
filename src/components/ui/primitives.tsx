@@ -390,7 +390,7 @@ export function ListRow({
 // ── Controls ─────────────────────────────────────────────────────────────────
 
 interface SegmentedProps<V extends string> {
-  segments: Array<{ value: V; label: string; badge?: number }>;
+  segments: Array<{ value: V; label: string; badge?: number | string }>;
   value: V;
   onChange: (v: V) => void;
 }
@@ -403,6 +403,7 @@ export function Segmented<V extends string>({ segments, value, onChange }: Segme
     <View style={[styles.segmented, { backgroundColor: colors.surface }]}>
       {segments.map((seg) => {
         const active = seg.value === value;
+        const showBadge = seg.badge !== undefined && seg.badge !== null && seg.badge !== 0 && seg.badge !== '';
         return (
           <TouchableOpacity
             key={seg.value}
@@ -422,7 +423,7 @@ export function Segmented<V extends string>({ segments, value, onChange }: Segme
             >
               {seg.label}
             </Text>
-            {seg.badge !== undefined && seg.badge > 0 && (
+            {showBadge && (
               <View
                 style={[
                   styles.segmentBadge,

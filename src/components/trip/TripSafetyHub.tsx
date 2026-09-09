@@ -11,6 +11,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -67,9 +68,9 @@ function minutesLate(scheduled?: string, arrivedISO?: string): number | null {
   return d.getHours() * 60 + d.getMinutes() - sched;
 }
 
-function lateLabel(mins: number | null): string {
+function lateLabel(mins: number | null, threshold = 5): string {
   if (mins == null) return '';
-  if (mins <= 2) return 'on time';
+  if (mins <= threshold) return 'On time';
   if (mins < 60) return `${mins} min late`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -100,6 +101,15 @@ export default function TripSafetyHub({
   const [nudging, setNudging] = useState(false);
   const [polling, setPolling] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+
+  // Filter for the member list: all | arrived | pending
+  type MemberFilter = 'all' | 'arrived' | 'pending';
+  const [memberFilter, setMemberFilter] = useState<MemberFilter>('all');
+
+  // Organizer-configurable late threshold (minutes)
+  const [lateThreshold, setLateThreshold] = useState(5);
+  const [thresholdSheetOpen, setThresholdSheetOpen] = useState(false);
+  const THRESHOLD_OPTIONS = [2, 5, 10, 15, 20, 30];
   const [liveWeather, setLiveWeather] = useState<RealTripForecast | null>(null);
 
   useEffect(() => {
@@ -213,11 +223,11 @@ export default function TripSafetyHub({
         if (!at) continue;
         present += 1;
         const late = minutesLate(st.time, at);
-        if (late != null && late > 2) { lateTotal += late; lateStops += 1; }
+        if (late != null && late > lateThreshold) { lateTotal += late; lateStops += 1; }
       }
       return { member: m, present, lateStops, lateTotal };
     }).sort((a: any, b: any) => b.present - a.present);
-  }, [members, stops, arrivals]);
+  }, [members, stops, arrivals, lateThreshold]);
 
   /** Post a notice to the group naming who we're waiting on — reuses the
    *  existing Announcements feature instead of inventing a new channel. */
@@ -288,292 +298,271 @@ export default function TripSafetyHub({
 
     return (
       <>
-        {/* ── Safety Radar Banner ── */}
-        <Section>
-          <Pressable
-            onPress={() => setTab('tracking')}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: space.md,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              borderColor: colors.brand,
-              backgroundColor: colors.card,
-              marginBottom: space.sm,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="shield-checkmark" size={18} color={colors.brand} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[T.label, { color: colors.text, fontWeight: '700' }]}>Safety Radar & Emergency Map</Text>
-                <Text style={[T.micro, { color: colors.textSecondary }]}>Google roads, satellite hybrid & nearby hospitals</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.brand} />
-          </Pressable>
-        </Section>
-
-        {/* ── Real-time Weather & Safety Advisory ── */}
-        {liveWeather && liveWeather.status === 'available' && (
-          <Section>
-            <View
-              style={{
-                borderRadius: radius.md,
-                borderWidth: 1,
-                borderColor: colors.cardBorder,
-                backgroundColor: colors.card,
-                padding: space.md,
-                marginBottom: space.sm,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="partly-sunny" size={15} color={colors.brand} />
-                  <Text style={[T.microStrong, { color: colors.brand, letterSpacing: 0.8 }]}>LIVE DESTINATION WEATHER</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                  <Ionicons name="pulse" size={11} color="#10B981" />
-                  <Text style={[T.micro, { color: '#10B981', fontWeight: '700' }]}>OPEN-METEO LIVE</Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Ionicons name={liveWeather.currentIcon} size={28} color={colors.brand} />
-                  <View>
-                    <Text style={[T.title, { color: colors.text }]}>{liveWeather.currentTemp}°C</Text>
-                    <Text style={[T.caption, { color: colors.textSecondary }]}>{liveWeather.currentCondition} · {liveWeather.destinationName}</Text>
+        {/* ── Stop hero card: image + title + progress + nav ── */}
+        <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          {/* Banner photo */}
+          {(() => {
+            const query = encodeURIComponent((current.title || current.location || trip.destination || 'travel').slice(0, 60));
+            const photoUri = current.photoUrl || `https://source.unsplash.com/featured/800x360?${query},travel`;
+            return (
+              <ImageBackground source={{ uri: photoUri }} style={styles.heroBanner} imageStyle={{ borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl }} resizeMode="cover">
+                <View style={styles.heroBannerOverlay}>
+                  {/* Top row: stop label + all-here badge */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[T.micro, { color: 'rgba(255,255,255,0.82)', flex: 1, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.9 }]}>
+                      Day {(current.dayIndex ?? 0) + 1} · Stop {stopIndex + 1}/{stops.length}
+                    </Text>
+                    {arrivedCount === members.length && members.length > 0 && (
+                      <Badge label="All here ✓" tone="positive" />
+                    )}
+                  </View>
+                  {/* Title */}
+                  <Text style={[T.title, { color: '#FFFFFF', marginTop: 4 }]} numberOfLines={2}>{current.title}</Text>
+                  {(current.time || current.location) && (
+                    <Text style={[T.caption, { color: 'rgba(255,255,255,0.7)', marginTop: 2 }]} numberOfLines={1}>
+                      {[current.time, current.location].filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
+                  {/* Progress bar inline */}
+                  <View style={{ marginTop: 10, gap: 4 }}>
+                    <ProgressBar value={members.length ? arrivedCount / members.length : 0} />
+                    <Text style={[T.micro, { color: 'rgba(255,255,255,0.7)' }]}>{arrivedCount} of {members.length} arrived</Text>
                   </View>
                 </View>
+              </ImageBackground>
+            );
+          })()}
 
-                <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                  <Text style={[T.micro, { color: colors.textMuted }]}>Humidity: {liveWeather.currentHumidity}%</Text>
-                  <Text style={[T.micro, { color: colors.textMuted }]}>Wind: {liveWeather.currentWindKph} km/h</Text>
-                </View>
-              </View>
-
-              <View style={{ marginTop: 10, padding: 8, borderRadius: 8, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.brand} />
-                <Text style={[T.micro, { color: colors.textSecondary, flex: 1 }]}>{liveWeather.advice}</Text>
-              </View>
-            </View>
-          </Section>
-        )}
-
-        {/* ── Current stop ── */}
-        <Section>
-          <View style={[styles.stopCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.md }}>
-              <Txt variant="overline" tone="accent" uppercase style={{ flex: 1 }}>
-                Day {(current.dayIndex ?? 0) + 1} · Stop {stopIndex + 1} of {stops.length}
-              </Txt>
-              {arrivedCount === members.length && members.length > 0 && (
-                <Badge label="All here" tone="positive" />
-              )}
-            </View>
-
-            <Txt variant="title" numberOfLines={2}>{current.title}</Txt>
-            <Txt variant="subhead" tone="muted" numberOfLines={1} style={{ marginTop: space.xs }}>
-              {[current.time, current.location].filter(Boolean).join(' · ')}
-            </Txt>
-
-            <View style={{ marginTop: space.lg, marginBottom: space.sm }}>
-              <ProgressBar value={members.length ? arrivedCount / members.length : 0} />
-            </View>
-            <Txt variant="footnote" tone="muted">
-              {arrivedCount} of {members.length} arrived
-            </Txt>
-
-            {/* Organizer advances the group through the itinerary */}
-            {isOrganizer && (
-              <View style={styles.navRow}>
-                <Press onPress={() => setStopIndex(i => Math.max(0, i - 1))} disabled={stopIndex === 0}>
-                  <View style={[styles.navBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
-                    <Ionicons name="chevron-back" size={15} color={stopIndex === 0 ? colors.textMuted : colors.text} />
-                    <Text style={[T.emphasis, { color: stopIndex === 0 ? colors.textMuted : colors.text }]}>
-                      Previous
-                    </Text>
+          {/* Bottom row: nav arrows (organizer) + check-in button */}
+          <View style={styles.heroBottom}>
+            {isOrganizer ? (
+              <>
+                <Press onPress={() => setStopIndex(i => Math.max(0, i - 1))} disabled={stopIndex === 0} style={{ flex: 1 }}>
+                  <View style={[styles.heroNavBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface, opacity: stopIndex === 0 ? 0.4 : 1 }]}>
+                    <Ionicons name="chevron-back" size={14} color={colors.text} />
+                    <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>Prev</Text>
                   </View>
                 </Press>
-
-                <Press
-                  onPress={() => setStopIndex(i => Math.min(stops.length - 1, i + 1))}
-                  disabled={stopIndex >= stops.length - 1}
-                >
-                  <View style={[styles.navBtn, {
-                    backgroundColor: stopIndex >= stops.length - 1 ? colors.surface : colors.brand,
-                    borderColor: stopIndex >= stops.length - 1 ? colors.cardBorder : colors.brand,
-                  }]}>
-                    <Text style={[T.emphasis, {
-                      color: stopIndex >= stops.length - 1 ? colors.textMuted : '#FFFFFF',
-                    }]}>
-                      Next stop
-                    </Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={15}
-                      color={stopIndex >= stops.length - 1 ? colors.textMuted : '#FFFFFF'}
-                    />
+                <Press onPress={() => setQrOpen(true)} style={{ flex: 2 }}>
+                  <View style={[styles.heroNavBtn, { borderColor: colors.brand, backgroundColor: colors.brand }]}>
+                    <Ionicons name="qr-code-outline" size={14} color="#FFFFFF" />
+                    <Text style={[T.caption, { color: '#FFFFFF', fontWeight: '700' }]}>Show arrival code</Text>
+                  </View>
+                </Press>
+                <Press onPress={() => setStopIndex(i => Math.min(stops.length - 1, i + 1))} disabled={stopIndex >= stops.length - 1} style={{ flex: 1 }}>
+                  <View style={[styles.heroNavBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface, opacity: stopIndex >= stops.length - 1 ? 0.4 : 1 }]}>
+                    <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>Next</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.text} />
+                  </View>
+                </Press>
+              </>
+            ) : iArrived ? (
+              <Press onPress={() => me && undoArrival(current.id, me.id)} style={{ flex: 1 }}>
+                <View style={[styles.heroNavBtn, { borderColor: sc.positive, backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={sc.positive} />
+                  <Text style={[T.caption, { color: sc.positive, fontWeight: '700' }]}>You're checked in · undo</Text>
+                </View>
+              </Press>
+            ) : (
+              <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
+                <Press onPress={openScanner} style={{ flex: 2 }}>
+                  <View style={[styles.heroNavBtn, { borderColor: colors.brand, backgroundColor: colors.brand }]}>
+                    <Ionicons name="scan-outline" size={14} color="#FFFFFF" />
+                    <Text style={[T.caption, { color: '#FFFFFF', fontWeight: '700' }]}>Scan code</Text>
+                  </View>
+                </Press>
+                <Press onPress={() => me && handleArrive(current, me.id)} style={{ flex: 1 }}>
+                  <View style={[styles.heroNavBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+                    <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>Manual</Text>
                   </View>
                 </Press>
               </View>
             )}
           </View>
-        </Section>
+        </View>
 
-        {/* ── Check-in action ── */}
-        <Section>
-          {isOrganizer ? (
-            <Button label="Show arrival code" icon="qr-code-outline" onPress={() => setQrOpen(true)} fullWidth />
-          ) : iArrived ? (
-            <Button
-              label="You are checked in"
-              variant="secondary"
-              icon="checkmark-circle-outline"
-              fullWidth
-              onPress={() => me && undoArrival(current.id, me.id)}
-            />
-          ) : (
-            <View style={{ gap: space.sm }}>
-              <Button label="Scan arrival code" icon="scan-outline" onPress={openScanner} fullWidth />
-              <Button
-                label="Mark me arrived"
-                variant="plain"
-                onPress={() => me && handleArrive(current, me.id)}
-                fullWidth
-              />
-            </View>
-          )}
-        </Section>
-
-        {/* ── Waiting on — links roll call to Announcements and Live location ── */}
-        {pending.length > 0 && arrivedCount > 0 && (
-          <Section>
-            <View style={[styles.waitCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                <Ionicons name="hourglass-outline" size={17} color={sc.attention} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt variant="emphasis">
-                    Waiting on {pending.length} {pending.length === 1 ? 'person' : 'people'}
-                  </Txt>
-                  <Txt variant="footnote" tone="muted" numberOfLines={1}>
-                    {pending.map((m: any) => m.name).join(', ')}
-                  </Txt>
-                </View>
-              </View>
-
+        {/* ── Members: vertical list ── */}
+        <View style={[styles.membersCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          {/* Header row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={[T.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', flex: 1 }]}>
+              Members · {arrivedCount}/{members.length}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
               {isOrganizer && (
-                <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.lg }}>
-                  {[
-                    { key: 'notify', icon: 'megaphone-outline', label: 'Announce', busy: nudging, onPress: () => handleNudge(pending) },
-                    { key: 'poll', icon: 'bar-chart-outline', label: 'Ask group', busy: polling, onPress: () => handleWaitPoll(pending) },
-                    { key: 'find', icon: 'navigate-outline', label: 'Locate', busy: false, onPress: () => setTab('tracking') },
-                  ].map((a: any) => (
-                    <Press key={a.key} onPress={a.onPress} disabled={a.busy} style={{ flex: 1 }}>
-                      <View style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                        {a.busy
-                          ? <ActivityIndicator size="small" color={colors.brand} />
-                          : <Ionicons name={a.icon} size={17} color={colors.brand} />}
-                        <Text style={[T.caption, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                          {a.label}
-                        </Text>
-                      </View>
-                    </Press>
-                  ))}
-                </View>
+                <Press onPress={() => setThresholdSheetOpen(true)}>
+                  <View style={[styles.miniActionBtn, { borderColor: colors.brand, backgroundColor: colors.brandLight }]}>
+                    <Ionicons name="timer-outline" size={13} color={colors.brand} />
+                    <Text style={[T.micro, { color: colors.brand, fontWeight: '700' }]}>Late ≥{lateThreshold}m</Text>
+                  </View>
+                </Press>
+              )}
+              {pending.length > 0 && arrivedCount > 0 && isOrganizer && (
+                <>
+                  <Press onPress={() => handleNudge(pending)} disabled={nudging}>
+                    <View style={[styles.miniActionBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+                      {nudging ? <ActivityIndicator size="small" color={colors.brand} /> : <Ionicons name="megaphone-outline" size={13} color={colors.brand} />}
+                      <Text style={[T.micro, { color: colors.brand, fontWeight: '700' }]}>Nudge</Text>
+                    </View>
+                  </Press>
+                  <Press onPress={() => handleWaitPoll(pending)} disabled={polling}>
+                    <View style={[styles.miniActionBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surface }]}>
+                      {polling ? <ActivityIndicator size="small" color={colors.brand} /> : <Ionicons name="bar-chart-outline" size={13} color={colors.brand} />}
+                      <Text style={[T.micro, { color: colors.brand, fontWeight: '700' }]}>Poll</Text>
+                    </View>
+                  </Press>
+                </>
               )}
             </View>
-          </Section>
-        )}
+          </View>
 
-        {/* ── Attendance ── */}
-        <Section>
-          <SectionLabel>Attendance · this stop</SectionLabel>
-          <ListGroup>
-            {[...arrived, ...pending].map((m: any) => {
+          {/* Filter tabs */}
+          <View style={styles.filterRow}>
+            {(['all', 'arrived', 'pending'] as MemberFilter[]).map(f => (
+              <Press key={f} onPress={() => setMemberFilter(f)}>
+                <View style={[
+                  styles.filterChip,
+                  memberFilter === f
+                    ? { backgroundColor: colors.brand, borderColor: colors.brand }
+                    : { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                ]}>
+                  <Text style={[T.micro, { fontWeight: '700', color: memberFilter === f ? '#FFFFFF' : colors.textMuted }]}>
+                    {f === 'all' ? `All (${members.length})` : f === 'arrived' ? `Arrived (${arrivedCount})` : `Not yet (${pending.length})`}
+                  </Text>
+                </View>
+              </Press>
+            ))}
+          </View>
+
+          {/* Member rows */}
+          {[...arrived, ...pending]
+            .filter(m =>
+              memberFilter === 'all'
+                ? true
+                : memberFilter === 'arrived'
+                  ? !!currentArrivals[m.id]
+                  : !currentArrivals[m.id]
+            )
+            .map((m: any, idx: number, arr: any[]) => {
               const at = currentArrivals[m.id];
               const here = !!at;
+              const late = here ? minutesLate(current.time, at) : null;
+              const isLate = late != null && late > lateThreshold;
+              const statusColor = here ? (isLate ? sc.attention : sc.positive) : colors.textMuted;
+              const bgColor = here
+                ? (isLate ? 'rgba(245,158,11,0.07)' : 'rgba(16,185,129,0.07)')
+                : 'transparent';
+
               return (
-                <ListRow
+                <Pressable
                   key={m.id}
-                  title={m.name === currentUserName ? `${m.name} (you)` : m.name}
-                  subtitle={
-                    here
-                      ? `Arrived ${clockOf(at)} · ${lateLabel(minutesLate(current.time, at))}`
-                      : m.location ? 'Not arrived · sharing location' : 'Not arrived'
-                  }
-                  leading={<Avatar name={m.name} uri={m.avatar_url || undefined} size={32} />}
-                  showChevron={false}
-                  // Organizers can mark anyone in or out for this stop
-                  onPress={
-                    isOrganizer
-                      ? () => (here ? undoArrival(current.id, m.id) : handleArrive(current, m.id))
-                      : undefined
-                  }
-                  trailing={
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-                      {here ? (
-                        (() => {
-                          const late = minutesLate(current.time, at);
-                          const isLate = late != null && late > 2;
-                          return (
-                            <Text style={[T.emphasis, { color: isLate ? sc.attention : sc.positive }]}>
-                              {isLate ? `+${late}m` : 'on time'}
-                            </Text>
-                          );
-                        })()
-                      ) : m.location ? (
-                        <Ionicons name="location" size={14} color={colors.textMuted} />
-                      ) : null}
+                  onPress={isOrganizer ? () => (here ? undoArrival(current.id, m.id) : handleArrive(current, m.id)) : undefined}
+                  style={({ pressed }) => [{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 8,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? colors.surface : bgColor,
+                    borderBottomWidth: idx < arr.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.cardBorder,
+                    gap: 10,
+                  }]}
+                >
+                  {/* Avatar with status dot */}
+                  <View style={{ position: 'relative' }}>
+                    <Avatar name={m.name} uri={m.avatar_url || undefined} size={38} />
+                    <View style={[styles.statusDot, { backgroundColor: statusColor, borderColor: here ? bgColor : colors.card }]} />
+                  </View>
+
+                  {/* Name + timestamp */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[T.body, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+                      {m.name === currentUserName ? `${m.name} (you)` : m.name}
+                    </Text>
+                    {here ? (
+                      <Text style={[T.micro, { color: colors.textMuted, marginTop: 1 }]}>
+                        Arrived {clockOf(at)}
+                        {current.time ? ` · sched. ${current.time}` : ''}
+                      </Text>
+                    ) : (
+                      <Text style={[T.micro, { color: colors.textMuted, marginTop: 1 }]}>Not yet arrived</Text>
+                    )}
+                  </View>
+
+                  {/* Status badge */}
+                  {here ? (
+                    <View style={[
+                      styles.lateBadge,
+                      { backgroundColor: isLate ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', borderColor: statusColor },
+                    ]}>
                       <Ionicons
-                        name={here ? 'checkmark-circle' : 'ellipse-outline'}
-                        size={19}
-                        color={here ? sc.positive : colors.textMuted}
+                        name={isLate ? 'time-outline' : 'checkmark-circle-outline'}
+                        size={11}
+                        color={statusColor}
                       />
+                      <Text style={[T.micro, { color: statusColor, fontWeight: '800', fontSize: 10 }]}>
+                        {lateLabel(late, lateThreshold)}
+                      </Text>
                     </View>
-                  }
-                />
+                  ) : (
+                    <View style={[styles.lateBadge, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+                      <Ionicons name="ellipsis-horizontal" size={11} color={colors.textMuted} />
+                      <Text style={[T.micro, { color: colors.textMuted, fontWeight: '700', fontSize: 10 }]}>Pending</Text>
+                    </View>
+                  )}
+                </Pressable>
               );
             })}
-          </ListGroup>
 
-          <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.md }}>
-            {isOrganizer
-              ? 'Tap a member to mark them arrived or undo it.'
-              : 'Your organizer advances the group to the next stop.'}
-          </Txt>
-        </Section>
+          {isOrganizer && (
+            <Text style={[T.micro, { color: colors.textMuted, marginTop: 8, textAlign: 'center' }]}>Tap a member to mark arrived or undo</Text>
+          )}
+        </View>
 
-        {/* ── Trip-wide record ── */}
-        <Section>
+        {/* ── Weather ── */}
+        {liveWeather && liveWeather.status === 'available' && (
+          <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Ionicons name={liveWeather.currentIcon as any} size={22} color={colors.brand} />
+            <View style={{ flex: 1 }}>
+              <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>{liveWeather.currentTemp}°C · {liveWeather.currentCondition}</Text>
+              <Text style={[T.micro, { color: colors.textMuted }]} numberOfLines={1}>{liveWeather.advice}</Text>
+            </View>
+            <Text style={[T.micro, { color: colors.textMuted }]}>💧{liveWeather.currentHumidity}%</Text>
+          </View>
+        )}
+
+        {/* ── Safety Radar link ── */}
+        <Pressable
+          onPress={() => setTab('tracking')}
+          style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.brand }]}
+        >
+          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="shield-checkmark" size={15} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>Safety Radar & Emergency Map</Text>
+            <Text style={[T.micro, { color: colors.textMuted }]}>Satellite map · nearby hospitals</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+        </Pressable>
+
+        {/* ── Trip-wide record (collapsible) ── */}
+        <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.cardBorder, flexDirection: 'column', alignItems: 'stretch', padding: 0, overflow: 'hidden' }]}>
           <Press onPress={() => setShowSummary(v => !v)}>
-            <View style={styles.summaryHead}>
-              <SectionLabel style={{ flex: 1, marginBottom: 0 }}>
-                Trip record · {stops.length} stops
-              </SectionLabel>
-              <Ionicons
-                name={showSummary ? 'chevron-up' : 'chevron-down'}
-                size={14}
-                color={colors.textMuted}
-              />
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.md }}>
+              <Ionicons name="stats-chart-outline" size={15} color={colors.brand} style={{ marginRight: 8 }} />
+              <Text style={[T.caption, { color: colors.text, fontWeight: '700', flex: 1 }]}>Trip attendance record · {stops.length} stops</Text>
+              <Ionicons name={showSummary ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textMuted} />
             </View>
           </Press>
-
           {showSummary && (
             <ListGroup>
               {tripSummary.map(({ member, present, lateStops, lateTotal }: any) => (
                 <ListRow
                   key={member.id}
                   title={member.name === currentUserName ? `${member.name} (you)` : member.name}
-                  subtitle={
-                    lateStops > 0
-                      ? `${lateStops} late arrival${lateStops === 1 ? '' : 's'} · ${lateTotal} min total`
-                      : present > 0 ? 'Always on time' : 'No check-ins yet'
-                  }
+                  subtitle={lateStops > 0 ? `${lateStops} late · ${lateTotal}m total` : present > 0 ? 'Always on time' : 'No check-ins yet'}
                   leading={<Avatar name={member.name} uri={member.avatar_url || undefined} size={30} />}
                   showChevron={false}
                   trailing={
@@ -585,7 +574,7 @@ export default function TripSafetyHub({
               ))}
             </ListGroup>
           )}
-        </Section>
+        </View>
       </>
     );
   };
@@ -615,22 +604,68 @@ export default function TripSafetyHub({
       {/* ── Organizer: arrival code ── */}
       <Sheet visible={qrOpen} onClose={() => setQrOpen(false)} title={current?.title}>
         <View style={{ alignItems: 'center' }}>
-          <Txt variant="subhead" tone="muted" align="center" style={{ marginBottom: space.xl }}>
+          {/* Stop mini-photo inside QR sheet */}
+          {!!current && (() => {
+            const query = encodeURIComponent((current.title || current.location || trip.destination || 'travel').slice(0, 60));
+            const photoUri = current.photoUrl ||
+              `https://source.unsplash.com/featured/600x200?${query},travel`;
+            return (
+              <Image
+                source={{ uri: photoUri }}
+                style={styles.qrStopPhoto}
+                resizeMode="cover"
+              />
+            );
+          })()}
+
+          <Txt variant="subhead" tone="muted" align="center" style={{ marginTop: space.lg, marginBottom: space.xl }}>
             Have the group scan this to confirm they have arrived.
           </Txt>
+
+          {/* QR code — data MUST match onBarcodeScanned check exactly */}
           <View style={[styles.qrFrame, { borderColor: colors.cardBorder }]}>
-            {!!current && (
-              <Image
-                source={{
-                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=0&data=tourgo:arrive:${trip.id}:${current.id}`,
-                }}
-                style={{ width: 220, height: 220 }}
-              />
-            )}
+            {!!current && (() => {
+              // Build the same plain string the scanner validates against.
+              const qrData = `tourgo:arrive:${trip.id}:${current.id}`;
+              const qrUri = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&ecc=M&data=${encodeURIComponent(qrData)}`;
+              return (
+                <Image source={{ uri: qrUri }} style={{ width: 240, height: 240 }} />
+              );
+            })()}
           </View>
+
           <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.xl }}>
             {arrivedCount} of {members.length} arrived
           </Txt>
+        </View>
+      </Sheet>
+
+      {/* ── Organizer: late threshold picker ── */}
+      <Sheet visible={thresholdSheetOpen} onClose={() => setThresholdSheetOpen(false)} title="Late arrival threshold">
+        <View style={{ paddingBottom: 16 }}>
+          <Text style={[T.caption, { color: colors.textMuted, marginBottom: 14 }]}>
+            A member is marked "late" if they arrive more than this many minutes after the scheduled stop time.
+          </Text>
+          {THRESHOLD_OPTIONS.map(opt => (
+            <Pressable
+              key={opt}
+              onPress={() => { setLateThreshold(opt); setThresholdSheetOpen(false); }}
+              style={({ pressed }) => [styles.thresholdOption, {
+                backgroundColor: opt === lateThreshold ? colors.brandLight : pressed ? colors.surface : 'transparent',
+                borderColor: opt === lateThreshold ? colors.brand : colors.cardBorder,
+              }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[T.body, { color: colors.text, fontWeight: opt === lateThreshold ? '800' : '500' }]}>
+                  {opt} minutes
+                </Text>
+                {opt === lateThreshold && (
+                  <Text style={[T.micro, { color: colors.brand }]}>Currently selected</Text>
+                )}
+              </View>
+              {opt === lateThreshold && <Ionicons name="checkmark-circle" size={20} color={colors.brand} />}
+            </Pressable>
+          ))}
         </View>
       </Sheet>
 
@@ -668,7 +703,7 @@ export default function TripSafetyHub({
               {scanning ? 'Checking you in' : current?.title}
             </Txt>
             <Txt variant="subhead" align="center" style={{ color: 'rgba(255,255,255,0.7)', marginTop: space.xs }}>
-              {scanning ? 'One moment' : 'Point at the organizer’s code'}
+              {scanning ? 'One moment' : 'Point at the organizer\u2019s code'}
             </Txt>
           </View>
         </View>
@@ -685,6 +720,26 @@ const styles = StyleSheet.create({
     padding: space.xl,
     borderRadius: radius.xl,
     borderWidth: hairline,
+    overflow: 'hidden',
+  },
+  stopBanner: {
+    height: 160,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    marginBottom: 2,
+  },
+  stopBannerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+  },
+  qrStopPhoto: {
+    width: '100%',
+    height: 120,
+    borderRadius: radius.lg,
+    marginBottom: 2,
   },
   quickAction: {
     alignItems: 'center',
@@ -694,6 +749,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: hairline,
     minHeight: 62,
+  },
+  memberCard: {
+    alignItems: 'center',
+    gap: 5,
+    padding: space.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    width: 80,
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   waitCard: {
     padding: space.lg,
@@ -754,5 +834,98 @@ const styles = StyleSheet.create({
   scanFooter: {
     position: 'absolute',
     left: space.xl, right: space.xl, bottom: 56,
+  },
+  // ── Roll-call styles ───────────────────────────────────────────────────────
+  heroCard: {
+    borderRadius: radius.xl,
+    borderWidth: hairline,
+    overflow: 'hidden',
+    marginBottom: space.md,
+  },
+  heroBanner: {
+    height: 180,
+  },
+  heroBannerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: space.lg,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  heroBottom: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: space.md,
+  },
+  heroNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+  },
+  membersCard: {
+    borderRadius: radius.xl,
+    borderWidth: hairline,
+    padding: space.lg,
+    marginBottom: space.md,
+  },
+  memberPill: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    minWidth: 64,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  lateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+  },
+  thresholdOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  miniActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.md,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+    marginBottom: space.sm,
   },
 });

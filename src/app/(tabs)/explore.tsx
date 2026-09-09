@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
   Platform,
+  Share,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -37,13 +38,14 @@ import {
   getMunicipalitiesForProvince,
   fetchGooglePlacesForProvince,
   formatAddress,
+  getPlaceImageUrl,
   type Destination,
 } from '../../services/destinations';
 import { loadExploreLog, saveExploreLog, type ExploreLog } from '../../services/exploreLog';
 import { getWishlistCatalog, type SavedSpot } from '../../services/wishlistCatalog';
 import { getTrips } from '../../services/tripService';
 import { isTripCompleted } from '../../services/tripStatus';
-import { shareTrip, shareToFacebook, buildAlbumShareMessage } from '../../services/tripShare';
+import { shareTrip, buildAlbumShareMessage } from '../../services/tripShare';
 import { supabase } from '../../services/supabase';
 import {
   ExploreMap,
@@ -178,6 +180,7 @@ export default function ExploreScreen() {
   const [mapStyleIdx, setMapStyleIdx] = useState(0);
   const [activeControlTab, setActiveControlTab] = useState<'none' | 'background' | 'region' | 'scale' | 'color' | 'style'>('none');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSharingFacebook, setIsSharingFacebook] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const cardRef = useRef<View>(null);
   const nonceRef = useRef(0);
@@ -215,6 +218,40 @@ export default function ExploreScreen() {
       notify('Could not save the image. Please try again.', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Facebook's web sharer (the old shareToFacebook(msg) call here) can only
+  // carry a text quote — no way to attach a locally-generated image, so the
+  // post came through with no visual at all. This captures the same Story
+  // Card rendered for the Download button and hands the PNG to the OS share
+  // sheet instead, so Facebook (picked from that sheet) gets the actual card.
+  const handleFacebookShareImage = async () => {
+    if (isSharingFacebook) return;
+    try {
+      setIsSharingFacebook(true);
+      if (!cardRef.current) {
+        notify('Card layout not ready yet. Please try again.', 'error');
+        return;
+      }
+      setIsExporting(true);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1.0, result: 'tmpfile' });
+      setIsExporting(false);
+      const message = buildAlbumShareMessage(completedTripAlbums.length, visitedProvincesList.length, log.visitedDestinations.length);
+      const result = await Share.share(
+        Platform.OS === 'ios' ? { url: uri, message } : { url: uri, message },
+        { dialogTitle: 'Share your Travel Album' }
+      );
+      if (result.action !== Share.sharedAction && result.action !== Share.dismissedAction) {
+        notify('Could not open the share sheet.', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to share card:', error);
+      setIsExporting(false);
+      notify('Could not create the share image.', 'error');
+    } finally {
+      setIsSharingFacebook(false);
     }
   };
 
@@ -283,29 +320,35 @@ export default function ExploreScreen() {
           const saved = new Set<string>(logData.savedProvinces);
           const visitedDests = new Set<string>();
 
-          // Identify all completed trips (marked as completed by organizer or endDate past)
-          const completedTrips = tripsData.filter((t: any) => isTripCompleted(t));
+          // ONLY completed trips (explicitly marked completed by organizer) count as explored/visited on the map
+          const completedTrips = (tripsData || []).filter((t: any) => isTripCompleted(t));
           const completedTripIds = completedTrips.map((t: any) => t.id);
 
+          // Add active/planned trips to saved/wishlist instead of visited
           for (const trip of tripsData) {
             if (!trip.destination) continue;
             const provinceId = findProvinceIdForDestination(trip.destination);
-            const isCompleted = isTripCompleted(trip);
+            if (provinceId && !isTripCompleted(trip)) {
+              saved.add(provinceId);
+            }
+          }
+
+          // Process ONLY completed trips for visited provinces and destinations
+          for (const trip of completedTrips) {
+            if (!trip.destination) continue;
+            const provinceId = findProvinceIdForDestination(trip.destination);
             if (provinceId) {
-              if (isCompleted) visited.add(provinceId);
-              else saved.add(provinceId);
+              visited.add(provinceId);
             }
 
-            // If trip is completed, match its destination to catalog destinations
-            if (isCompleted) {
-              const matchedDest = DESTINATIONS.find(d => 
-                trip.destination.toLowerCase().includes(d.name.toLowerCase()) ||
-                d.name.toLowerCase().includes(trip.destination.toLowerCase())
-              );
-              if (matchedDest) {
-                visitedDests.add(matchedDest.id);
-                if (matchedDest.provinceId) visited.add(matchedDest.provinceId);
-              }
+            // Match completed trip destination to catalog destinations
+            const matchedDest = DESTINATIONS.find(d => 
+              trip.destination.toLowerCase().includes(d.name.toLowerCase()) ||
+              d.name.toLowerCase().includes(trip.destination.toLowerCase())
+            );
+            if (matchedDest) {
+              visitedDests.add(matchedDest.id);
+              if (matchedDest.provinceId) visited.add(matchedDest.provinceId);
             }
           }
 
@@ -465,7 +508,7 @@ export default function ExploreScreen() {
 
   const provinceTrips = useMemo(() => {
     if (!selectedProvinceId) return [];
-    return userTrips.filter(t => findProvinceIdForDestination(t.destination) === selectedProvinceId);
+    return userTrips.filter(t => findProvinceIdForDestination(t.destination) === selectedProvinceId && isTripCompleted(t));
   }, [userTrips, selectedProvinceId]);
 
   const allDestinations = useMemo(() => {
@@ -605,13 +648,13 @@ export default function ExploreScreen() {
       if (!province) return null;
       const tripsForProv = userTrips.filter(t => {
         const pId = findProvinceIdForDestination(t.destination);
-        return pId === provId && new Date(t.endDate) < new Date();
+        return pId === provId && isTripCompleted(t);
       });
-      const latestTrip = tripsForProv.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
+      const latestTrip = tripsForProv.sort((a, b) => new Date(b.endDate || b.start_date || 0).getTime() - new Date(a.endDate || a.start_date || 0).getTime())[0];
       return {
         id: provId, name: province.name, region: province.region,
-        date: latestTrip ? new Date(latestTrip.endDate) : new Date(0),
-        dateStr: latestTrip ? new Date(latestTrip.endDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'Passport Stamped',
+        date: latestTrip ? new Date(latestTrip.endDate || latestTrip.startDate) : new Date(0),
+        dateStr: latestTrip ? new Date(latestTrip.endDate || latestTrip.startDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'Passport Stamped',
         tripTitle: latestTrip ? latestTrip.title : 'Footprint Logged',
       };
     }).filter(Boolean) as any[];
@@ -1081,7 +1124,11 @@ export default function ExploreScreen() {
                     {/* Polaroid Scrapbook Grid */}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                       {completedTripAlbums.map((trip: any) => {
-                        const imageUrl = trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1000';
+                        const rawImg = trip.image || trip.image_url;
+                        const isGeneric = !rawImg || rawImg.trim() === '' || rawImg.includes('photo-1469854523086') || rawImg.includes('photo-1542856391');
+                        const imageUrl = isGeneric
+                          ? getPlaceImageUrl(trip.destination || trip.title || 'Philippines')
+                          : rawImg;
                         const cardWidth = (windowWidth - 44) / 2;
                         const itinCount = (trip.itineraryItems || []).length;
                         const buddyCount = trip.members?.length || 1;
@@ -1646,14 +1693,15 @@ export default function ExploreScreen() {
                     </TouchableOpacity>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity
-                        onPress={async () => {
-                          const msg = buildAlbumShareMessage(completedTripAlbums.length, visitedProvincesList.length, log.visitedDestinations.length);
-                          const { error } = await shareToFacebook(msg);
-                          if (error) notify(error, 'error');
-                        }}
+                        onPress={handleFacebookShareImage}
+                        disabled={isSharingFacebook}
                         style={[styles.floatingGlassBtn, { backgroundColor: '#1877F2' }]}
                       >
-                        <Ionicons name="logo-facebook" size={20} color="#FFFFFF" />
+                        {isSharingFacebook ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Ionicons name="logo-facebook" size={20} color="#FFFFFF" />
+                        )}
                       </TouchableOpacity>
                       <TouchableOpacity onPress={handleSaveImage} style={styles.floatingGlassBtn} disabled={isSaving}>
                         {isSaving ? (

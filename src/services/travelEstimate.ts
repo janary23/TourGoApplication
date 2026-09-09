@@ -170,6 +170,59 @@ export function resolvePlaceCoords(text: string): Coords | null {
   return contained ? contained.coords : null;
 }
 
+/**
+ * Fetch real GPS coordinates for a place name from the Nominatim OpenStreetMap
+ * geocoding API.  Falls back to resolvePlaceCoords (offline) if the network
+ * is unavailable or the query returns no results.
+ *
+ * @param placeName  - Human-readable name, e.g. "Taal Volcano Viewpoint, Tagaytay"
+ * @param hint       - Optional city/region hint appended only when no result is
+ *                     found for the bare name, e.g. "Tagaytay, Philippines"
+ */
+export async function geocodePlace(
+  placeName: string,
+  hint?: string
+): Promise<Coords | null> {
+  // 1. Try offline index first (instant, no network)
+  const offline = resolvePlaceCoords(placeName);
+  if (offline) return offline;
+
+  // 2. Live Nominatim lookup
+  const tryNominatim = async (q: string): Promise<Coords | null> => {
+    try {
+      const encoded = encodeURIComponent(q);
+      const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=ph`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'TourGoApp/1.0 (travel planner)' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (json?.length > 0) {
+        return {
+          latitude: parseFloat(json[0].lat),
+          longitude: parseFloat(json[0].lon),
+        };
+      }
+    } catch {
+      // network error or timeout — degrade silently
+    }
+    return null;
+  };
+
+  // Try exact name first
+  const direct = await tryNominatim(placeName);
+  if (direct) return direct;
+
+  // Try with the destination hint appended
+  if (hint) {
+    const hinted = await tryNominatim(`${placeName}, ${hint}`);
+    if (hinted) return hinted;
+  }
+
+  return null;
+}
+
 // ── Travel time ──────────────────────────────────────────────────────────────
 
 /** Known routes kept from the original inline estimator so existing Cebu trips

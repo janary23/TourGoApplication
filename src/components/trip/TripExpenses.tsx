@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { addExpense as dbAddExpense, deleteExpense as dbDeleteExpense } from '../../services/tripService';
+import * as ImagePicker from 'expo-image-picker';
+import { addExpense as dbAddExpense, deleteExpense as dbDeleteExpense, markExpenseSettled } from '../../services/tripService';
 import { useTheme } from '../../context/ThemeContext';
 import {
   ScreenHeader, Section, SectionLabel, ListGroup, ListRow, Card, Segmented,
@@ -49,6 +50,9 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
   const [splitWith, setSplitWith] = useState<string[]>([]);
   const [category, setCategory] = useState('Other');
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanBanner, setScanBanner] = useState<string | null>(null);
+  const [settling, setSettling] = useState<string | null>(null); // expense id being settled
 
   const expenses = trip.expenses ?? [];
   const members = trip.members ?? [];
@@ -127,7 +131,82 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
   const handleOpenSheet = () => {
     reset();
+    setScanBanner(null);
     setSheetOpen(true);
+  };
+
+  const handleScanReceipt = async () => {
+    // Ask for source: camera or gallery
+    Alert.alert(
+      'Scan Receipt',
+      'Choose how to add your receipt',
+      [
+        {
+          text: 'Take a Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              notify('Camera permission is required to scan receipts.', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.85,
+              base64: true,
+            });
+            if (!result.canceled && result.assets?.[0]?.base64) {
+              await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
+            }
+          },
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              notify('Photo library permission is required.', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.85,
+              base64: true,
+            });
+            if (!result.canceled && result.assets?.[0]?.base64) {
+              await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const processReceiptImage = async (base64: string, mimeType: string) => {
+    reset();
+    setSheetOpen(true);
+    setScanning(true);
+    setScanBanner(null);
+    try {
+      const { scanReceiptFromImage } = await import('../../services/aiService');
+      const result = await scanReceiptFromImage(base64, mimeType);
+      if (result.title) setTitle(result.title);
+      if (result.amount && result.amount > 0) setAmount(String(result.amount));
+      if (result.category && CATEGORIES.some((c) => c.id === result.category)) {
+        setCategory(result.category);
+      }
+      const msg =
+        result.confidence === 'high'
+          ? '✅ Receipt scanned! Check the fields below.'
+          : result.confidence === 'medium'
+          ? '⚠️ Scanned with medium confidence — please verify.'
+          : '❗ Low confidence — please fill in manually.';
+      setScanBanner(msg);
+    } catch {
+      setScanBanner('❗ Could not read receipt. Please fill in manually.');
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleSave = async () => {
@@ -166,6 +245,63 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
       });
   };
 
+  const handleExpenseTap = (exp: any) => {
+    if (isViewOnly) return;
+    const iPaid = exp.paidBy === currentUserName;
+    const iOweThem = exp.splitWith.includes(currentUserName) && !iPaid;
+
+    const options: Array<{ label: string; action: () => void; destructive?: boolean }> = [];
+
+    // Settle / unsettle — available to anyone who owes on this expense
+    if (iOweThem && !exp.isSettled) {
+      options.push({
+        label: '✅  Mark as Paid',
+        action: async () => {
+          setSettling(exp.id);
+          const { error } = await markExpenseSettled(exp.id, true);
+          setSettling(null);
+          if (error) notify(error, 'error');
+          else { notify('Marked as paid!', 'success'); loadTrip(); }
+        },
+      });
+    }
+    if (iOweThem && exp.isSettled) {
+      options.push({
+        label: '↩︎  Mark as Unpaid',
+        action: async () => {
+          setSettling(exp.id);
+          const { error } = await markExpenseSettled(exp.id, false);
+          setSettling(null);
+          if (error) notify(error, 'error');
+          else { loadTrip(); }
+        },
+      });
+    }
+    // Delete — only the person who paid can delete
+    if (iPaid) {
+      options.push({
+        label: '🗑  Remove Expense',
+        destructive: true,
+        action: () => confirmDelete(exp),
+      });
+    }
+
+    if (options.length === 0) return; // viewer with no action
+
+    Alert.alert(
+      exp.title,
+      `${peso(exp.amount)} · ${iPaid ? 'You paid' : `${exp.paidBy} paid`}`,
+      [
+        ...options.map((o) => ({
+          text: o.label,
+          style: (o.destructive ? 'destructive' : 'default') as 'destructive' | 'default',
+          onPress: o.action,
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]
+    );
+  };
+
   const canSave = !isViewOnly && !!title.trim() && parseFloat(amount) > 0 && !!paidBy;
 
   return (
@@ -181,8 +317,19 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
               ? `${peso(total)} spent across ${expenses.length} ${expenses.length === 1 ? 'entry' : 'entries'}`
               : undefined
           }
-          action={isViewOnly ? undefined : { icon: 'add', onPress: () => setSheetOpen(true), label: 'Add expense' }}
         />
+        {!isViewOnly && (
+          <View style={styles.headerActions}>
+            <Press onPress={handleScanReceipt} style={styles.scanBtn}>
+              <Ionicons name="scan-outline" size={17} color={colors.brand} />
+              <Text style={[T.subhead, { color: colors.brand, fontWeight: '600' }]}>Scan Receipt</Text>
+            </Press>
+            <Press onPress={handleOpenSheet} style={[styles.scanBtn, { backgroundColor: colors.brand }]}>
+              <Ionicons name="add" size={17} color="#fff" />
+              <Text style={[T.subhead, { color: '#fff', fontWeight: '600' }]}>Add Expense</Text>
+            </Press>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -264,6 +411,8 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
                   {filtered.map((exp: any) => {
                     const per = exp.splitWith.length > 0 ? exp.amount / exp.splitWith.length : exp.amount;
                     const iPaid = exp.paidBy === currentUserName;
+                    const iOweThem = exp.splitWith.includes(currentUserName) && !iPaid;
+                    const isBeingSettled = settling === exp.id;
                     return (
                       <ListRow
                         key={exp.id}
@@ -271,9 +420,25 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
                         title={exp.title}
                         subtitle={`${iPaid ? 'You' : exp.paidBy} paid · ${peso(per)} each`}
                         showChevron={false}
-                        onPress={!isViewOnly && iPaid ? () => confirmDelete(exp) : undefined}
+                        onPress={!isViewOnly ? () => handleExpenseTap(exp) : undefined}
                         trailing={
-                          <Text style={[T.mono, { color: colors.text }]}>{peso(exp.amount)}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                            {isBeingSettled ? (
+                              <ActivityIndicator size="small" color={colors.brand} />
+                            ) : exp.isSettled ? (
+                              <View style={[styles.settledBadge, { backgroundColor: colors.brandLight }]}>
+                                <Ionicons name="checkmark-circle" size={13} color={colors.brand} />
+                                <Text style={[T.caption, { color: colors.brand, fontWeight: '600' }]}>Settled</Text>
+                              </View>
+                            ) : iOweThem ? (
+                              <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={[T.mono, { color: colors.text }]}>{peso(exp.amount)}</Text>
+                                <Text style={[T.caption, { color: stateColor(isDark).attention }]}>Tap to settle</Text>
+                              </View>
+                            ) : (
+                              <Text style={[T.mono, { color: colors.text }]}>{peso(exp.amount)}</Text>
+                            )}
+                          </View>
                         }
                       />
                     );
@@ -281,7 +446,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
                 </ListGroup>
               )}
               <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.md }}>
-                Tap an entry you paid for to remove it
+                Tap any entry to settle or remove it
               </Txt>
             </Section>
           </>
@@ -291,11 +456,36 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
       {/* ── Add expense ── */}
       <Sheet
         visible={sheetOpen}
-        onClose={() => { setSheetOpen(false); reset(); }}
+        onClose={() => { setSheetOpen(false); reset(); setScanBanner(null); }}
         title="New expense"
         primaryAction={{ label: 'Add expense', onPress: handleSave, loading: saving, disabled: !canSave }}
       >
-        <Field label="What was it for" value={title} onChangeText={setTitle} placeholder="Dinner at the pier" autoFocus />
+        {/* Scan banner */}
+        {(scanning || scanBanner) && (
+          <View style={[
+            styles.scanBannerWrap,
+            { backgroundColor: scanning ? colors.brandLight : colors.surface, borderColor: colors.brand, borderWidth: hairline },
+          ]}>
+            {scanning ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                <ActivityIndicator size="small" color={colors.brand} />
+                <Text style={[T.subhead, { color: colors.brand }]}>Reading receipt with AI…</Text>
+              </View>
+            ) : (
+              <Text style={[T.subhead, { color: colors.text }]}>{scanBanner}</Text>
+            )}
+          </View>
+        )}
+
+        {!scanning && !scanBanner && (
+          <Press onPress={handleScanReceipt} style={[styles.scanSheetBtn, { borderColor: colors.brand, backgroundColor: colors.brandLight }]}>
+            <Ionicons name="scan-outline" size={18} color={colors.brand} />
+            <Text style={[T.subhead, { color: colors.brand, fontWeight: '600' }]}>Scan a Receipt</Text>
+            <Text style={[T.caption, { color: colors.textSecondary, marginLeft: 'auto' }]}>auto-fill ✨</Text>
+          </Press>
+        )}
+
+        <Field label="What was it for" value={title} onChangeText={setTitle} placeholder="Dinner at the pier" autoFocus={!scanning} />
 
         <Field
           label="Amount"
@@ -406,6 +596,39 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 const styles = StyleSheet.create({
   root: { flex: 1 },
   head: { paddingHorizontal: space.xl, paddingTop: space.lg },
+  headerActions: {
+    flexDirection: 'row',
+    gap: space.sm,
+    marginTop: space.md,
+    marginBottom: space.xs,
+  },
+  scanBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.md,
+    borderRadius: radius.md,
+    backgroundColor: 'transparent',
+    borderWidth: hairline,
+    borderColor: '#6B7280',
+  },
+  scanSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: space.xl,
+  },
+  scanBannerWrap: {
+    padding: space.md,
+    borderRadius: radius.md,
+    marginBottom: space.lg,
+  },
   scroll: { paddingHorizontal: space.xl, paddingBottom: 120 },
   divider: { height: hairline, marginVertical: space.lg },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
@@ -417,5 +640,13 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm + 1,
     borderRadius: radius.md,
     borderWidth: hairline,
+  },
+  settledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
 });

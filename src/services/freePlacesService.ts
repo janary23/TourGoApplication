@@ -1,5 +1,13 @@
 import { SpotInfo } from './homeSpots';
 import { Destination, getPlaceImageUrl } from './destinations';
+import {
+  fetchOverpassCategoryPlaces,
+  fetchOverpassPlaces,
+  ATTRACTION_OVERPASS_TAGS,
+  type OverpassCategoryKey,
+  type OverpassPlace,
+} from './overpassService';
+import { fetchGeoapifyCategoryPlaces, fetchGeoapifyPlaces, ATTRACTION_GEOAPIFY_CATEGORIES } from './geoapifyService';
 
 // Haversine distance calculation in km
 export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -73,10 +81,32 @@ const WIKI_HEADERS = {
   'Accept': 'application/json'
 };
 
+// Wikipedia's geosearch returns literally anything with an article near a
+// point — the town/city article itself, its schools, malls, government
+// buildings — not just places worth visiting. Filter those out so "what's
+// near here" doesn't drown real attractions in administrative/institutional
+// noise (this was the actual cause of a search like "Baliuag" surfacing the
+// town's own article, a university and a mall ahead of its churches).
+const NON_ATTRACTION_TITLE_PATTERNS = [
+  'election', 'district', 'legislative', 'plebiscite', 'congress',
+  'university', 'college', 'school', 'academy', 'seminary',
+  'hospital', 'medical center', 'health center',
+  'city hall', 'municipal hall', 'barangay hall', 'provincial capitol',
+  'sm city', 'sm mall', 'sm supermalls', 'robinsons place', 'robinsons mall',
+  'ayala mall', 'ayala malls', 'gaisano', 'puregold', 'walter mart',
+  'police station', 'fire station', 'bus terminal', 'jeepney terminal',
+  'list of', 'category:',
+];
+
+function isNonAttractionTitle(titleLower: string): boolean {
+  return NON_ATTRACTION_TITLE_PATTERNS.some(p => titleLower.includes(p));
+}
+
 export async function fetchWikipediaNearbySpots(
   coords: { latitude: number; longitude: number },
   radiusMeters = 10000,
-  limit = 10
+  limit = 10,
+  excludeNames: string[] = []
 ): Promise<SpotInfo[]> {
   try {
     const safeRadius = Math.min(Math.max(radiusMeters, 10), 10000);
@@ -88,16 +118,18 @@ export async function fetchWikipediaNearbySpots(
     const pages = json?.query?.pages;
     if (!pages) return [];
 
+    // The place actually being searched (e.g. "Baliwag") shouldn't show up
+    // as a "spot to visit within Baliwag" — it's the town itself.
+    const excludeLower = excludeNames.map(n => n.trim().toLowerCase()).filter(Boolean);
+
     const spots: SpotInfo[] = [];
     for (const key of Object.keys(pages)) {
       const p = pages[key];
       if (!p || !p.title) continue;
 
       const titleLower = p.title.toLowerCase();
-      // Skip non-tourist administrative articles
-      if (titleLower.includes('election') || titleLower.includes('district') || titleLower.includes('legislative')) {
-        continue;
-      }
+      if (isNonAttractionTitle(titleLower)) continue;
+      if (excludeLower.includes(titleLower)) continue;
 
       const pLat = p.coordinates?.[0]?.lat ?? coords.latitude;
       const pLon = p.coordinates?.[0]?.lon ?? coords.longitude;
@@ -154,8 +186,8 @@ async function fetchWikipediaCategorySpots(
       const p = pages[key];
       if (!p || !p.title) continue;
 
-      // Skip list pages
-      if (p.title.startsWith('List of') || p.title.startsWith('Category:')) continue;
+      // Skip list pages and non-attraction noise (schools, malls, admin buildings)
+      if (isNonAttractionTitle(p.title.toLowerCase())) continue;
 
       const pLat = p.coordinates?.[0]?.lat ?? userCoords.latitude;
       const pLon = p.coordinates?.[0]?.lon ?? userCoords.longitude;
@@ -259,40 +291,124 @@ function extractCleanLocationQuery(raw: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UNIFIED FREE PLACES PROVIDER
-// Makes 100% real, live dynamic HTTP queries to Wikipedia & OpenStreetMap.
-// Zero hardcoded place arrays!
+// OVERPASS API (OPENSTREETMAP) — LIVE TAG-BASED PLACE SEARCH
+// 100% Free, keyless. Unlike Photon (which only matches on a place's NAME),
+// Overpass (see ./overpassService) queries OSM's actual amenity/tourism/
+// natural tags, so "restaurants near me" or "beaches near Boracay" return
+// real category matches instead of places that merely have that word in
+// their name. This wrapper just maps the shared OverpassPlace shape onto
+// this file's SpotInfo shape.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function fetchFreePlaces(
-  cityName: string,
-  query: string,
+function mapOverpassPlacesToSpots(places: OverpassPlace[]): SpotInfo[] {
+  return places.map(p => {
+    const dist = p.distanceKm;
+    return {
+      id: p.id,
+      name: p.name,
+      location: p.address,
+      vibe: p.vibe,
+      season: 'year-round',
+      budget: p.budget,
+      distance: dist < 1 ? `${Math.round(dist * 1000)} m away` : `${dist.toFixed(1)} km away`,
+      highlights: [p.label, 'OpenStreetMap Verified'],
+      description: `A ${p.label.toLowerCase()} in the Philippines.`,
+      image: getPlaceImageUrl(p.name, [p.label]),
+      rating: 4.6,
+      reviewCount: 'New',
+      categoryTag: p.label,
+      subtitle: p.address,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      days: [{ title: 'Visit Details', activities: [`Explore ${p.name}`, 'Take photos', 'Enjoy the area'] }],
+    };
+  });
+}
+
+// Geoapify is the primary live source — it's the same OSM data as Overpass,
+// just hosted more reliably (Overpass's free public mirrors were
+// intermittently down in testing) and with cleaner category tagging plus a
+// real curation signal for heritage (heritage.unesco). Overpass supplements
+// it for the one thing Geoapify's category list can't do at all
+// (waterfalls have no Geoapify category), and is the full fallback if
+// Geoapify has no key configured, is rate-limited, or errors.
+async function fetchLiveCategorySpots(
+  category: OverpassCategoryKey,
+  coords: { latitude: number; longitude: number },
+  radiusMeters: number,
+  limit = 20
+): Promise<SpotInfo[]> {
+  const geoapifyPlaces = await fetchGeoapifyCategoryPlaces(category, coords, radiusMeters, limit);
+
+  if (category === 'outdoors') {
+    // Geoapify covers beaches/hot springs/caves but not waterfalls — pull
+    // those from Overpass specifically and merge in.
+    const waterfallPlaces = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], coords, radiusMeters, limit);
+    const combined = [...geoapifyPlaces];
+    for (const w of waterfallPlaces) {
+      if (!combined.some(c => c.name.toLowerCase() === w.name.toLowerCase())) combined.push(w);
+    }
+    if (combined.length > 0) return mapOverpassPlacesToSpots(combined.slice(0, limit));
+  } else if (geoapifyPlaces.length > 0) {
+    return mapOverpassPlacesToSpots(geoapifyPlaces);
+  }
+
+  // Geoapify unavailable/empty — fall back to Overpass entirely.
+  const overpassPlaces = await fetchOverpassCategoryPlaces(category, coords, radiusMeters, limit);
+  return mapOverpassPlacesToSpots(overpassPlaces);
+}
+
+// General "what's worth seeing here" search (beaches, heritage, museums,
+// parks, viewpoints — no specific category), used for a plain place-name
+// search like "Baliuag" that isn't filtered to one category chip.
+async function fetchLiveAttractionSpots(
+  coords: { latitude: number; longitude: number },
+  radiusMeters: number,
+  limit = 20
+): Promise<SpotInfo[]> {
+  const geoapifyPlaces = await fetchGeoapifyPlaces(ATTRACTION_GEOAPIFY_CATEGORIES, coords, radiusMeters, limit);
+  const waterfallPlaces = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], coords, radiusMeters, 5);
+
+  const combined = [...geoapifyPlaces];
+  for (const w of waterfallPlaces) {
+    if (!combined.some(c => c.name.toLowerCase() === w.name.toLowerCase())) combined.push(w);
+  }
+  if (combined.length > 0) return mapOverpassPlacesToSpots(combined.slice(0, limit));
+
+  // Geoapify unavailable/empty — fall back to Overpass entirely.
+  const overpassPlaces = await fetchOverpassPlaces(ATTRACTION_OVERPASS_TAGS, coords, radiusMeters, limit);
+  return mapOverpassPlacesToSpots(overpassPlaces);
+}
+
+function detectCategoryFromQuery(query: string): OverpassCategoryKey | null {
+  if (query.includes('best islands beaches waterfalls')) return 'outdoors';
+  if (query.includes('best historical landmarks')) return 'heritage';
+  if (query.includes('best museums art galleries')) return 'art';
+  if (query.includes('best theme parks amusement')) return 'parks';
+  if (query.includes('famous local restaurants')) return 'food';
+  return null;
+}
+
+// The old Wikipedia/Photon-based category lookups, kept as the nationwide
+// "browse everything" backbone (broad geographic spread of notable spots)
+// and as a fallback when Overpass has no local data for a searched place.
+async function fetchCuratedCategorySpots(
+  category: OverpassCategoryKey,
   coords: { latitude: number; longitude: number }
 ): Promise<SpotInfo[]> {
-  const qLower = query.toLowerCase();
-  const cleaned = extractCleanLocationQuery(query);
-
-  // 1. National Category Feeds (from Home Page rows)
-  if (query.includes('best islands beaches waterfalls') || (qLower.includes('nature') && cityName === 'Philippines')) {
-    const waterfalls = await fetchWikipediaCategorySpots('Category:Waterfalls_of_the_Philippines', coords, 'Waterfall', 'nature');
-    const beaches = await fetchWikipediaCategorySpots('Category:Beaches_of_the_Philippines', coords, 'Beach', 'relaxing');
-    return [...waterfalls, ...beaches].slice(0, 15);
-  }
-
-  if (query.includes('best historical landmarks') || (qLower.includes('heritage') && cityName === 'Philippines')) {
-    return await fetchWikipediaCategorySpots('Category:National_Historical_Landmarks_of_the_Philippines', coords, 'Heritage', 'culture');
-  }
-
-  if (query.includes('best museums art galleries') || (qLower.includes('museum') && cityName === 'Philippines')) {
-    return await fetchWikipediaCategorySpots('Category:Museums_in_the_Philippines', coords, 'Museum', 'culture');
-  }
-
-  if (query.includes('best theme parks amusement') || (qLower.includes('park') && cityName === 'Philippines')) {
-    return await fetchWikipediaCategorySpots('Category:Parks_in_the_Philippines', coords, 'Park', 'relaxing');
-  }
-
-  if (query.includes('famous local restaurants') || (qLower.includes('restaurant') && cityName === 'Philippines')) {
-    const photonFood = await searchPhotonPlaces(`restaurant cafe Philippines`, coords);
-    if (photonFood.length > 0) {
+  switch (category) {
+    case 'outdoors': {
+      const waterfalls = await fetchWikipediaCategorySpots('Category:Waterfalls_of_the_Philippines', coords, 'Waterfall', 'nature');
+      const beaches = await fetchWikipediaCategorySpots('Category:Beaches_of_the_Philippines', coords, 'Beach', 'relaxing');
+      return [...waterfalls, ...beaches].slice(0, 15);
+    }
+    case 'heritage':
+      return await fetchWikipediaCategorySpots('Category:National_Historical_Landmarks_of_the_Philippines', coords, 'Heritage', 'culture');
+    case 'art':
+      return await fetchWikipediaCategorySpots('Category:Museums_in_the_Philippines', coords, 'Museum', 'culture');
+    case 'parks':
+      return await fetchWikipediaCategorySpots('Category:Parks_in_the_Philippines', coords, 'Park', 'relaxing');
+    case 'food': {
+      const photonFood = await searchPhotonPlaces(`restaurant cafe Philippines`, coords);
       return photonFood.slice(0, 12).map(pr => ({
         id: pr.id,
         name: pr.name,
@@ -310,8 +426,67 @@ export async function fetchFreePlaces(
         subtitle: pr.address,
         latitude: pr.latitude,
         longitude: pr.longitude,
-        days: [{ title: 'Dining Experience', activities: ['Enjoy local food specialties', 'Try house bestsellers'] }]
+        days: [{ title: 'Dining Experience', activities: ['Enjoy local food specialties', 'Try house bestsellers'] }],
       }));
+    }
+    default:
+      return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIFIED FREE PLACES PROVIDER
+// Makes 100% real, live dynamic HTTP queries to Wikipedia & OpenStreetMap.
+// Zero hardcoded place arrays!
+// ─────────────────────────────────────────────────────────────────────────────
+export async function fetchFreePlaces(
+  cityName: string,
+  query: string,
+  coords: { latitude: number; longitude: number }
+): Promise<SpotInfo[]> {
+  const cleaned = extractCleanLocationQuery(query);
+  const category = detectCategoryFromQuery(query);
+
+  // Did the user name an actual place ("Boracay", "Vigan"), or is this a
+  // generic nationwide browse ("Philippines")? The old version of this
+  // function ignored this distinction entirely for category rows — a search
+  // for "beaches in Boracay" silently returned the same fixed nationwide
+  // Wikipedia beach list as a plain "beaches" browse, dropping "Boracay" on
+  // the floor. Overpass fixes that by letting us search by real tag data
+  // anchored to the actual named place.
+  const specificLocation =
+    cleaned && cleaned.length >= 2 && cleaned.toLowerCase() !== 'philippines' ? cleaned : null;
+
+  if (category) {
+    let anchorCoords = coords;
+    if (specificLocation) {
+      const geocoded = await searchPhotonPlaces(specificLocation, coords);
+      if (geocoded.length > 0) {
+        anchorCoords = { latitude: geocoded[0].latitude, longitude: geocoded[0].longitude };
+      }
+    }
+
+    const radiusMeters = specificLocation ? 12000 : 30000;
+    const liveSpots = await fetchLiveCategorySpots(category, anchorCoords, radiusMeters, specificLocation ? 15 : 12);
+
+    if (specificLocation) {
+      // A named place was searched — real live data near it is far more
+      // relevant than a random slice of a nationwide list. Only fall back
+      // to the curated list if nothing is tagged there at all.
+      if (liveSpots.length > 0) return liveSpots;
+      const curatedFallback = await fetchCuratedCategorySpots(category, anchorCoords);
+      if (curatedFallback.length > 0) return curatedFallback;
+    } else {
+      // Nationwide browse (Home page rows): keep the curated Wikipedia list
+      // as the backbone (it spans well-known spots across the whole
+      // archipelago), and widen coverage with real nearby places that
+      // Wikipedia's category membership can't capture.
+      const curated = await fetchCuratedCategorySpots(category, coords);
+      const combined = [...curated];
+      for (const s of liveSpots) {
+        if (!combined.some(c => c.name.toLowerCase() === s.name.toLowerCase())) combined.push(s);
+      }
+      if (combined.length > 0) return combined.slice(0, 24);
     }
   }
 
@@ -324,38 +499,55 @@ export async function fetchFreePlaces(
       const bestMatch = photonMatches[0];
       const targetCoords = { latitude: bestMatch.latitude, longitude: bestMatch.longitude };
 
-      // Query live Wikipedia Geosearch around this exact location's coordinates!
-      const wikiSpots = await fetchWikipediaNearbySpots(targetCoords, 10000, 12);
+      // Query live Wikipedia Geosearch around this exact location's
+      // coordinates — excluding the searched place's own article (a town
+      // isn't "a spot to visit within itself").
+      const wikiSpots = await fetchWikipediaNearbySpots(targetCoords, 10000, 12, [bestMatch.name, targetLocation]);
 
-      // Also map the OpenStreetMap POIs found in that location
-      const osmSpots: SpotInfo[] = photonMatches.slice(0, 8).map(pr => {
-        const dist = calculateDistanceKm(coords.latitude, coords.longitude, pr.latitude, pr.longitude);
-        return {
-          id: pr.id,
-          name: pr.name,
-          location: pr.address || `${targetLocation}, Philippines`,
-          vibe: 'relaxing',
-          season: 'year-round',
-          budget: 'moderate',
-          distance: dist < 1 ? `${Math.round(dist * 1000)} m away` : `${dist.toFixed(1)} km away`,
-          highlights: ['OpenStreetMap Spot', 'Live Local Location'],
-          description: `A destination in ${pr.address || targetLocation}.`,
-          image: getPlaceImageUrl(pr.name, [pr.category || 'Spot']),
-          rating: 4.7,
-          reviewCount: '1.1K',
-          categoryTag: pr.category || 'Local Spot',
-          subtitle: pr.address,
-          latitude: pr.latitude,
-          longitude: pr.longitude,
-          days: [{ title: 'Visit Details', activities: ['Sightseeing', 'Explore surroundings'] }]
-        };
-      });
+      // Geoapify/Overpass: real tagged attractions (beaches, heritage,
+      // museums, parks, viewpoints) actually near this place — what makes
+      // "best places in Baliuag" work instead of only returning whatever
+      // happens to have a Wikipedia article nearby.
+      const liveSpots = await fetchLiveAttractionSpots(targetCoords, 12000, 15);
 
-      // Merge Wikipedia attractions + OpenStreetMap places
+      // Photon POIs matching the search text itself — lowest-confidence
+      // source (it's a geocoder, not a category search), so it goes last
+      // and drops purely administrative hits (the town/city/barangay entry
+      // for the place being searched, which isn't a destination itself).
+      const ADMIN_PLACE_TYPES = new Set(['city', 'town', 'village', 'municipality', 'state', 'country', 'county', 'borough', 'suburb', 'district', 'hamlet']);
+      const osmSpots: SpotInfo[] = photonMatches
+        .filter(pr => !ADMIN_PLACE_TYPES.has((pr.category || '').toLowerCase()))
+        .slice(0, 8)
+        .map(pr => {
+          const dist = calculateDistanceKm(coords.latitude, coords.longitude, pr.latitude, pr.longitude);
+          return {
+            id: pr.id,
+            name: pr.name,
+            location: pr.address || `${targetLocation}, Philippines`,
+            vibe: 'relaxing',
+            season: 'year-round',
+            budget: 'moderate',
+            distance: dist < 1 ? `${Math.round(dist * 1000)} m away` : `${dist.toFixed(1)} km away`,
+            highlights: ['OpenStreetMap Spot', 'Live Local Location'],
+            description: `A destination in ${pr.address || targetLocation}.`,
+            image: getPlaceImageUrl(pr.name, [pr.category || 'Spot']),
+            rating: 4.7,
+            reviewCount: '1.1K',
+            categoryTag: pr.category || 'Local Spot',
+            subtitle: pr.address,
+            latitude: pr.latitude,
+            longitude: pr.longitude,
+            days: [{ title: 'Visit Details', activities: ['Sightseeing', 'Explore surroundings'] }]
+          };
+        });
+
+      // Merge: curated Wikipedia notability first, then real Geoapify/
+      // Overpass tag matches, then the loose Photon name matches — deduped
+      // by name.
       const combined = [...wikiSpots];
-      for (const pr of osmSpots) {
-        if (!combined.some(c => c.name.toLowerCase() === pr.name.toLowerCase())) {
-          combined.push(pr);
+      for (const s of [...liveSpots, ...osmSpots]) {
+        if (!combined.some(c => c.name.toLowerCase() === s.name.toLowerCase())) {
+          combined.push(s);
         }
       }
 
