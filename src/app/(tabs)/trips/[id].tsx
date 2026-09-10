@@ -351,7 +351,7 @@ export default function TripHomeScreen() {
         </Txt>
 
         <View style={{ marginTop: space.xxl }}>
-          <Txt variant="overline" tone="muted" uppercase style={{ marginBottom: space.sm }}>
+          <Txt variant="overline" tone="muted" style={{ marginBottom: space.sm }}>
             Danger zone
           </Txt>
           <Button

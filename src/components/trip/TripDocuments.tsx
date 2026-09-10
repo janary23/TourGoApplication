@@ -179,7 +179,7 @@ export default function TripDocuments({
           autoFocus
         />
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: space.sm }}>
             Format
           </Txt>
           <Segmented<DocType>

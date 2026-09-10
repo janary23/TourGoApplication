@@ -1220,7 +1220,7 @@ export default function TripItinerary({
                                     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8,
                                   }}>
                                     <Text style={{ ...T.microStrong, color: '#FFFFFF' }}>
-                                      NEARBY
+                                      Nearby
                                     </Text>
                                   </View>
                                 )}

@@ -331,7 +331,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
             {/* ── Where you stand ── */}
             <Section>
               <Card>
-                <Txt variant="caption" tone="muted" uppercase>
+                <Txt variant="caption" tone="muted">
                   {net > 0 ? 'You are owed' : net < 0 ? 'You owe' : 'You are settled up'}
                 </Txt>
                 <Txt
@@ -484,7 +484,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
         {/* Category */}
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: space.sm }}>
             Category
           </Txt>
           <View style={styles.catGrid}>
@@ -512,7 +512,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
         {/* Paid by */}
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: space.sm }}>
             Paid by
           </Txt>
           <ListGroup>
@@ -538,7 +538,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
         {/* Split between */}
         <View style={{ marginTop: space.xl }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.sm }}>
-            <Txt variant="caption" tone="muted" uppercase style={{ flex: 1, letterSpacing: 0.6 }}>
+            <Txt variant="caption" tone="muted" style={{ flex: 1 }}>
               Split between
             </Txt>
             <Txt variant="caption" tone="muted">

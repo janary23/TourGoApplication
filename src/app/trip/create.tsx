@@ -1448,7 +1448,7 @@ export default function CreateTripScreen() {
                 <Text style={{ ...T.emphasis, color: colors.text }}>Itinerary Plan</Text>
                 <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 1 }}>Timeline schedule of daily spots and activities</Text>
               </View>
-              <Text style={{ ...T.microStrong, color: colors.brand, backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>ALWAYS ON</Text>
+              <Text style={{ ...T.microStrong, color: colors.brand, backgroundColor: colors.brandLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>Always on</Text>
             </View>
 
             {/* Toggle Features List */}

@@ -221,7 +221,7 @@ export default function TripDateCalendarModal({
           </View>
 
           {/* Selection Target Bar */}
-          <View style={[styles.targetBar, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC', borderColor: colors.cardBorder }]}>
+          <View style={[styles.targetBar, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
             <TouchableOpacity
               onPress={() => setTarget('start')}
               style={[
@@ -230,7 +230,7 @@ export default function TripDateCalendarModal({
               ]}
             >
               <Text style={[styles.targetTabMicro, { color: target === 'start' ? colors.brand : colors.textMuted }]}>
-                DEPARTURE
+                Departure
               </Text>
               <Text style={[styles.targetTabDate, { color: colors.text }]}>
                 {tempStart || 'Select'}
@@ -249,7 +249,7 @@ export default function TripDateCalendarModal({
               ]}
             >
               <Text style={[styles.targetTabMicro, { color: target === 'end' ? colors.brand : colors.textMuted }]}>
-                RETURN
+                Return
               </Text>
               <Text style={[styles.targetTabDate, { color: colors.text }]}>
                 {tempEnd || 'Select'}
@@ -326,7 +326,7 @@ export default function TripDateCalendarModal({
                         right: 0,
                         top: 4,
                         bottom: 4,
-                        backgroundColor: isDark ? 'rgba(6,182,212,0.18)' : 'rgba(6,182,212,0.12)',
+                        backgroundColor: colors.brandLight,
                       }}
                     />
                   )}
@@ -338,7 +338,7 @@ export default function TripDateCalendarModal({
                         right: 0,
                         top: 4,
                         bottom: 4,
-                        backgroundColor: isDark ? 'rgba(6,182,212,0.18)' : 'rgba(6,182,212,0.12)',
+                        backgroundColor: colors.brandLight,
                       }}
                     />
                   )}
@@ -350,7 +350,7 @@ export default function TripDateCalendarModal({
                         right: '50%',
                         top: 4,
                         bottom: 4,
-                        backgroundColor: isDark ? 'rgba(6,182,212,0.18)' : 'rgba(6,182,212,0.12)',
+                        backgroundColor: colors.brandLight,
                       }}
                     />
                   )}
@@ -364,7 +364,7 @@ export default function TripDateCalendarModal({
                         right: existingTripInfo.type === 'end' ? '50%' : 0,
                         top: 5,
                         bottom: 5,
-                        backgroundColor: isDark ? 'rgba(234,179,8,0.14)' : 'rgba(234,179,8,0.12)',
+                        backgroundColor: colors.warningSurface,
                       }}
                     />
                   )}
@@ -412,7 +412,7 @@ export default function TripDateCalendarModal({
               <Text style={[styles.monthTripsLabel, { color: colors.textMuted }]}>
                 Existing trips this month
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'flex-start' }}>
                 {monthOverlapTrips.map((t) => {
                   const fmt = (iso: string) => {
                     const d = new Date(iso + (iso.includes('T') ? '' : 'T00:00:00'));
@@ -423,7 +423,7 @@ export default function TripDateCalendarModal({
                       key={t.id}
                       style={[
                         styles.monthTripChip,
-                        { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.cardBorder, borderWidth: 1 },
+                        { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 },
                       ]}
                     >
                       <View style={[styles.monthTripDot, { backgroundColor: '#EAB308' }]} />
@@ -514,7 +514,6 @@ const styles = StyleSheet.create({
   targetTabMicro: {
     fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
   targetTabDate: {
     ...T.emphasis,
@@ -605,8 +604,6 @@ const styles = StyleSheet.create({
   monthTripsLabel: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   monthTripChip: {
     flexDirection: 'row',

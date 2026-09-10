@@ -225,10 +225,10 @@ export default function TripPolls({
                   const voters: string[] = Array.isArray(opt.voters) ? opt.voters : (Array.isArray(opt.votes) ? opt.votes : []);
                   return (
                     <View key={opt.id}>
-                      <Txt variant="caption" tone="muted" uppercase>{opt.text}</Txt>
+                      <Txt variant="caption" tone="muted">{opt.text}</Txt>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>
                         {voters.map((voterId: string) => {
-                          const name = memberMap.get(voterId) || 'Former Member';
+                          const name = memberMap.get(voterId) || 'Former member';
                           const isMissing = !memberMap.has(voterId);
                           return (
                             <View key={voterId} style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
@@ -316,7 +316,7 @@ export default function TripPolls({
         )}
 
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="caption" tone="muted" style={{ marginBottom: space.sm }}>
             Options
           </Txt>
           <View style={{ gap: space.sm }}>
