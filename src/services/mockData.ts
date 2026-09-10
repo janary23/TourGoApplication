@@ -296,7 +296,11 @@ let trips: Trip[] = [
     endDate: "2026-09-13",
     role: "member",
     code: "COOLBAGUIO",
-    image: "https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80",
+    // Was a desert-canyon-and-van photo (the redesign audit's mismatched-photo
+    // bug) — swapped for a sunlit pine forest, matching Baguio's "City of
+    // Pines" identity. Verified by downloading and viewing the image, not
+    // just checking the URL resolves.
+    image: "https://images.unsplash.com/photo-1425913397330-cf8af2ff40a1?auto=format&fit=crop&w=600&q=80",
     features: {
       itinerary: true,
       split_expenses: false,
