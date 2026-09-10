@@ -99,33 +99,38 @@ function buildOverpassQuery(
   return `[out:json][timeout:25];\n(\n${clauses}\n);\nout center ${limit};`;
 }
 
-// Public Overpass instances occasionally hang instead of failing fast (a
-// dead connection with no response at all). Without a hard timeout, a single
-// bad endpoint could stall search for a very long time before the next
-// endpoint — or the existing curated fallback — ever gets a chance to run.
-const OVERPASS_REQUEST_TIMEOUT_MS = 8000;
+// Public Overpass instances occasionally hang or suffer regional rate-limits.
+// We query endpoints concurrently with a strict 2.5s timeout using Promise.any.
+// The fastest responding instance wins; if all fail or time out, it returns
+// empty immediately rather than blocking the application for tens of seconds.
+const OVERPASS_REQUEST_TIMEOUT_MS = 2500;
+
+async function fetchFromEndpoint(endpoint: string, ql: string): Promise<any[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OVERPASS_REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(ql)}`,
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (Array.isArray(json?.elements)) return json.elements;
+    throw new Error('Invalid elements payload');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function queryOverpass(ql: string): Promise<any[]> {
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OVERPASS_REQUEST_TIMEOUT_MS);
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(ql)}`,
-        signal: controller.signal,
-      });
-      if (!res.ok) continue;
-      const json = await res.json();
-      if (Array.isArray(json?.elements)) return json.elements;
-    } catch (err) {
-      console.warn('Overpass endpoint failed:', endpoint, err);
-    } finally {
-      clearTimeout(timeoutId);
-    }
+  try {
+    return await Promise.any(OVERPASS_ENDPOINTS.map(ep => fetchFromEndpoint(ep, ql)));
+  } catch {
+    // All endpoints failed or timed out — silently fallback to Wikipedia/Geoapify
+    return [];
   }
-  return [];
 }
 
 export function classifyOsmElement(tags: Record<string, string> = {}): {

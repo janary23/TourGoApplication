@@ -47,7 +47,7 @@ export default function TripHomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { profile } = useAuth();
-  
+
   const [trip, setTrip] = useState<Trip | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,16 +152,16 @@ export default function TripHomeScreen() {
 
   const handleDeleteTrip = () => {
     confirmAction({
-        title: 'Delete trip?',
-        message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
-        confirmLabel: 'Delete',
-        destructive: true,
-      }).then(async (ok) => {
-        if (!ok) return;
-        setEditModalVisible(false);
-        await dbDeleteTrip(trip.id);
-        router.back();
-      });
+      title: 'Delete trip?',
+      message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    }).then(async (ok) => {
+      if (!ok) return;
+      setEditModalVisible(false);
+      await dbDeleteTrip(trip.id);
+      router.back();
+    });
   };
 
   const getTripPhase = (): { phase: 'before' | 'during' | 'after'; label: string; icon: string } => {

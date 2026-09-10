@@ -15,7 +15,7 @@ import { subscribeOnboardingActive } from '../../../services/mascotBridge';
 import FeaturedTripCard from '../../../components/trips/FeaturedTripCard';
 import OtherTripCard from '../../../components/trips/OtherTripCard';
 import CalendarWidget from '../../../components/home/CalendarWidget';
-import { space, radius, type as T } from '../../../components/ui/tokens';
+import { space, radius, type as T, shadow } from '../../../components/ui/tokens';
 import { EmptyState } from '../../../components/ui/primitives';
 import { fetchLiveTripForecast, type RealTripForecast } from '../../../services/weatherService';
 
@@ -740,6 +740,7 @@ export default function TripsScreen() {
   // Animation values
   const searchFocusAnim = useRef(new Animated.Value(0)).current;
   const tabAnim = useRef(new Animated.Value(0)).current;
+  const [tripsTabsWidth, setTripsTabsWidth] = useState(0);
 
   // Keep Aguilito hidden on the My Trips page while the walkthrough is running
   useEffect(() => {
@@ -804,14 +805,13 @@ export default function TripsScreen() {
   const activeTabIndex = tabNames.indexOf(activeTab);
 
   React.useEffect(() => {
-    Animated.spring(tabAnim, { toValue: activeTabIndex, useNativeDriver: NATIVE_DRIVER, tension: 200, friction: 18 }).start();
+    Animated.spring(tabAnim, { toValue: activeTabIndex, useNativeDriver: NATIVE_DRIVER, tension: 68, friction: 12 }).start();
   }, [activeTabIndex]);
 
-  const segmentedWidth = SCREEN_WIDTH - 40;
-  const pillWidth = (segmentedWidth - 4) / 3;
+  const pillWidth = tripsTabsWidth > 0 ? (tripsTabsWidth - 6) / 3 : (SCREEN_WIDTH - 46) / 3;
   const tabTranslateX = tabAnim.interpolate({
     inputRange: [0, 1, 2],
-    outputRange: [2, pillWidth + 2, (pillWidth * 2) + 2],
+    outputRange: [0, pillWidth, pillWidth * 2],
   });
 
   const handleSearchFocus = () => {
@@ -1066,17 +1066,71 @@ export default function TripsScreen() {
                 </Animated.View>
               </View>
 
-              <View style={[styles.segmentedContainer, { backgroundColor: colors.surface }]}>
+              <View
+                onLayout={(e) => setTripsTabsWidth(e.nativeEvent.layout.width)}
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2',
+                  borderRadius: radius.md,
+                  padding: 3,
+                  position: 'relative',
+                  marginBottom: 22,
+                }}
+              >
+                {/* Sliding animated background pill */}
                 <Animated.View
-                  style={[styles.segmentedPill, { width: pillWidth, transform: [{ translateX: tabTranslateX }], backgroundColor: colors.card }]}
+                  style={[
+                    {
+                      position: 'absolute',
+                      top: 3,
+                      bottom: 3,
+                      left: 3,
+                      width: pillWidth,
+                      borderRadius: radius.sm + 1,
+                      backgroundColor: colors.card,
+                      transform: [{ translateX: tabTranslateX }],
+                    },
+                    shadow(1, isDark),
+                  ]}
                 />
-                {(['all', 'organizer', 'member'] as const).map((tab) => {
-                  const isSelected = activeTab === tab;
-                  const label = tab === 'all' ? 'All trips' : tab === 'organizer' ? 'Hosted' : 'Joined';
+
+                {(
+                  [
+                    { id: 'all', label: 'All trips', icon: 'briefcase' },
+                    { id: 'organizer', label: 'Hosted', icon: 'star' },
+                    { id: 'member', label: 'Joined', icon: 'people' },
+                  ] as const
+                ).map((tab) => {
+                  const isSelected = activeTab === tab.id;
                   return (
-                    <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} activeOpacity={1} style={styles.segmentedTab}>
-                      <Text style={[styles.segmentedTabText, { color: isSelected ? colors.text : colors.textSecondary, fontFamily: isSelected ? 'Sora-SemiBold' : 'WorkSans-Medium' }]}>
-                        {label}
+                    <TouchableOpacity
+                      key={tab.id}
+                      onPress={() => setActiveTab(tab.id)}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 8,
+                        borderRadius: radius.sm + 1,
+                        gap: 6,
+                        zIndex: 1,
+                      }}
+                    >
+                      <Ionicons
+                        name={tab.icon as any}
+                        size={14}
+                        color={isSelected ? colors.text : colors.textMuted}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontFamily: isSelected ? 'Sora-SemiBold' : 'WorkSans-Medium',
+                          color: isSelected ? colors.text : colors.textSecondary,
+                        }}
+                      >
+                        {tab.label}
                       </Text>
                     </TouchableOpacity>
                   );

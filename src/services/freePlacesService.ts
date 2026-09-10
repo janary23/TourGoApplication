@@ -340,14 +340,15 @@ async function fetchLiveCategorySpots(
   const geoapifyPlaces = await fetchGeoapifyCategoryPlaces(category, coords, radiusMeters, limit);
 
   if (category === 'outdoors') {
-    // Geoapify covers beaches/hot springs/caves but not waterfalls — pull
-    // those from Overpass specifically and merge in.
-    const waterfallPlaces = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], coords, radiusMeters, limit);
-    const combined = [...geoapifyPlaces];
-    for (const w of waterfallPlaces) {
-      if (!combined.some(c => c.name.toLowerCase() === w.name.toLowerCase())) combined.push(w);
+    // If Geoapify found outdoors spots, attempt a fast enrichment for waterfalls without blocking
+    if (geoapifyPlaces.length > 0) {
+      const waterfallPlaces = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], coords, radiusMeters, 5).catch(() => []);
+      const combined = [...geoapifyPlaces];
+      for (const w of waterfallPlaces) {
+        if (!combined.some(c => c.name.toLowerCase() === w.name.toLowerCase())) combined.push(w);
+      }
+      return mapOverpassPlacesToSpots(combined.slice(0, limit));
     }
-    if (combined.length > 0) return mapOverpassPlacesToSpots(combined.slice(0, limit));
   } else if (geoapifyPlaces.length > 0) {
     return mapOverpassPlacesToSpots(geoapifyPlaces);
   }
@@ -366,13 +367,9 @@ async function fetchLiveAttractionSpots(
   limit = 20
 ): Promise<SpotInfo[]> {
   const geoapifyPlaces = await fetchGeoapifyPlaces(ATTRACTION_GEOAPIFY_CATEGORIES, coords, radiusMeters, limit);
-  const waterfallPlaces = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], coords, radiusMeters, 5);
-
-  const combined = [...geoapifyPlaces];
-  for (const w of waterfallPlaces) {
-    if (!combined.some(c => c.name.toLowerCase() === w.name.toLowerCase())) combined.push(w);
+  if (geoapifyPlaces.length > 0) {
+    return mapOverpassPlacesToSpots(geoapifyPlaces);
   }
-  if (combined.length > 0) return mapOverpassPlacesToSpots(combined.slice(0, limit));
 
   // Geoapify unavailable/empty — fall back to Overpass entirely.
   const overpassPlaces = await fetchOverpassPlaces(ATTRACTION_OVERPASS_TAGS, coords, radiusMeters, limit);
@@ -499,16 +496,14 @@ export async function fetchFreePlaces(
       const bestMatch = photonMatches[0];
       const targetCoords = { latitude: bestMatch.latitude, longitude: bestMatch.longitude };
 
-      // Query live Wikipedia Geosearch around this exact location's
-      // coordinates — excluding the searched place's own article (a town
-      // isn't "a spot to visit within itself").
-      const wikiSpots = await fetchWikipediaNearbySpots(targetCoords, 10000, 12, [bestMatch.name, targetLocation]);
+      // Query Wikipedia and live Geoapify concurrently for maximum responsiveness
+      const [wikiRes, liveRes] = await Promise.allSettled([
+        fetchWikipediaNearbySpots(targetCoords, 10000, 12, [bestMatch.name, targetLocation]),
+        fetchLiveAttractionSpots(targetCoords, 12000, 15),
+      ]);
 
-      // Geoapify/Overpass: real tagged attractions (beaches, heritage,
-      // museums, parks, viewpoints) actually near this place — what makes
-      // "best places in Baliuag" work instead of only returning whatever
-      // happens to have a Wikipedia article nearby.
-      const liveSpots = await fetchLiveAttractionSpots(targetCoords, 12000, 15);
+      const wikiSpots = wikiRes.status === 'fulfilled' ? wikiRes.value : [];
+      const liveSpots = liveRes.status === 'fulfilled' ? liveRes.value : [];
 
       // Photon POIs matching the search text itself — lowest-confidence
       // source (it's a geocoder, not a category search), so it goes last

@@ -411,7 +411,7 @@ export function Segmented<V extends string>({ segments, value, onChange }: Segme
   const { colors, isDark } = useTheme();
 
   return (
-    <View style={[styles.segmented, { backgroundColor: colors.surface }]}>
+    <View style={[styles.segmented, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }]}>
       {segments.map((seg) => {
         const active = seg.value === value;
         const showBadge = seg.badge !== undefined && seg.badge !== null && seg.badge !== 0 && seg.badge !== '';
@@ -1143,24 +1143,25 @@ interface ChipProps {
  * than defaulting every chip/badge/nav bar to it.
  */
 export function Chip({ label, selected, onPress, icon }: ChipProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   return (
     <Press onPress={onPress}>
       <View
         style={[
           styles.chip,
           {
-            backgroundColor: selected ? colors.brandLight : colors.surface,
-            borderColor: selected ? colors.brand : colors.cardBorder,
+            backgroundColor: selected ? colors.card : (isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2'),
+            borderColor: selected ? (isDark ? 'rgba(255,255,255,0.15)' : '#E2E8F0') : 'transparent',
           },
+          selected && shadow(1, isDark),
         ]}
       >
         {!!icon && (
-          <Ionicons name={icon} size={14} color={selected ? colors.brand : colors.textSecondary} />
+          <Ionicons name={icon} size={14} color={selected ? colors.text : colors.textMuted} />
         )}
         <Text
           numberOfLines={1}
-          style={[T.label, { color: selected ? colors.brand : colors.textSecondary }]}
+          style={[T.label, { color: selected ? colors.text : colors.textSecondary, fontFamily: selected ? 'Sora-SemiBold' : 'WorkSans-Medium' }]}
         >
           {label}
         </Text>

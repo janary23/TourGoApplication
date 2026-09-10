@@ -87,21 +87,20 @@ export async function getActiveDayPlan(): Promise<ActiveDayPlan | null> {
         };
         await storageSet(storageKey, JSON.stringify(remotePlan));
         return remotePlan;
-      } else if (!error && !data) {
-        // User has NO active plan in database; clear any stale local cache for this user
-        await storageRemove(storageKey);
-        return null;
       }
     } catch (e) {
       console.warn('Network error checking active day plan in DB:', e);
     }
   }
 
-  // Fallback to user-scoped local cache (e.g. offline)
+  // Fallback to user-scoped local cache (e.g. offline or freshly generated)
   try {
     const raw = await storageGet(storageKey);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.status !== 'finished') {
+        return parsed;
+      }
     }
   } catch (e) {
     console.warn('Failed reading local active day plan:', e);

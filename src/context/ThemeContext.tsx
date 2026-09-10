@@ -100,11 +100,14 @@ export interface ThemeColors {
 }
 
 // ── Light ────────────────────────────────────────────────────────────────────
-// Neutrals are warm ("Paper"), not slate — a deliberate move away from the
-// generic cool-grey SaaS background, and grounded in the route-line brand
-// mark rather than any one photo's palette.
+// Page and card are both pure white — cards separate from the page by shadow
+// alone (see tokens.ts `shadow()`), the way Airbnb's own screens do, not by a
+// tonal step between "background" and "surface". The warm "Paper" neutrals
+// live on in the tokens that still want a step off white — surface,
+// cardBorder, divider — grounded in the route-line brand mark rather than a
+// generic cool-grey SaaS palette.
 const lightColors: ThemeColors = {
-  background: '#F7F5F1',
+  background: '#FFFFFF',
   card: '#FFFFFF',
   surface: '#F1EEE7',
   surfaceElevated: '#FFFFFF',
@@ -135,7 +138,7 @@ const lightColors: ThemeColors = {
   inputBorder: '#E7E3DB',
   tabBar: '#FFFFFF',
   tabBarBorder: '#E7E3DB',
-  header: '#F7F5F1',
+  header: '#FFFFFF',
   headerBorder: '#E7E3DB',
   overlay: 'rgba(21, 26, 33, 0.45)',
 };

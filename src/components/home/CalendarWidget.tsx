@@ -194,7 +194,7 @@ export default function CalendarWidget({
           onPress={() => setIsCalendarExpanded(true)}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
-          style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderTopWidth: 5, borderTopColor: colors.brand }]}
+          style={[styles.calendarWidget, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
         >
           {/* Widget Header */}
           <View style={styles.widgetHeader}>
@@ -215,18 +215,18 @@ export default function CalendarWidget({
               const dayNum = d.getDate();
               return (
                 <View key={index} style={[styles.miniDayCell, { alignItems: 'center' }]}>
-                  <Text style={[styles.miniDayName, { color: isToday ? colors.brand : colors.textMuted }]}>{dayName}</Text>
+                  <Text style={[styles.miniDayName, { color: isToday ? colors.text : colors.textMuted, fontWeight: isToday ? '700' : '500' }]}>{dayName}</Text>
                   {/* Subtle range marker behind the day number when the day is
                       part of a trip, so the start→end span reads at a glance */}
                   <View style={[
                     { justifyContent: 'center', alignItems: 'center', marginTop: 2, flexDirection: 'row', height: 24 },
-                    isToday && { backgroundColor: colors.brand, borderRadius: 12, minWidth: 24 },
-                    !isToday && hasTrip && { backgroundColor: colors.brandLight, borderRadius: 12, minWidth: 24 },
+                    isToday && { backgroundColor: colors.text, borderRadius: 12, minWidth: 24 },
+                    !isToday && hasTrip && { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2', borderRadius: 12, minWidth: 24 },
                   ]}>
-                    <Text style={[styles.miniDayNum, { color: isToday ? '#FFFFFF' : hasTrip ? colors.brand : colors.text, fontSize: 11 }]}>{dayNum}</Text>
+                    <Text style={[styles.miniDayNum, { color: isToday ? colors.card : hasTrip ? colors.text : colors.textSecondary, fontSize: 11, fontWeight: isToday || hasTrip ? '700' : '400' }]}>{dayNum}</Text>
                   </View>
                   {hasTrip && (
-                    <View style={[styles.miniTripDot, { backgroundColor: colors.brand, marginTop: 2 }]} />
+                    <View style={[styles.miniTripDot, { backgroundColor: colors.textSecondary, marginTop: 2 }]} />
                   )}
                 </View>
               );
@@ -329,15 +329,15 @@ export default function CalendarWidget({
                       !cell.isCurrentMonth && { opacity: 0.25 }
                     ]}
                   >
-                    {/* Continuous range background blocks — neutral, since accent is reserved for the selected state */}
+                    {/* Continuous range background blocks — neutral gray */}
                     {dayTripInfo && dayTripInfo.type === 'middle' && (
-                      <View style={{ position: 'absolute', left: 0, right: 0, top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                      <View style={{ position: 'absolute', left: 0, right: 0, top: 3, bottom: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }} />
                     )}
                     {dayTripInfo && dayTripInfo.type === 'start' && (
-                      <View style={{ position: 'absolute', left: '50%', right: 0, top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                      <View style={{ position: 'absolute', left: '50%', right: 0, top: 3, bottom: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }} />
                     )}
                     {dayTripInfo && dayTripInfo.type === 'end' && (
-                      <View style={{ position: 'absolute', left: 0, right: '50%', top: 3, bottom: 3, backgroundColor: colors.surface }} />
+                      <View style={{ position: 'absolute', left: 0, right: '50%', top: 3, bottom: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }} />
                     )}
 
                     {/* Circle endpoint/highlight indicator */}
@@ -394,7 +394,7 @@ export default function CalendarWidget({
                       key={trip.id}
                       activeOpacity={0.7}
                       onPress={() => router.push(`/trip/${trip.id}`)}
-                      style={[styles.monthTripChip, { backgroundColor: colors.surface }]}
+                      style={[styles.monthTripChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }]}
                     >
                       <View style={[styles.monthTripDot, { backgroundColor: colors.brand }]} />
                       <View style={{ flex: 1 }}>

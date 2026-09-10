@@ -550,14 +550,10 @@ export async function fetchGooglePlacesForProvince(
       const radiusMeters = municipalityId ? 8000 : 25000;
       const limit = municipalityId ? 15 : 20;
       const geoapifyFound = await fetchGeoapifyPlaces(ATTRACTION_GEOAPIFY_CATEGORIES, anchorCoords, radiusMeters, limit);
-      const waterfallFound = await fetchOverpassPlaces([{ key: 'natural', value: 'waterfall' }], anchorCoords, radiusMeters, 5);
       let found = [...geoapifyFound];
-      for (const w of waterfallFound) {
-        if (!found.some(f => f.name.toLowerCase() === w.name.toLowerCase())) found.push(w);
-      }
       if (found.length === 0) {
-        // Geoapify unavailable/empty — fall back to Overpass entirely.
-        found = await fetchOverpassPlaces(ATTRACTION_OVERPASS_TAGS, anchorCoords, radiusMeters, limit);
+        // Geoapify unavailable/empty — fall back to Overpass.
+        found = await fetchOverpassPlaces(ATTRACTION_OVERPASS_TAGS, anchorCoords, radiusMeters, limit).catch(() => []);
       }
       overpassPlaces = found.slice(0, limit).map(p => ({
         id: p.id,

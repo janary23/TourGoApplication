@@ -220,8 +220,8 @@ const parseMessageWithButtons = (rawText: string): { cleanText: string; buttons:
       buttons.push({ label: 'Create a Trip', action: '/trip/create', icon: 'add-circle-outline' });
     } else if (lower.includes('join a trip') || lower.includes('join trip') || lower.includes('trip code') || lower.includes('invite code')) {
       buttons.push({ label: 'Join with Code', action: '/trip/join', icon: 'enter-outline' });
-    } else if (lower.includes('1-minute') || lower.includes('1 minute') || lower.includes('day plan') || lower.includes('spontaneous')) {
-      buttons.push({ label: '1-Minute Planner', action: '/day-plan', icon: 'flash-outline' });
+    } else if (lower.includes('1-minute') || lower.includes('1 minute') || lower.includes('day plan') || lower.includes('spontaneous') || lower.includes('build itinerary')) {
+      buttons.push({ label: 'Build Itinerary', action: '/day-plan', icon: 'compass-outline' });
     } else if (lower.includes('explore') || lower.includes('destinations') || lower.includes('tourist spots')) {
       buttons.push({ label: 'Explore Destinations', action: '/explore', icon: 'compass-outline' });
     } else if (lower.includes('my trips') || lower.includes('trips tab') || lower.includes('view trips')) {
@@ -449,7 +449,7 @@ TOURGO SYSTEM KNOWLEDGE (Answer accurately when asked how to do anything in the 
    - Allows users to enter a destination, choose an optional time window (Start Time and End Time), pick travel vibes (Food, Nature, Sightseeing, etc.), and select companions.
    - Powered by Gemini AI to build an instant realistic one-day itinerary.
    - When a plan is created, it saves to the database and appears as an active floating icon on the Home page. Tapping it lets users review stops or mark it as finished to dismiss it.
-   - Action button: [BUTTON:1-Minute Planner|/day-plan]
+   - Action button: [BUTTON:Build Itinerary|/day-plan]
 
 3. CREATE & JOIN TRIPS:
    - Create Trip: Tap 'Create' on the Trips tab or top bar (/trip/create). Add title, destination, dates, cover photo, and invite friends.

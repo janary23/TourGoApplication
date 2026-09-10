@@ -154,7 +154,7 @@ export default function ProfileScreen() {
               <View
                 style={{
                   flexDirection: 'row',
-                  backgroundColor: colors.surface,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2',
                   borderRadius: 14,
                   padding: 4,
                   gap: 4,
@@ -190,7 +190,7 @@ export default function ProfileScreen() {
                       <Ionicons
                         name={item.icon as any}
                         size={14}
-                        color={isSelected ? colors.brand : colors.textMuted}
+                        color={isSelected ? colors.text : colors.textMuted}
                       />
                       <Text
                         style={{

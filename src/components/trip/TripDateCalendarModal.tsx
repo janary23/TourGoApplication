@@ -221,15 +221,15 @@ export default function TripDateCalendarModal({
           </View>
 
           {/* Selection Target Bar */}
-          <View style={[styles.targetBar, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+          <View style={[styles.targetBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2', borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0' }]}>
             <TouchableOpacity
               onPress={() => setTarget('start')}
               style={[
                 styles.targetTab,
-                target === 'start' && { backgroundColor: colors.brandLight, borderColor: colors.brand, borderWidth: 1 },
+                target === 'start' && { backgroundColor: colors.card, borderColor: isDark ? 'rgba(255,255,255,0.15)' : '#E2E8F0', borderWidth: 1 },
               ]}
             >
-              <Text style={[styles.targetTabMicro, { color: target === 'start' ? colors.brand : colors.textMuted }]}>
+              <Text style={[styles.targetTabMicro, { color: target === 'start' ? colors.text : colors.textMuted }]}>
                 Departure
               </Text>
               <Text style={[styles.targetTabDate, { color: colors.text }]}>
@@ -245,10 +245,10 @@ export default function TripDateCalendarModal({
               onPress={() => setTarget('end')}
               style={[
                 styles.targetTab,
-                target === 'end' && { backgroundColor: colors.brandLight, borderColor: colors.brand, borderWidth: 1 },
+                target === 'end' && { backgroundColor: colors.card, borderColor: isDark ? 'rgba(255,255,255,0.15)' : '#E2E8F0', borderWidth: 1 },
               ]}
             >
-              <Text style={[styles.targetTabMicro, { color: target === 'end' ? colors.brand : colors.textMuted }]}>
+              <Text style={[styles.targetTabMicro, { color: target === 'end' ? colors.text : colors.textMuted }]}>
                 Return
               </Text>
               <Text style={[styles.targetTabDate, { color: colors.text }]}>
@@ -259,9 +259,9 @@ export default function TripDateCalendarModal({
 
           {durationStr ? (
             <View style={styles.durationPillWrap}>
-              <View style={[styles.durationPill, { backgroundColor: colors.brandLight }]}>
-                <Ionicons name="time-outline" size={13} color={colors.brand} />
-                <Text style={[styles.durationText, { color: colors.brand }]}>{durationStr}</Text>
+              <View style={[styles.durationPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2' }]}>
+                <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+                <Text style={[styles.durationText, { color: colors.textSecondary }]}>{durationStr}</Text>
               </View>
             </View>
           ) : null}
@@ -326,7 +326,7 @@ export default function TripDateCalendarModal({
                         right: 0,
                         top: 4,
                         bottom: 4,
-                        backgroundColor: colors.brandLight,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB',
                       }}
                     />
                   )}
@@ -338,7 +338,7 @@ export default function TripDateCalendarModal({
                         right: 0,
                         top: 4,
                         bottom: 4,
-                        backgroundColor: colors.brandLight,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB',
                       }}
                     />
                   )}
@@ -350,7 +350,7 @@ export default function TripDateCalendarModal({
                         right: '50%',
                         top: 4,
                         bottom: 4,
-                        backgroundColor: colors.brandLight,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#E5E7EB',
                       }}
                     />
                   )}
@@ -423,7 +423,7 @@ export default function TripDateCalendarModal({
                       key={t.id}
                       style={[
                         styles.monthTripChip,
-                        { backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1 },
+                        { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2', borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E2E8F0', borderWidth: 1 },
                       ]}
                     >
                       <View style={[styles.monthTripDot, { backgroundColor: '#EAB308' }]} />

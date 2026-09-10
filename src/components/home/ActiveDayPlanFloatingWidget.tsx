@@ -8,6 +8,8 @@ import {
   ScrollView,
   Animated,
   Platform,
+  PanResponder,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,13 +17,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { notify } from '../ui/Feedback';
-import { type as T } from '../ui/tokens';
+import { type as T, space, radius, hairline, shadow } from '../ui/tokens';
 import {
   getActiveDayPlan,
   subscribeActiveDayPlan,
   finishActiveDayPlan,
   type ActiveDayPlan,
 } from '../../services/dayPlanService';
+
+function minuteLabel(mins: number): string {
+  if (!mins) return '';
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function getImgUrl(item: any): string | null {
+  if (item?.imageUrl) return item.imageUrl;
+  if (item?.image) return item.image;
+  return null;
+}
 
 const NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -54,6 +70,39 @@ export default function ActiveDayPlanFloatingWidget() {
   // Entrance & pulse animation
   const bounceAnim = useRef(new Animated.Value(0)).current;
 
+  // Movable pan tracking for the floating capsule
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const isDraggingRef = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
+      },
+      onPanResponderGrant: () => {
+        isDraggingRef.current = true;
+        pan.extractOffset();
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 120);
+      },
+      onPanResponderTerminate: () => {
+        pan.flattenOffset();
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 120);
+      },
+    })
+  ).current;
+
   const refreshPlan = useCallback(async () => {
     const p = await getActiveDayPlan();
     setActivePlan(p);
@@ -79,7 +128,7 @@ export default function ActiveDayPlanFloatingWidget() {
         toValue: 1,
         friction: 6,
         tension: 40,
-        useNativeDriver: NATIVE_DRIVER,
+        useNativeDriver: false,
       }).start();
     } else {
       bounceAnim.setValue(0);
@@ -116,23 +165,32 @@ export default function ActiveDayPlanFloatingWidget() {
 
   return (
     <>
-      {/* ── FLOATING PILL BUTTON ON HOME SCREEN ── */}
+      {/* ── FLOATING PILL BUTTON ON HOME SCREEN (DRAGGABLE & MOVABLE) ── */}
       {/* Only shown while a plan is actually active — hides immediately
           once finished, independent of the modal's own closing transition. */}
       {activePlan && (
         <Animated.View
+          {...panResponder.panHandlers}
           style={[
             styles.floatingContainer,
             {
               bottom: Math.max(insets.bottom, 12) + 74,
-              transform: [{ scale: bounceAnim }],
+              transform: [
+                { translateX: pan.x },
+                { translateY: pan.y },
+                { scale: bounceAnim },
+              ],
               opacity: bounceAnim,
             },
           ]}
         >
           <TouchableOpacity
             activeOpacity={0.88}
-            onPress={() => setModalVisible(true)}
+            onPress={() => {
+              if (!isDraggingRef.current) {
+                setModalVisible(true);
+              }
+            }}
             style={[
               styles.floatingPill,
               {
@@ -228,6 +286,10 @@ export default function ActiveDayPlanFloatingWidget() {
               {stops.map((stop, idx) => {
                 const isLast = idx === stops.length - 1;
                 const [timeVal, ampm] = (stop.time || 'TBD').split(' ');
+                const imgUrl = getImgUrl(stop);
+                const durationLabel = stop.durationMinutes ? minuteLabel(stop.durationMinutes) : '';
+                const nextStop = stops[idx + 1];
+
                 return (
                   <View key={idx} style={styles.stopBlock}>
                     {/* Time rail */}
@@ -253,36 +315,71 @@ export default function ActiveDayPlanFloatingWidget() {
                       )}
                     </View>
 
-                    {/* Card */}
-                    <View style={{ flex: 1, minWidth: 0, marginBottom: 10 }}>
-                      <View style={[styles.stopContentCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-                        <View style={styles.stopHeaderRow}>
-                          <Text style={[styles.stopTitleText, { color: colors.text }]} numberOfLines={1}>
-                            {stop.title}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                          {!!stop.category && (
-                            <View style={[styles.categoryBadge, { backgroundColor: colors.card }]}>
-                              <Text style={[styles.categoryBadgeText, { color: colors.textSecondary }]}>
-                                {stop.category}
+                    {/* Card matching 1-Day Itinerary screen */}
+                    <View style={{ flex: 1, minWidth: 0, marginBottom: 4 }}>
+                      <View style={[
+                        styles.stopCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.cardBorder,
+                        },
+                        shadow(1, isDark),
+                      ]}>
+                        {!!imgUrl && (
+                          <Image source={{ uri: imgUrl }} style={styles.stopThumb} resizeMode="cover" />
+                        )}
+
+                        <View style={styles.stopBody}>
+                          <View style={styles.stopTitleRow}>
+                            <Text numberOfLines={1} style={[T.headline, { flex: 1, color: colors.text }]}>
+                              {stop.title}
+                            </Text>
+                          </View>
+
+                          <View style={styles.stopPillsRow}>
+                            {!!stop.category && (
+                              <View style={[styles.stopCategoryChip, { backgroundColor: colors.surface }]}>
+                                <Text style={[styles.stopCategoryChipText, { color: colors.textSecondary }]}>
+                                  {stop.category}
+                                </Text>
+                              </View>
+                            )}
+                            {!!stop.estimatedCost && (
+                              <View style={[styles.stopCostChip, { backgroundColor: isDark ? 'rgba(71, 173, 245, 0.12)' : '#E9F4FE', borderColor: colors.brand }]}>
+                                <Ionicons name="pricetag-outline" size={10} color={colors.brand} style={{ marginRight: 3 }} />
+                                <Text style={[styles.stopCostChipText, { color: colors.brand }]}>
+                                  {stop.estimatedCost}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {!!stop.description && (
+                            <Text numberOfLines={2} style={[styles.stopDesc, { color: colors.textMuted }]}>
+                              {stop.description}
+                            </Text>
+                          )}
+
+                          {!!durationLabel && (
+                            <View style={styles.durationRow}>
+                              <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+                              <Text style={[styles.durationTxt, { color: colors.textMuted }]}>
+                                {durationLabel}
                               </Text>
                             </View>
                           )}
-                          {!!stop.estimatedCost && (
-                            <View style={[styles.categoryBadge, { backgroundColor: colors.brandLight }]}>
-                              <Text style={[styles.categoryBadgeText, { color: colors.brand, fontWeight: '700' }]}>
-                                {stop.estimatedCost}
-                              </Text>
-                            </View>
-                          )}
                         </View>
-                        {stop.description ? (
-                          <Text style={[styles.stopDescText, { color: colors.textMuted }]} numberOfLines={2}>
-                            {stop.description}
-                          </Text>
-                        ) : null}
                       </View>
+
+                      {/* Gap between stops */}
+                      {!isLast && (
+                        <View style={styles.gapRow}>
+                          <Ionicons name="ellipsis-vertical" size={10} color={colors.textMuted} />
+                          <Text style={[styles.gapTxt, { color: colors.textMuted }]}>
+                            {nextStop ? `Next: ${nextStop.title.split(' ')[0]}` : 'Next stop'}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -432,7 +529,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   stopsScroll: {
-    maxHeight: 280,
+    maxHeight: 380,
     marginVertical: 6,
   },
   stopBlock: {
@@ -440,38 +537,36 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   railCol: {
-    width: 48,
+    width: 52,
     alignItems: 'flex-end',
-    paddingRight: 6,
-    paddingTop: 8,
+    paddingRight: space.sm,
+    paddingTop: space.md,
   },
   railTime: {
     ...T.emphasis,
-    fontSize: 12,
     letterSpacing: -0.2,
   },
   railAmpm: {
     ...T.micro,
-    fontSize: 9,
     marginTop: -1,
   },
   trackCol: {
-    width: 18,
+    width: 22,
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: space.lg,
   },
   railDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
+    width: 13,
+    height: 13,
+    borderRadius: 8,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   railDotCore: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   railLine: {
     flex: 1,
@@ -479,36 +574,82 @@ const styles = StyleSheet.create({
     marginTop: 2,
     borderRadius: 1,
   },
-  stopContentCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
+  stopCard: {
+    flexDirection: 'row',
+    gap: space.md,
+    padding: space.md - 2,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
   },
-  stopHeaderRow: {
+  stopThumb: {
+    width: 66,
+    height: 66,
+    borderRadius: radius.md,
+  },
+  stopBody: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
+  stopTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
+    gap: space.sm,
   },
-  stopTitleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    flex: 1,
+  stopPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+    marginTop: 4,
   },
-  categoryBadge: {
-    paddingHorizontal: 8,
+  stopCategoryChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.sm,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radius.sm - 2,
   },
-  categoryBadgeText: {
+  stopCategoryChipText: {
+    ...T.microStrong,
+    letterSpacing: 0.2,
+  },
+  stopCostChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.sm - 2,
+    borderWidth: hairline,
+  },
+  stopCostChipText: {
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.1,
   },
-  stopDescText: {
-    fontSize: 12,
-    lineHeight: 16,
+  stopDesc: {
+    ...T.footnote,
+    lineHeight: 15,
+    marginTop: 5,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 6,
+  },
+  durationTxt: {
+    ...T.micro,
+  },
+  gapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: space.sm,
+    paddingLeft: space.xs,
+  },
+  gapTxt: {
+    ...T.micro,
   },
   actionsRow: {
     flexDirection: 'row',

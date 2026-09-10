@@ -55,12 +55,8 @@ import { shareTrip, buildAlbumShareMessage } from '../../services/tripShare';
 import { supabase } from '../../services/supabase';
 import {
   ExploreMap,
-  type ExploreMapHandle,
-  type ExploreLayer,
-  type MapFocus,
   type ProvinceMarker,
 } from '../../components/explore/ExploreMap';
-import { ExploreFilterPills } from '../../components/explore/ExploreFilterPills';
 import { ProvinceSheetContent } from '../../components/explore/ProvinceSheetContent';
 import { notify } from '../../components/ui/Feedback';
 import { EmptyState } from '../../components/ui/primitives';
@@ -135,10 +131,9 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const mapRef = useRef<ExploreMapHandle>(null);
   const params = useLocalSearchParams<{ selectProvinceId?: string; tab?: string }>();
 
-  const [viewType, setViewType] = useState<'map' | 'list' | 'province-detail'>('list');
+  const [viewType, setViewType] = useState<'list' | 'province-detail'>('list');
   const [exploreTab, setExploreTab] = useState<'wishlist' | 'albums'>('wishlist');
   const tabAnim = useRef(new Animated.Value(0)).current;
 
@@ -157,7 +152,6 @@ export default function ExploreScreen() {
       router.setParams({ tab: undefined } as any);
     }
   }, [params.tab]);
-  const [albumsSubView, setAlbumsSubView] = useState<'gallery' | 'map'>('gallery');
   const [statusFilter, setStatusFilter] = useState<'all' | 'explored' | 'unexplored'>('all');
   const [regionFilter, setRegionFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,11 +170,6 @@ export default function ExploreScreen() {
   const [selectedAlbumProvinceId, setSelectedAlbumProvinceId] = useState<string | null>(null);
   const [selectedDestId, setSelectedDestId] = useState<string | null>(null);
   const [selectedMuniId, setSelectedMuniId] = useState<string | null>(null);
-  const [focusTarget, setFocusTarget] = useState<MapFocus | null>(null);
-  // The interactive browse map ("View Map" from Albums) — separate from the
-  // export/share map further down, which always renders isExportMode with a
-  // hardcoded layer="all" and stub select handlers.
-  const [browseMapLayer, setBrowseMapLayer] = useState<ExploreLayer>('all');
   const [userTrips, setUserTrips] = useState<any[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [activePresetIdx, setActivePresetIdx] = useState(0);
@@ -195,7 +184,6 @@ export default function ExploreScreen() {
   const [isSharingFacebook, setIsSharingFacebook] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const cardRef = useRef<View>(null);
-  const nonceRef = useRef(0);
   const [googlePlaces, setGooglePlaces] = useState<Destination[]>([]);
   const [isPlacesLoading, setIsPlacesLoading] = useState(false);
 
@@ -495,11 +483,6 @@ export default function ExploreScreen() {
     updateLog({ savedDestinations: saved ? log.savedDestinations.filter(x => x !== id) : [...log.savedDestinations, id] });
   }, [log.savedDestinations, updateLog]);
 
-  const focusOn = useCallback((latitude: number, longitude: number, zoom: number) => {
-    nonceRef.current += 1;
-    setFocusTarget({ latitude, longitude, zoom, nonce: nonceRef.current });
-  }, []);
-
   const handleUploadPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -631,11 +614,6 @@ export default function ExploreScreen() {
     return provinceDests;
   }, [selectedMuniId, provinceDests, googlePlaces]);
 
-  const handleMapSelectProvince = useCallback((id: string) => { setSelectedProvinceId(id); setSelectedDestId(null); setSelectedMuniId(null); setViewType('province-detail'); }, []);
-  const handleMapSelectDestination = useCallback((id: string) => {
-    const dest = allDestinations.find(d => d.id === id); if (!dest) return;
-    setSelectedDestId(id); setSelectedProvinceId(dest.provinceId); setSelectedMuniId(dest.municipalityId); setViewType('province-detail');
-  }, [allDestinations]);
   const handleSelectProvince = useCallback((id: string) => {
     setSelectedProvinceId(id); setSelectedDestId(null); setSelectedMuniId(null); setViewType('province-detail');
   }, []);
@@ -720,7 +698,7 @@ export default function ExploreScreen() {
 
         {/* Sub Header Tab Segmented Control */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 8, backgroundColor: colors.background }}>
-          <View style={{ flexDirection: 'row', backgroundColor: colors.surface, borderRadius: R.md, padding: 3, position: 'relative' }}>
+          <View style={{ flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF2', borderRadius: R.md, padding: 3, position: 'relative' }}>
             
             {/* Sliding animated background pill */}
             <Animated.View
@@ -754,8 +732,8 @@ export default function ExploreScreen() {
                 gap: 6,
               }}
             >
-              <Ionicons name="heart" size={14} color={exploreTab === 'wishlist' ? colors.brand : colors.textMuted} />
-              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'wishlist' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'wishlist' ? colors.brand : colors.textSecondary }}>
+              <Ionicons name="heart" size={14} color={exploreTab === 'wishlist' ? colors.text : colors.textMuted} />
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'wishlist' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'wishlist' ? colors.text : colors.textSecondary }}>
                 Wishlist
               </Text>
             </TouchableOpacity>
@@ -772,8 +750,8 @@ export default function ExploreScreen() {
                 gap: 6,
               }}
             >
-              <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.brand : colors.textMuted} />
-              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'albums' ? colors.brand : colors.textSecondary }}>
+              <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.text : colors.textMuted} />
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'albums' ? colors.text : colors.textSecondary }}>
                 Albums
               </Text>
             </TouchableOpacity>
@@ -1053,92 +1031,13 @@ export default function ExploreScreen() {
               </View>
               <View style={{ height: 100 }} />
             </ScrollView>
-          ) : viewType === 'map' ? (
-            /* ── Interactive Philippines Map — "View Map" from Albums ──
-               ExploreMap and ExploreFilterPills were both already fully
-               built; ExploreMap only ever rendered in isExportMode (the
-               Story Card generator further below) with stub select
-               handlers, and ExploreFilterPills was never imported by this
-               screen at all. This is their first real interactive use. */
-            <View style={{ flex: 1 }}>
-              <View style={[styles.detailHeader, { paddingHorizontal: 16, marginBottom: 8 }]}>
-                <TouchableOpacity
-                  onPress={() => setViewType('list')}
-                  hitSlop={12}
-                  style={styles.detailBackBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back"
-                >
-                  <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={[styles.detailTitle, { color: colors.text }]}>Philippines Map</Text>
-                  <Text style={[styles.detailSubtitle, { color: colors.textMuted }]}>
-                    {log.visitedProvinces.length} of {TOTAL_PROVINCES} provinces explored
-                  </Text>
-                </View>
-              </View>
-
-              <ExploreFilterPills
-                layer={browseMapLayer}
-                onChange={setBrowseMapLayer}
-                counts={{
-                  all: provincePoints.length,
-                  visited: log.visitedProvinces.length,
-                  saved: log.savedProvinces.length,
-                }}
-              />
-
-              <View style={{ flex: 1, position: 'relative' }}>
-                <ExploreMap
-                  ref={mapRef}
-                  provinces={provincePoints}
-                  destinations={destinationMarkers}
-                  layer={browseMapLayer}
-                  regionFilter={null}
-                  focusTarget={focusTarget}
-                  selectedProvinceId={selectedProvinceId}
-                  selectedDestId={selectedDestId}
-                  onSelectProvince={handleMapSelectProvince}
-                  onSelectDestination={handleMapSelectDestination}
-                  themeKey={isDark ? 'cyberpunk' : 'passport'}
-                />
-
-                <View style={styles.mapZoomControls}>
-                  <TouchableOpacity
-                    onPress={() => mapRef.current?.zoomIn()}
-                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Zoom in"
-                  >
-                    <Ionicons name="add" size={20} color={colors.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => mapRef.current?.zoomOut()}
-                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Zoom out"
-                  >
-                    <Ionicons name="remove" size={20} color={colors.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => mapRef.current?.resetView()}
-                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Reset map view"
-                  >
-                    <Ionicons name="locate-outline" size={18} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
           ) : exploreTab === 'albums' ? (
             /* ── Past Memories Scrapbook & Travel Albums Screen ── */
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 16 }}>
                 <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={{ ...T.largeTitle, fontWeight: '800', color: colors.text, letterSpacing: -0.7, lineHeight: 36 }}>Albums</Text>
-                  <Text style={{ ...T.subhead, color: colors.textMuted, marginTop: 2 }}>Past memories scrapbook & collection map of completed journeys</Text>
+                  <Text style={{ ...T.subhead, color: colors.textMuted, marginTop: 2 }}>Your completed trips and the provinces you've explored</Text>
                 </View>
                 
                 {/* Share Collection Button */}
@@ -1178,8 +1077,15 @@ export default function ExploreScreen() {
                   shadowRadius: 6,
                   elevation: 1,
                 }}>
+                  {/* Three plain counts, not three states — success/warning
+                      colours mean something specific elsewhere in this app
+                      (explored vs. not, paid vs. due). Rainbow-colouring
+                      numbers that don't actually differ in kind is exactly
+                      the "colour marks which feature, not state" pattern
+                      the design system forbids. One colour, weight and
+                      position do the differentiating. */}
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ ...T.title, color: colors.brand }}>
+                    <Text style={{ ...T.title, color: colors.text }}>
                       {completedTripAlbums.length}
                     </Text>
                     <Text style={{ ...T.micro, color: colors.textMuted }}>
@@ -1188,7 +1094,7 @@ export default function ExploreScreen() {
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ ...T.title, color: colors.success }}>
+                    <Text style={{ ...T.title, color: colors.text }}>
                       {visitedProvincesList.length}
                     </Text>
                     <Text style={{ ...T.micro, color: colors.textMuted }}>
@@ -1197,11 +1103,11 @@ export default function ExploreScreen() {
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ ...T.title, color: colors.warning }}>
+                    <Text style={{ ...T.title, color: colors.text }}>
                       {log.visitedDestinations.length}
                     </Text>
                     <Text style={{ ...T.micro, color: colors.textMuted }}>
-                      Spots on map
+                      Spots visited
                     </Text>
                   </View>
                 </View>
@@ -1227,195 +1133,118 @@ export default function ExploreScreen() {
                           ? getPlaceImageUrl(trip.destination || trip.title || 'Philippines')
                           : rawImg;
                         const cardWidth = (windowWidth - 44) / 2;
-                        const itinCount = (trip.itineraryItems || []).length;
                         const buddyCount = trip.members?.length || 1;
 
+                        // This used to cram six separate pieces onto one small
+                        // tile — a role sticker, a "Memory" sticker, destination,
+                        // title, a year+buddies line, an itinerary-count line, an
+                        // "Open memory" link, and a share icon — a summary card
+                        // trying to summarize everything at once, which read as
+                        // busy rather than considered. It's the same anatomy as
+                        // the Wishlist card right above it now: one bare shadowed
+                        // photo, one plain white pill for the single fact worth
+                        // putting on the image (your role), a title, one subtitle
+                        // line. The whole tile opens the trip — a chevron/link row
+                        // saying "Open memory" was redundant with that. Share
+                        // moved to the trip's own screen instead of competing for
+                        // space on the summary tile.
                         return (
                           <TouchableOpacity
                             key={trip.id}
                             activeOpacity={0.9}
                             onPress={() => router.push(`/trip/${trip.id}`)}
-                            style={{
-                              width: cardWidth,
-                              backgroundColor: colors.card,
-                              borderColor: colors.cardBorder,
-                              borderWidth: 1,
-                              borderRadius: 20,
-                              padding: 8,
-                              marginBottom: 16,
-                              shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 4 },
-                              shadowOpacity: 0.04,
-                              shadowRadius: 8,
-                              elevation: 2,
-                            }}
+                            style={{ width: cardWidth, marginBottom: 20 }}
                           >
-                            {/* Polaroid Photo with Memory Stamp */}
-                            <View style={{ position: 'relative', height: 118, width: '100%', borderRadius: 12, overflow: 'hidden' }}>
-                              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover', opacity: isDark ? 0.9 : 1 }} />
-                              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.5)']} style={StyleSheet.absoluteFillObject} />
+                            <View style={[{ width: '100%', aspectRatio: 1.05, borderRadius: 16, position: 'relative' }, shadow(2, isDark)]}>
+                              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 16, opacity: isDark ? 0.9 : 1 }} />
 
-                              {/* Memory Sticker Badge */}
-                              <View style={{
-                                position: 'absolute',
-                                bottom: 6,
-                                left: 6,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 3,
-                                backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                                paddingHorizontal: 6,
-                                paddingVertical: 2.5,
-                                borderRadius: 8,
-                              }}>
-                                <Ionicons name="checkmark-done-outline" size={10} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', ...T.microStrong }}>Memory</Text>
-                              </View>
-
-                              {/* Role Chip */}
-                              <View style={{
-                                position: 'absolute',
-                                top: 6,
-                                right: 6,
-                                backgroundColor: trip.role === 'organizer' ? 'rgba(2, 132, 199, 0.9)' : 'rgba(100, 116, 139, 0.85)',
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                                borderRadius: 8,
-                              }}>
-                                <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
+                              <View style={[
+                                { position: 'absolute', top: 10, left: 10, backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill },
+                                shadow(1, isDark),
+                              ]}>
+                                <Text style={{ color: '#0F172A', ...T.microStrong }}>
                                   {trip.role === 'organizer' ? 'Organized' : 'Joined'}
                                 </Text>
                               </View>
+
+                              {/* Bare icon on the photo, same rule as every heart
+                                  elsewhere — no dark circle backdrop, just a shadow
+                                  on the glyph. Organizer-only, since only they can
+                                  share a completed trip. */}
+                              {trip.role === 'organizer' && (
+                                <TouchableOpacity
+                                  style={{ position: 'absolute', top: 8, right: 8, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}
+                                  hitSlop={10}
+                                  onPress={async (e) => {
+                                    e.stopPropagation();
+                                    const { error } = await shareTrip(trip);
+                                    if (error) notify(error, 'error');
+                                  }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Share this trip"
+                                >
+                                  <Ionicons name="share-social-outline" size={17} color="#FFFFFF" style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} />
+                                </TouchableOpacity>
+                              )}
                             </View>
 
-                            {/* Polaroid Card Details */}
-                            <View style={{ paddingTop: 8, paddingHorizontal: 2 }}>
-                              <Text style={{ ...T.microStrong, color: colors.brand }} numberOfLines={1}>
-                                {trip.destination.split(',')[0]}
-                              </Text>
-                              <Text style={{ ...T.label, color: colors.text, marginVertical: 2 }} numberOfLines={1}>
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.sm, marginTop: space.sm }}>
+                              <Text style={{ color: colors.text, ...T.headline, flex: 1 }} numberOfLines={1}>
                                 {trip.title}
                               </Text>
-                              <Text style={{ ...T.micro, color: colors.textMuted }}>
-                                {new Date(trip.endDate || trip.startDate).getFullYear()}, {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
+                              <Text style={{ color: colors.textMuted, ...T.footnote }}>
+                                {new Date(trip.endDate || trip.startDate).getFullYear()}
                               </Text>
-
-                              {itinCount > 0 && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
-                                  <Ionicons name="location-outline" size={10} color={colors.textSecondary} />
-                                  <Text style={{ ...T.micro, color: colors.textSecondary }} numberOfLines={1}>
-                                    {itinCount} itinerary {itinCount === 1 ? 'stop' : 'stops'}
-                                  </Text>
-                                </View>
-                              )}
-
-                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                  <Text style={{ ...T.microStrong, color: colors.brand }}>Open memory</Text>
-                                  <Ionicons name="chevron-forward" size={10} color={colors.brand} />
-                                </View>
-
-                                {trip.role === 'organizer' && (
-                                  <TouchableOpacity
-                                    onPress={async (e) => {
-                                      e.stopPropagation();
-                                      const { error } = await shareTrip(trip);
-                                      if (error) notify(error, 'error');
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    style={{ padding: 2 }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Share this trip"
-                                  >
-                                    <Ionicons name="share-social-outline" size={13} color={colors.brand} />
-                                  </TouchableOpacity>
-                                )}
-                              </View>
                             </View>
+                            <Text style={{ color: colors.textSecondary, ...T.subhead, marginTop: 1 }} numberOfLines={1}>
+                              {trip.destination.split(',')[0]} · {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
+                            </Text>
                           </TouchableOpacity>
                         );
                       })}
                     </View>
                   </View>
 
-                  {/* ── Collection Map Highlights ── */}
+                  {/* ── Provinces explored ── */}
                   {visitedProvincesList.length > 0 && (
                     <View style={{ marginBottom: 20 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
-                          <Text style={{ ...T.label, color: colors.textSecondary }}>
-                            Collection map and footprints
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => setViewType('map')}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
-                        >
-                          <Text style={{ ...T.overline, color: colors.brand }}>View Map</Text>
-                          <Ionicons name="chevron-forward" size={12} color={colors.brand} />
-                        </TouchableOpacity>
-                      </View>
+                      <Text style={{ ...T.label, color: colors.textSecondary, marginBottom: 12 }}>
+                        Provinces you've explored
+                      </Text>
 
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                         {visitedProvincesList.map((item) => {
                           const bgImage = getProvinceImage(item.id, item.region);
                           const matchingDests = allDestinations.filter(d => d.provinceId === item.id && log.visitedDestinations.includes(d.id));
+                          const provinceCardWidth = (windowWidth - 44) / 2;
                           return (
                             <Pressable
                               key={item.id}
-                              style={({ pressed }) => [
-                                {
-                                  backgroundColor: colors.card,
-                                  borderColor: colors.cardBorder,
-                                  borderWidth: 1,
-                                  borderRadius: 18,
-                                  overflow: 'hidden',
-                                  width: (windowWidth - 44) / 2,
-                                  shadowColor: '#000',
-                                  shadowOffset: { width: 0, height: 4 },
-                                  shadowOpacity: 0.03,
-                                  shadowRadius: 8,
-                                  elevation: 2,
-                                  transform: [{ scale: pressed ? 0.97 : 1 }]
-                                }
-                              ]}
+                              style={({ pressed }) => [{ width: provinceCardWidth, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                               onPress={() => {
                                 setSelectedAlbumProvinceId(item.id);
                               }}
                             >
-                              <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
-                                <ImageBackground source={{ uri: bgImage }} style={{ width: '100%', height: '100%' }}>
-                                  <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
+                              <View style={[{ width: '100%', aspectRatio: 1.05, borderRadius: 16 }, shadow(2, isDark)]}>
+                                <ImageBackground source={{ uri: bgImage }} imageStyle={{ borderRadius: 16 }} style={{ width: '100%', height: '100%' }}>
                                   <View
-                                    style={{
-                                      position: 'absolute',
-                                      top: 8,
-                                      left: 8,
-                                      backgroundColor: 'rgba(0,0,0,0.6)',
-                                      paddingHorizontal: 8,
-                                      paddingVertical: 4,
-                                      borderRadius: 8,
-                                      flexDirection: 'row',
-                                      alignItems: 'center',
-                                      gap: 4
-                                    }}
+                                    style={[
+                                      { position: 'absolute', top: 10, left: 10, backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, flexDirection: 'row', alignItems: 'center', gap: 4 },
+                                      shadow(1, isDark),
+                                    ]}
                                   >
-                                    <Ionicons name="images-outline" size={10} color="#FFFFFF" />
-                                    <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
+                                    <Text style={{ color: '#0F172A', ...T.microStrong }}>
                                       {matchingDests.length} {matchingDests.length === 1 ? 'spot' : 'spots'}
                                     </Text>
                                   </View>
                                 </ImageBackground>
                               </View>
-                              <View style={{ padding: 12 }}>
-                                <Text style={{ color: colors.text, ...T.emphasis }} numberOfLines={1}>
-                                  {item.name}
-                                </Text>
-                                <Text style={{ color: colors.textSecondary, ...T.micro, marginTop: 2 }} numberOfLines={1}>
-                                  {item.region} Region
-                                </Text>
-                              </View>
+                              <Text style={{ color: colors.text, ...T.headline, marginTop: space.sm }} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                              <Text style={{ color: colors.textSecondary, ...T.subhead, marginTop: 1 }} numberOfLines={1}>
+                                {item.region} region
+                              </Text>
                             </Pressable>
                           );
                         })}
@@ -1443,26 +1272,19 @@ export default function ExploreScreen() {
               {wishlistDests.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                   {wishlistDests.map((item) => {
+                    // Same card anatomy as Home's spot cards: the image is
+                    // the only bounded, shadowed, rounded surface — no card
+                    // border, no dark scrim over the photo, no glassmorphic
+                    // badge. Title, rating and season sit in the quiet page
+                    // background underneath, the way every other card in
+                    // the app now works. A different screen building its
+                    // own bordered-box-plus-dark-badge card was exactly the
+                    // inconsistency this pass exists to remove.
+                    const cardWidth = (windowWidth - 44) / 2;
                     return (
                       <Pressable
                         key={item.id}
-                        style={({ pressed }) => [
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.cardBorder,
-                            borderWidth: 1,
-                            borderRadius: 18,
-                            overflow: 'hidden',
-                            width: (windowWidth - 44) / 2,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.03,
-                            shadowRadius: 8,
-                            elevation: 2,
-                            position: 'relative',
-                            transform: [{ scale: pressed ? 0.97 : 1 }]
-                          }
-                        ]}
+                        style={({ pressed }) => [{ width: cardWidth, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                         onPress={() => {
                           if (item.provinceId) {
                             setSelectedDestId(item.id);
@@ -1474,46 +1296,12 @@ export default function ExploreScreen() {
                           }
                         }}
                       >
-                        <View style={{ overflow: 'hidden', height: 110, position: 'relative' }}>
-                          <Image source={{ uri: item.image }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFillObject} />
-
-                          {/* Glassmorphic Rating Tag on top-left of image */}
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: 8,
-                              left: 8,
-                              backgroundColor: 'rgba(0,0,0,0.6)',
-                              paddingHorizontal: 8,
-                              paddingVertical: 3,
-                              borderRadius: 12,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 2,
-                              zIndex: 10
-                            }}
-                          >
-                            <Ionicons name="star" size={10} color={GOLD} />
-                            <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
-                              {parseFloat(String(item.rating)).toFixed(1)}
-                            </Text>
-                          </View>
+                        <View style={[{ width: '100%', aspectRatio: 1.05, borderRadius: 16 }, shadow(2, isDark)]}>
+                          <Image source={{ uri: item.image }} style={{ width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 16 }} />
                         </View>
-                        
+
                         <TouchableOpacity
-                          style={{
-                            position: 'absolute',
-                            top: 8,
-                            right: 8,
-                            backgroundColor: 'rgba(0,0,0,0.25)',
-                            width: 36,
-                            height: 36,
-                            borderRadius: 18,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 20
-                          }}
+                          style={{ position: 'absolute', top: 10, right: 10, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}
                           hitSlop={10}
                           onPress={(e) => {
                             e.stopPropagation();
@@ -1522,17 +1310,23 @@ export default function ExploreScreen() {
                           accessibilityRole="button"
                           accessibilityLabel="Remove from wishlist"
                         >
-                          <Ionicons name="heart" size={16} color={colors.danger} />
+                          <Ionicons name="heart" size={18} color={colors.danger} style={{ textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} />
                         </TouchableOpacity>
 
-                        <View style={{ padding: 12 }}>
-                          <Text style={{ color: colors.text, ...T.emphasis, textAlign: 'left' }} numberOfLines={1}>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.sm, marginTop: space.sm }}>
+                          <Text style={{ color: colors.text, ...T.headline, flex: 1 }} numberOfLines={1}>
                             {item.name}
                           </Text>
-                          <Text style={{ color: colors.textSecondary, ...T.micro, marginTop: 2 }} numberOfLines={1}>
-                            {(item.bestTime || 'Year-round').split('–')[0]} Season
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                            <Ionicons name="star" size={11} color={colors.text} />
+                            <Text style={{ color: colors.text, ...T.footnote }}>
+                              {parseFloat(String(item.rating)).toFixed(2)}
+                            </Text>
+                          </View>
                         </View>
+                        <Text style={{ color: colors.textSecondary, ...T.subhead, marginTop: 1 }} numberOfLines={1}>
+                          {(item.bestTime || 'Year-round').split('–')[0]} season
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -2215,25 +2009,6 @@ const styles = StyleSheet.create({
   },
   detailHeaderActions: {
     flexDirection: 'row',
-  },
-  mapZoomControls: {
-    position: 'absolute',
-    right: 16,
-    bottom: 24,
-    gap: 8,
-  },
-  mapZoomBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
   },
   detailCard: {
     borderRadius: 24,

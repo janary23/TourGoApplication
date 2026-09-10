@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   StyleSheet, View, Text, ScrollView, Image, TouchableOpacity,
   RefreshControl, TextInput, Modal, Dimensions, Keyboard,
-  Animated, ActivityIndicator, Platform
+  Animated, ActivityIndicator, Platform, Easing
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +31,8 @@ import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloa
 const NATIVE_DRIVER = Platform.OS !== 'web';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 52) / 2;
+// 20px side padding × 2 + the 16px gap between the two grid columns.
+const CARD_WIDTH = (SCREEN_WIDTH - 40 - 16) / 2;
 
 interface TeleportLocation {
   id: string;
@@ -131,30 +132,34 @@ type SectionId =
 
 type SortMode = 'rating' | 'distance' | 'az';
 
-const ON_IMAGE_AMBER = '#FBBF24';
+// Ratings drawn on top of a photo read as white text, matching the plain
+// filled star used everywhere off-photo (colors.text) — one neutral rating
+// mark across the screen instead of an amber "review site" accent competing
+// with the single brand blue.
+const ON_IMAGE_STAR = '#FFFFFF';
 
-const SECTION_META: Record<SectionId, { title: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  recommended: { title: 'Recommended For You', subtitle: 'Picked from your interests across the Philippines', icon: 'sparkles' },
-  trending: { title: 'Trending Across the Philippines', subtitle: 'What travelers are loving right now', icon: 'earth' },
-  today: { title: "Today's Vibe", subtitle: 'Matched to the current weather', icon: 'partly-sunny' },
-  nearYou: { title: 'Best in your place', subtitle: 'Top-rated gems close by', icon: 'location' },
-  events: { title: 'Local Events', subtitle: 'Happening soon nearby', icon: 'calendar' },
-  outdoors: { title: 'Nature & Outdoors', subtitle: 'Breathtaking islands, waterfalls & scenic trails in PH', icon: 'leaf-outline' },
-  heritage: { title: 'History & Heritage', subtitle: 'Must-visit historic landmarks, shrines & old churches in PH', icon: 'trail-sign-outline' },
-  art: { title: 'Art & Museums', subtitle: 'Famous cultural spots, galleries & museums in PH', icon: 'color-palette-outline' },
-  parks: { title: 'Amusement & Parks', subtitle: 'Top theme parks, zoos, gardens & family fun spots in PH', icon: 'planet-outline' },
-  food: { title: 'Local Food & Cafes', subtitle: 'Famous travel eateries, native food & upland cafes in PH', icon: 'restaurant-outline' },
+// `icon` used to carry one Ionicon per section here — a rainbow icon set
+// (sparkles, earth, calendar, leaf, museum palette...) that was never
+// actually rendered anywhere; each row is told apart by its title and
+// photos, not a decorative glyph. Dead data is its own kind of slop —
+// removed rather than left defined-but-unused.
+const SECTION_META: Record<SectionId, { title: string; subtitle: string }> = {
+  recommended: { title: 'Recommended For You', subtitle: 'Picked from your interests across the Philippines' },
+  trending: { title: 'Trending Across the Philippines', subtitle: 'What travelers are loving right now' },
+  today: { title: "Today's Vibe", subtitle: 'Matched to the current weather' },
+  nearYou: { title: 'Best in your place', subtitle: 'Top-rated gems close by' },
+  events: { title: 'Local Events', subtitle: 'Happening soon nearby' },
+  outdoors: { title: 'Nature & Outdoors', subtitle: 'Breathtaking islands, waterfalls & scenic trails in PH' },
+  heritage: { title: 'History & Heritage', subtitle: 'Must-visit historic landmarks, shrines & old churches in PH' },
+  art: { title: 'Art & Museums', subtitle: 'Famous cultural spots, galleries & museums in PH' },
+  parks: { title: 'Amusement & Parks', subtitle: 'Top theme parks, zoos, gardens & family fun spots in PH' },
+  food: { title: 'Local Food & Cafes', subtitle: 'Famous travel eateries, native food & upland cafes in PH' },
 };
 
-const LANDING_CATEGORIES: { id: SectionId; label: string; image: string }[] = [
-  { id: 'outdoors', label: 'Nature', image: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=400&q=80' },
-  { id: 'heritage', label: 'Heritage', image: 'https://images.unsplash.com/photo-1590076212952-6138676fa1c0?auto=format&fit=crop&w=400&q=80' },
-  { id: 'art', label: 'Art & Museum', image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=400&q=80' },
-  { id: 'parks', label: 'Parks & Fun', image: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=400&q=80' },
-  { id: 'food', label: 'Local Eats', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80' },
-];
-
-const SEARCH_SUGGESTIONS = ['Baguio', 'Boracay', 'Siargao', 'El Nido', 'Coffee', 'Nightlife'];
+// LANDING_CATEGORIES (a row of stock-photo category tiles) and
+// SEARCH_SUGGESTIONS were both defined with matching styles further down
+// and never actually rendered anywhere — leftovers from an earlier layout.
+// Removed along with their dead styles rather than left as unused code.
 
 const SORT_OPTIONS: { id: SortMode; label: string }[] = [
   { id: 'rating', label: 'Top Rated' },
@@ -290,6 +295,41 @@ function InteractiveButton({
   );
 }
 
+/**
+ * Fades + rises its children in once, on mount — nothing more. Used to
+ * stagger the Home screen's sections in as the screen first appears, a
+ * beat behind one another, instead of every row being present and static
+ * in the very first frame. That cascade — content settling in rather than
+ * just existing — is a big part of what reads as "alive" on Airbnb's own
+ * scroll, not just the photos themselves.
+ *
+ * It's a real component (not an inline helper), which matters here: React
+ * keeps it mounted across its parent's re-renders as long as it stays in
+ * the same tree position, so the entrance plays once when the section first
+ * appears and never replays on every unrelated re-render — but it does
+ * replay if the section unmounts and remounts (e.g. leaving and returning
+ * to Home), which reads as an intentional "content resettling" beat rather
+ * than a bug.
+ */
+function Reveal({ delay = 0, style, children }: { delay?: number; style?: any; children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(16)).current;
+  useEffect(() => {
+    const anim = Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 380, delay, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(rise, { toValue: 0, duration: 380, delay, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
+    ]);
+    anim.start();
+    return () => anim.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY: rise }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 // iOS-style pulsing skeleton loader for the home screen
 function HomeSkeletonLoader({ colors }: { colors: any }) {
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
@@ -398,6 +438,28 @@ export default function HomeScreen() {
   const [sectionQuery, setSectionQuery] = useState('');
   const [sectionSort, setSectionSort] = useState<SortMode>('rating');
   const [searchInput, setSearchInput] = useState('');
+
+  // `screen` is plain state, not a router push — the section page shares this
+  // component so it can reuse getFullSectionData, so there's no navigator to
+  // hand it a native transition. Swapping the state alone made it a hard cut,
+  // the single most jarring moment in the app: one frame it's Home, the next
+  // it's a totally different screen. This fades the outgoing screen out, then
+  // fades + rises the incoming one in — a quick settle that reads like a
+  // native push without needing a real shared-element transition.
+  const screenFade = useRef(new Animated.Value(1)).current;
+  const screenRise = useRef(new Animated.Value(0)).current;
+  const animateScreenSwap = useCallback((applyState: () => void) => {
+    Animated.timing(screenFade, {
+      toValue: 0, duration: 110, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE_DRIVER,
+    }).start(() => {
+      applyState();
+      screenRise.setValue(14);
+      Animated.parallel([
+        Animated.timing(screenFade, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(screenRise, { toValue: 0, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE_DRIVER }),
+      ]).start();
+    });
+  }, [screenFade, screenRise]);
 
   // Interactive states
   const [savedIds, setSavedIds] = useState<string[]>([]);
@@ -720,15 +782,12 @@ export default function HomeScreen() {
     coords: { latitude: number; longitude: number }
   ): Promise<SpotInfo[]> => {
     try {
-      // fetchFreePlaces has no internal timeout — on a slow or unreachable
-      // connection (spotty mobile signal is the normal case for a travel
-      // app, not the edge case) a single one of these six parallel category
-      // calls can otherwise hold the whole Home screen on its skeleton for
-      // minutes. Six categories run in parallel below, so 10s here is the
-      // screen's real worst-case load time, not 60s.
-      return await withTimeout(fetchFreePlaces(cityName, query, coords), 10000);
+      // fetchFreePlaces uses fast parallel requests to Geoapify and Wikipedia.
+      // 15s provides ample headroom on slow 3G/4G connections without locking
+      // the screen indefinitely.
+      return await withTimeout(fetchFreePlaces(cityName, query, coords), 15000);
     } catch (err) {
-      console.error(`Dynamic free places query failed for "${query}": `, err);
+      console.warn(`Dynamic free places query timed out or failed for "${query}": `, err);
       return [];
     }
   };
@@ -861,43 +920,55 @@ export default function HomeScreen() {
   };
 
   // ── Navigation helpers ──────────────────────────────────────────────
+  // Every one of these routes its state change through animateScreenSwap
+  // instead of calling setScreen directly, so every way into or out of a
+  // section page — tapping "See all", submitting a search, an AI search, the
+  // back button — gets the same fade+rise, not just some of them.
   const openSection = (id: SectionId) => {
-    setActiveSection(id);
-    setSectionQuery('');
-    setSectionSort('rating');
-    setScreen('section');
+    animateScreenSwap(() => {
+      setActiveSection(id);
+      setSectionQuery('');
+      setSectionSort('rating');
+      setScreen('section');
+    });
   };
 
   const handleSubmitSearch = () => {
     if (!searchInput.trim()) return;
     Keyboard.dismiss();
-    setIsSearchByAi(false);
-    setSectionQuery(searchInput);
-    setActiveCategoryFilter('all');
-    setAiIntent(null);
-    setActiveSection('outdoors');
-    setScreen('section');
+    animateScreenSwap(() => {
+      setIsSearchByAi(false);
+      setSectionQuery(searchInput);
+      setActiveCategoryFilter('all');
+      setAiIntent(null);
+      setActiveSection('outdoors');
+      setScreen('section');
+    });
   };
 
   const handleAiSearchSubmit = () => {
     if (!aiSearchInput.trim()) return;
     setAiModalVisible(false);
     Keyboard.dismiss();
-    setIsSearchByAi(true);
-    setSectionQuery(aiSearchInput);
-    setActiveCategoryFilter('all');
-    setActiveSection('outdoors');
-    setScreen('section');
+    animateScreenSwap(() => {
+      setIsSearchByAi(true);
+      setSectionQuery(aiSearchInput);
+      setActiveCategoryFilter('all');
+      setActiveSection('outdoors');
+      setScreen('section');
+    });
   };
 
   const goHome = () => {
-    setScreen('home');
-    setActiveSection(null);
-    setSectionQuery('');
-    setSearchInput('');
-    setActiveCategoryFilter('all');
-    setAiIntent(null);
-    setIsSearchByAi(false);
+    animateScreenSwap(() => {
+      setScreen('home');
+      setActiveSection(null);
+      setSectionQuery('');
+      setSearchInput('');
+      setActiveCategoryFilter('all');
+      setAiIntent(null);
+      setIsSearchByAi(false);
+    });
   };
 
   const toggleSave = (id: string) => {
@@ -931,60 +1002,53 @@ export default function HomeScreen() {
     return '₱₱₱';
   };
 
-  // ── Shared card renderers ────────────────────────────────────────────
-  const renderGridCard = (spot: SpotInfo, width: number = CARD_WIDTH) => (
-    <View key={spot.id} style={[styles.gemCard, { width, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-      <TouchableOpacity activeOpacity={0.8} onPress={() => setSelectedSpot(spot)} style={{ flex: 1 }}>
-        <View style={{ position: 'relative', height: 110, overflow: 'hidden' }}>
-          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.gemImage} />
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={10} color={ON_IMAGE_AMBER} style={{ marginRight: 2 }} />
-            <Text style={styles.ratingBadgeText}>{spot.rating.toFixed(1)}</Text>
-          </View>
-        </View>
-        <View style={styles.gemTextContainer}>
-          <Text style={[styles.gemTitle, { color: colors.text }]} numberOfLines={1}>{spot.name}</Text>
-          <Text style={[styles.gemSubText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {spotSubtitle(spot) ?? spot.distance}
-          </Text>
-        </View>
-      </TouchableOpacity>
-      <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.gemHeartBadge}>
-        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={14} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
-      </TouchableOpacity>
-    </View>
-  );
-
   /**
-   * `conditionIcon` is the one thing that makes "Today's Vibe" a different
-   * card from "Recommended For You" beside it — without it the two sections
-   * were the same card shape back-to-back with only the header text saying
-   * why. A small glyph tied to *why this spot is here* earns its place; it
-   * never appears on the personalised row.
+   * The one card shape used everywhere a spot appears as a photo tile —
+   * the 2-up grid ("Trending", "Near You") and the horizontal scrolls
+   * ("Recommended", "Today's Vibe") used to be two different card
+   * languages (a bordered box with a dark rating badge vs. a full-bleed
+   * photo with text scrimmed over it). Airbnb's own list cards never mix
+   * those: one photo, rounded and unboxed, a plain white heart floating on
+   * it, and the info — title, rating, place — living in the quiet page
+   * background underneath. Doing that once here, for every card, is what
+   * actually reads as "designed by one hand" rather than "assembled".
+   *
+   * `conditionIcon` is the one thing that still makes "Today's Vibe" read
+   * as a different reason-to-look than "Recommended" beside it — a small
+   * glyph tied to *why this spot is here*. It never appears on the
+   * personalised row.
    */
-  const renderHorizontalCard = (spot: SpotInfo, conditionIcon?: keyof typeof Ionicons.glyphMap) => {
+  const renderSpotCard = (
+    spot: SpotInfo,
+    opts?: { width?: number; conditionIcon?: keyof typeof Ionicons.glyphMap }
+  ) => {
+    const width = opts?.width ?? CARD_WIDTH;
     const subtitle = spotSubtitle(spot);
+    const saved = savedIds.includes(spot.id);
     return (
-      <View key={spot.id} style={[styles.weatherCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-        <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.96}>
-          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.weatherCardImage} />
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.weatherCardGradient} />
-          {!!conditionIcon && (
-            <View style={styles.weatherConditionBadge}>
-              <Ionicons name={conditionIcon} size={12} color="#FFFFFF" />
+      <View key={spot.id} style={{ width, position: 'relative' }}>
+        <InteractiveButton onPress={() => setSelectedSpot(spot)} style={[styles.spotCardImageWrap, shadow(2, isDark)]} activeScale={0.97}>
+          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.spotCardImage} />
+          {!!opts?.conditionIcon && (
+            <View style={styles.spotCardConditionBadge}>
+              <Ionicons name={opts.conditionIcon} size={12} color={colors.text} />
             </View>
           )}
-          <View style={[styles.weatherRatingBadge, conditionIcon ? { left: 34 } : { left: 8 }]}>
-            <Ionicons name="star" size={9} color={ON_IMAGE_AMBER} />
-            <Text style={styles.weatherRatingBadgeText}>{spot.rating.toFixed(1)}</Text>
-          </View>
-          <View style={styles.weatherTextContainer}>
-            <Text style={styles.weatherCardTitle} numberOfLines={1}>{spot.name}</Text>
-            {!!subtitle && <Text style={styles.weatherCardSub} numberOfLines={1}>{subtitle}</Text>}
-          </View>
         </InteractiveButton>
-        <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(spot.id)} style={styles.weatherHeartBadge}>
-          <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
+        <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.spotCardHeart}>
+          <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.saved : '#FFFFFF'} style={styles.onPhotoHeartIcon} />
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setSelectedSpot(spot)}>
+          <View style={styles.spotCardInfoRow}>
+            <Text style={[styles.spotCardTitle, { color: colors.text }]} numberOfLines={1}>{spot.name}</Text>
+            <View style={styles.spotCardRating}>
+              <Ionicons name="star" size={11} color={colors.text} />
+              <Text style={[styles.spotCardRatingText, { color: colors.text }]}>{spot.rating.toFixed(2)}</Text>
+            </View>
+          </View>
+          <Text style={[styles.spotCardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {subtitle ?? spot.distance}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -1001,30 +1065,35 @@ export default function HomeScreen() {
   const renderFeaturedTrendingCard = (spot: SpotInfo) => {
     const subtitle = spotSubtitle(spot);
     return (
-      <View style={styles.trendingFeaturedContainer}>
-        <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
-          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.trendingFeaturedImage} />
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} style={styles.trendingFeaturedGradient} />
-          <View style={styles.trendingFeaturedBadge}>
-            <Ionicons name="flame" size={11} color="#FFFFFF" />
-            <Text style={styles.trendingFeaturedBadgeText}>Most loved this month</Text>
-          </View>
-          <View style={styles.trendingFeaturedTextWrap}>
-            <Text style={styles.trendingFeaturedTitle} numberOfLines={1}>{spot.name}</Text>
-            <View style={styles.trendingFeaturedMetaRow}>
-              <View style={styles.trendingFeaturedRating}>
-                <Ionicons name="star" size={11} color={ON_IMAGE_AMBER} />
-                <Text style={styles.trendingFeaturedRatingText}>{spot.rating.toFixed(1)}</Text>
-              </View>
-              {!!subtitle && (
-                <Text style={styles.trendingFeaturedSub} numberOfLines={1}>{subtitle}</Text>
-              )}
+      <View style={[styles.trendingFeaturedShadowWrap, shadow(2, isDark)]}>
+        <View style={styles.trendingFeaturedContainer}>
+          <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
+            <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.trendingFeaturedImage} />
+            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} style={styles.trendingFeaturedGradient} />
+            {/* Plain text, no icon — every badge in the reference (Guest
+                favorite, Popular, Superhost) is bare text on a white pill.
+                A flame glued on for "hype" was decoration standing in for
+                copy that already says the thing. */}
+            <View style={styles.trendingFeaturedBadge}>
+              <Text style={[styles.trendingFeaturedBadgeText, { color: colors.text }]}>Most loved</Text>
             </View>
-          </View>
-        </InteractiveButton>
-        <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.trendingFeaturedHeart}>
-          <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={15} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
-        </TouchableOpacity>
+            <View style={styles.trendingFeaturedTextWrap}>
+              <Text style={styles.trendingFeaturedTitle} numberOfLines={1}>{spot.name}</Text>
+              <View style={styles.trendingFeaturedMetaRow}>
+                <View style={styles.trendingFeaturedRating}>
+                  <Ionicons name="star" size={11} color={ON_IMAGE_STAR} />
+                  <Text style={styles.trendingFeaturedRatingText}>{spot.rating.toFixed(2)}</Text>
+                </View>
+                {!!subtitle && (
+                  <Text style={styles.trendingFeaturedSub} numberOfLines={1}>{subtitle}</Text>
+                )}
+              </View>
+            </View>
+          </InteractiveButton>
+          <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.trendingFeaturedHeart}>
+            <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={17} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} style={styles.onPhotoHeartIcon} />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -1149,7 +1218,7 @@ export default function HomeScreen() {
             onPress={() => setAiModalVisible(true)}
             landed={isBirdLanded && !isOnboardingActive}
           />
-          <View style={[styles.searchBarWrapper, { flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={[styles.searchBarWrapper, { flex: 1, backgroundColor: colors.card }, shadow(1, isDark)]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
             <TextInput
               value={searchInput}
@@ -1181,55 +1250,77 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Quick 1-minute spontaneous day planner. Flat brand-colour fill, not a
-            gradient — brandFill and brandFillDeep were the same blue faded into
-            a darker version of itself, i.e. the "one saturated blue" Hard Rule
-            wearing a gradient as a costume. The "1 MIN" tag no longer carries a
-            decorative flash icon; the text alone says it (another Hard Rule:
-            sparkle/lightning icons used as decoration). */}
-        <InteractiveButton onPress={() => router.push('/day-plan')} style={styles.quickPlannerCard} activeScale={0.97}>
-          <View style={[styles.quickPlannerGradient, { backgroundColor: colors.brandFill }]}>
-            <View style={styles.quickPlannerBody}>
-              <View style={styles.quickPlannerTag}>
-                <Text style={styles.quickPlannerTagText}>1 MIN</Text>
+        {/* Hero — the photo leads, the way Airbnb opens on content, not a
+            CTA. This is the first thing anyone sees after the greeting text,
+            full-bleed and aspirational, before any utility card competes
+            with it for that first impression. */}
+        <Reveal style={[styles.heroCardShadowWrap, shadow(2, isDark)]}>
+          <View style={styles.heroCardContainer}>
+            <InteractiveButton onPress={() => openSection('trending')} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
+              <PhotoWithFallback uri={featuredLandingSpot?.image} placeName="Philippines" style={styles.heroCardImage} />
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']} style={styles.heroCardGradient} />
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroStatPill}>
+                  <Text style={styles.heroStatPillText}>7,641 Islands to Explore</Text>
+                </View>
               </View>
-              <Text style={styles.quickPlannerTitle}>Build an itinerary in a minute</Text>
-              <Text style={styles.quickPlannerSubtitle} numberOfLines={2}>
-                Biglaang trip? Tell us where you're headed and we'll plan the day.
-              </Text>
-            </View>
-            <View style={styles.quickPlannerArrow}>
-              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-            </View>
+              <View style={styles.heroTextContainer}>
+                <Text style={styles.heroTitleText}>Best of the Philippines</Text>
+                <Text style={styles.heroSubtitleText}>Top curated picks across the islands</Text>
+                <View style={styles.onColorPillButton}>
+                  <Text style={styles.onColorPillButtonText}>Explore now</Text>
+                  <Ionicons name="arrow-forward" size={13} color="#0F172A" />
+                </View>
+              </View>
+            </InteractiveButton>
+            <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(featuredLandingSpot.id)} style={styles.heroHeartContainer}>
+              <Ionicons name={savedIds.includes(featuredLandingSpot.id) ? 'heart' : 'heart-outline'} size={19} color={savedIds.includes(featuredLandingSpot.id) ? colors.saved : '#FFFFFF'} style={styles.onPhotoHeartIcon} />
+            </TouchableOpacity>
           </View>
-        </InteractiveButton>
+        </Reveal>
 
-        {/* Hero */}
-        <View style={styles.heroCardContainer}>
-          <InteractiveButton onPress={() => openSection('trending')} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
-            <PhotoWithFallback uri={featuredLandingSpot?.image} placeName="Philippines" style={styles.heroCardImage} />
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']} style={styles.heroCardGradient} />
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroStatPill}>
-                <Text style={styles.heroStatPillText}>7,641 Islands to Explore</Text>
+        {/* Quick spontaneous day planner — the second beat, right after the
+            hero photo has made its impression, not before it. Flat
+            brand-colour fill, not a gradient — brandFill and brandFillDeep
+            were the same blue faded into a darker version of itself, i.e.
+            the "one saturated blue" Hard Rule wearing a gradient as a
+            costume.
+            This used to lead with a floating "1 MIN" tag above the
+            headline and end in a bare arrow-in-a-circle — the exact
+            templated shape a generic AI-generated promo banner defaults to.
+            Airbnb's equivalent (its "Become a host" banner) never floats a
+            tag: headline, one plain line of what it does, then a real
+            solid-white pill button — not a bare text+arrow, which still
+            read as a decoration rather than a control; a filled button is
+            what unambiguously says "tap me" on a colour-block card. The
+            icon medallion is back alongside it as the card's visual anchor —
+            same role the house icon plays on Airbnb's "Become a host" card —
+            now that the button itself, not the icon, is what says "tap me".
+            The pill shares its exact style (radius, colour, padding) with
+            the hero's "Explore now" pill above it, so the two don't read as
+            two different button languages sitting one scroll apart. */}
+        <Reveal delay={70}>
+          <InteractiveButton onPress={() => router.push('/day-plan')} style={styles.quickPlannerCard} activeScale={0.97}>
+            <View style={[styles.quickPlannerRow, { backgroundColor: colors.brandFill }]}>
+              <View style={styles.quickPlannerBody}>
+                <Text style={styles.quickPlannerTitle}>Build a same-day itinerary</Text>
+                <Text style={styles.quickPlannerSubtitle} numberOfLines={2}>
+                  Tell us where you're headed and we'll map out the day for you.
+                </Text>
+                <View style={styles.onColorPillButton}>
+                  <Text style={styles.onColorPillButtonText}>Plan it now</Text>
+                  <Ionicons name="arrow-forward" size={13} color="#0F172A" />
+                </View>
               </View>
-            </View>
-            <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitleText}>Best of the Philippines</Text>
-              <Text style={styles.heroSubtitleText}>Top curated picks across the islands</Text>
-              <View style={styles.heroCtaRow}>
-                <Text style={styles.heroCtaText}>Explore now</Text>
-                <Ionicons name="arrow-forward" size={13} color="#0F172A" />
+              <View style={styles.quickPlannerIconMedallion}>
+                <Ionicons name="compass" size={24} color="#FFFFFF" />
               </View>
             </View>
           </InteractiveButton>
-          <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(featuredLandingSpot.id)} style={styles.heroHeartContainer}>
-            <Ionicons name={savedIds.includes(featuredLandingSpot.id) ? 'heart' : 'heart-outline'} size={16} color={savedIds.includes(featuredLandingSpot.id) ? colors.saved : '#FFFFFF'} />
-          </TouchableOpacity>
-        </View>
+        </Reveal>
 
         {/* Recommended For You */}
-        <View style={styles.sectionBlock}>
+        <Reveal delay={140} style={styles.sectionBlock}>
           {renderSectionHeader('recommended', {
             titleOverride: userPrefs.length > 0 ? undefined : 'You Might Like',
             subtitleOverride: userPrefs.length > 0
@@ -1244,14 +1335,13 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weatherScrollContainer}>
-            {getFullSectionData('recommended').slice(0, 8).map(spot => renderHorizontalCard(spot))}
+            {getFullSectionData('recommended').slice(0, 8).map(spot => renderSpotCard(spot, { width: 168 }))}
           </ScrollView>
-        </View>
-
+        </Reveal>
 
         {/* Trending Across the Philippines — one featured pick + a 2x2 grid,
             not a sixth uniform row of the same card shape as Near You below. */}
-        <View style={styles.sectionBlock}>
+        <Reveal delay={210} style={styles.sectionBlock}>
           {renderSectionHeader('trending', { shown: 5 })}
           {(() => {
             const [featured, ...rest] = getFullSectionData('trending').slice(0, 5);
@@ -1260,15 +1350,15 @@ export default function HomeScreen() {
               <>
                 {renderFeaturedTrendingCard(featured)}
                 <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
-                  {rest.map(spot => renderGridCard(spot))}
+                  {rest.map(spot => renderSpotCard(spot))}
                 </View>
               </>
             );
           })()}
-        </View>
+        </Reveal>
 
         {/* Today's Vibe */}
-        <View style={styles.sectionBlock}>
+        <Reveal delay={280} style={styles.sectionBlock}>
           {renderSectionHeader('today', {
             rightBadge: (
               <View style={[styles.weatherPillBadge, { backgroundColor: colors.brandLight }]}>
@@ -1278,28 +1368,28 @@ export default function HomeScreen() {
             shown: 8,
           })}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.weatherScrollContainer, { marginTop: 12 }]}>
-            {todayWeather.spots.slice(0, 8).map(spot => renderHorizontalCard(spot, todayConditionIcon))}
+            {todayWeather.spots.slice(0, 8).map(spot => renderSpotCard(spot, { width: 168, conditionIcon: todayConditionIcon }))}
           </ScrollView>
-        </View>
+        </Reveal>
 
         {/* Local Events */}
         {localEvents.length > 0 && (
-          <View style={styles.sectionBlock}>
+          <Reveal delay={350} style={styles.sectionBlock}>
             {/* events keeps no See All: the section page renders spot cards, not events */}
             {renderSectionHeader('events', { hideSeeAll: true })}
             <View style={[styles.eventsListContainer, { marginTop: 12, backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               {localEvents.slice(0, 3).map((evt, i, arr) => renderEventCard(evt, i === arr.length - 1))}
             </View>
-          </View>
+          </Reveal>
         )}
 
         {/* Near You */}
-        <View style={[styles.sectionBlock, { marginBottom: 0 }]}>
+        <Reveal delay={420} style={[styles.sectionBlock, { marginBottom: 0 }]}>
           {renderSectionHeader('nearYou', { titleOverride: 'Best in your place', subtitleOverride: `Top-rated gems around ${locationName}`, shown: 4 })}
           <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
-            {getFullSectionData('nearYou').slice(0, 4).map(spot => renderGridCard(spot))}
+            {getFullSectionData('nearYou').slice(0, 4).map(spot => renderSpotCard(spot))}
           </View>
-        </View>
+        </Reveal>
       </ScrollView>
     </View>
   );
@@ -1337,8 +1427,25 @@ export default function HomeScreen() {
         >
           {/* Minimalist Header Row (Back Button + Title/Subtitle) */}
           <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity activeOpacity={0.8} onPress={goHome} style={{ marginRight: 16 }}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={goHome}
+              style={[
+                {
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  borderWidth: 1,
+                  borderColor: colors.cardBorder,
+                  backgroundColor: colors.card,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 14,
+                },
+                shadow(1, isDark),
+              ]}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={{ ...T.display, color: colors.text }}>{headerTitle}</Text>
@@ -1354,7 +1461,7 @@ export default function HomeScreen() {
               onPress={() => setAiModalVisible(true)}
               landed={isBirdLanded && !isOnboardingActive}
             />
-            <View style={[styles.searchBarWrapper, { flex: 1, backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={[styles.searchBarWrapper, { flex: 1, backgroundColor: colors.card }, shadow(1, isDark)]}>
               <Ionicons name="search" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
               <TextInput
                 value={sectionQuery}
@@ -1456,7 +1563,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <View style={styles.gemsGridContainer}>
-                  {results.map(spot => renderGridCard(spot))}
+                  {results.map(spot => renderSpotCard(spot))}
                 </View>
               )}
             </View>
@@ -1470,10 +1577,10 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={screen === 'section' ? ['left', 'right'] : ['top', 'left', 'right']}>
       {loading ? (
         <HomeSkeletonLoader colors={colors} />
-      ) : screen === 'home' ? (
-        renderHome()
       ) : (
-        renderSectionScreen()
+        <Animated.View style={{ flex: 1, opacity: screenFade, transform: [{ translateY: screenRise }] }}>
+          {screen === 'home' ? renderHome() : renderSectionScreen()}
+        </Animated.View>
       )}
 
       {/* ── DETAILED INFORMATION MODAL OVERLAY ── */}
@@ -1764,11 +1871,14 @@ const styles = StyleSheet.create({
   eyebrowText: { ...T.microStrong, letterSpacing: 1.4 },
   greetingTitle: T.largeTitle,
 
-  searchContainer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  searchContainer: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
+  // A pill that floats on the page rather than sits in a bordered box — shadow
+  // stands in for the border so the search field reads as the one elevated,
+  // tappable surface at the top of the screen instead of another outlined tile.
   searchBarWrapper: {
-    flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: space.lg,
+    flexDirection: 'row', alignItems: 'center', height: 52, borderRadius: radius.pill, paddingHorizontal: space.lg + 2,
   },
-  searchInputText: { flex: 1, ...T.body, height: '100%', padding: 0 },
+  searchInputText: { flex: 1, ...T.headline, height: '100%', padding: 0 },
   categoryChipsContainer: { paddingVertical: 6 },
   // alignItems: 'flex-start' stops the row's flex children (Chip, no fixed
   // height) from stretching to whatever cross-axis height the ScrollView
@@ -1777,14 +1887,32 @@ const styles = StyleSheet.create({
   categoryChipsScroll: { paddingHorizontal: 20, gap: 8, alignItems: 'flex-start' },
   scrollContent: { paddingBottom: 110 },
 
-  quickPlannerCard: { marginHorizontal: space.xl, marginBottom: space.xl, borderRadius: radius.xl, overflow: 'hidden' },
-  quickPlannerGradient: { padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  quickPlannerCard: { marginHorizontal: space.xl, marginTop: space.xl, marginBottom: space.xl, borderRadius: radius.xxl, overflow: 'hidden' },
+  quickPlannerRow: { padding: space.lg + 4, flexDirection: 'row', alignItems: 'center', gap: space.lg },
   quickPlannerBody: { flex: 1 },
-  quickPlannerTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: 3, marginBottom: space.sm },
-  quickPlannerTagText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.9 },
-  quickPlannerTitle: { color: '#FFFFFF', ...T.titleSm, letterSpacing: -0.2 },
-  quickPlannerSubtitle: { color: 'rgba(255,255,255,0.88)', ...T.footnote, lineHeight: 17, marginTop: 3 },
-  quickPlannerArrow: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+  quickPlannerTitle: { color: '#FFFFFF', ...T.titleSm, letterSpacing: -0.3 },
+  quickPlannerSubtitle: { color: 'rgba(255,255,255,0.85)', ...T.footnote, lineHeight: 17, marginTop: 4 },
+  // One real icon as the card's visual anchor, sized to read as an
+  // illustration rather than a UI control — the same role the house icon
+  // plays on Airbnb's "Become a host" banner.
+  quickPlannerIconMedallion: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  // A real filled pill button, not text-with-an-arrow — on a solid colour
+  // card, a plain text link still reads as a caption, not a control. Shared
+  // by every "call to action on a photo/colour surface" on this screen (this
+  // card and the hero's "Explore now") so they're provably the same button,
+  // not two similar-looking ones with different radii/colours sitting one
+  // scroll apart.
+  onColorPillButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF', borderRadius: radius.pill,
+    paddingHorizontal: space.md + 2, paddingVertical: space.sm, marginTop: space.md,
+  },
+  // Fixed near-black, not colors.brand — this pill sits on the brand-colour
+  // card/photo itself, so brand-coloured text on it read as low-contrast and
+  // slightly redundant. Baked into the shared style (not passed inline per
+  // call site) so every "Explore now"/"Plan it now" pill is provably the
+  // same colour, not just coincidentally matching today.
+  onColorPillButtonText: { ...T.emphasis, color: '#0F172A' },
 
   sectionBlock: { marginTop: space.xxl },
   sectionHeader: { marginBottom: space.md },
@@ -1797,37 +1925,43 @@ const styles = StyleSheet.create({
   inlineLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: space.xl, marginTop: space.sm, marginBottom: space.md },
   inlineLinkText: { ...T.label },
 
+  // Split in two: the outer wrap carries the shadow (shadow and
+  // overflow:'hidden' can't live on the same view — the clip would cut the
+  // shadow off too), the inner one clips the photo/gradient/text to the
+  // rounded corners.
+  heroCardShadowWrap: { marginHorizontal: space.xl, height: 210, borderRadius: radius.xxl },
   heroCardContainer: {
-    marginHorizontal: space.xl, height: 200, borderRadius: radius.xl, overflow: 'hidden', position: 'relative',
+    flex: 1, borderRadius: radius.xxl, overflow: 'hidden', position: 'relative',
   },
   heroCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   heroCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '85%' },
-  heroHeartContainer: { position: 'absolute', top: 14, right: 14, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center', padding: 6 },
+  // A plain white chip, not a dark scrim badge — the whole point of moving
+  // every other rating/heart mark off the photo onto white was to stop the
+  // screen switching between two visual languages; the hero keeps its
+  // full-bleed photo (it's the one deliberate editorial moment) but borrows
+  // the same clean-white vocabulary for what sits on top of it.
+  // Same bare-heart-with-shadow treatment as every other card on the screen —
+  // no white chip. One heart, one rule, everywhere, instead of a chip on the
+  // big photos and a plain icon on the small ones.
+  heroHeartContainer: { position: 'absolute', top: 16, right: 16, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   heroTopRow: { position: 'absolute', top: 14, left: 14, right: 60 },
-  heroStatPill: { alignSelf: 'flex-start', backgroundColor: 'rgba(0,0,0,0.42)', borderRadius: radius.sm, paddingHorizontal: space.sm + 2, paddingVertical: 5 },
-  heroStatPillText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.2 },
+  heroStatPill: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 6, ...shadow(1) },
+  heroStatPillText: { color: '#0F172A', ...T.microStrong, letterSpacing: 0.2 },
   heroTextContainer: { position: 'absolute', bottom: 18, left: 18, right: 18 },
   heroTitleText: { color: '#FFFFFF', ...T.display },
   heroSubtitleText: { color: '#E0E7FF', ...T.label, marginTop: 2 },
-  heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, backgroundColor: '#FFFFFF', alignSelf: 'flex-start', borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm - 1, marginTop: space.md },
-  heroCtaText: { ...T.label, color: '#0F172A' },
-
-  categoryTilesScroll: { paddingHorizontal: 20, gap: 12, paddingBottom: 4 },
-  categoryTileCard: { width: 150, height: 170, borderRadius: 20, padding: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 8, elevation: 1 },
-  categoryTileImage: { width: '100%', height: 85, borderRadius: 16, resizeMode: 'cover' },
-  categoryTileTextContainer: { marginTop: 8, paddingHorizontal: 4 },
-  categoryTileLabel: { ...T.emphasis },
-  categoryTileSub: { ...T.micro, marginTop: 2, lineHeight: 12 },
 
   // The "Trending" featured card — same big-photo language as the hero above,
   // scaled down, so this section reads as a second editorial moment rather
-  // than a third repetition of the small grid card.
-  trendingFeaturedContainer: { marginHorizontal: space.xl, height: 190, borderRadius: radius.xl, overflow: 'hidden', position: 'relative' },
+  // than a third repetition of the small grid card. Same shadow-wrap/clip
+  // split as the hero, for the same reason.
+  trendingFeaturedShadowWrap: { marginHorizontal: space.xl, height: 190, borderRadius: radius.xxl },
+  trendingFeaturedContainer: { flex: 1, borderRadius: radius.xxl, overflow: 'hidden', position: 'relative' },
   trendingFeaturedImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   trendingFeaturedGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '75%' },
-  trendingFeaturedBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: radius.sm, paddingHorizontal: space.sm + 2, paddingVertical: 5 },
-  trendingFeaturedBadgeText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.2 },
-  trendingFeaturedHeart: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  trendingFeaturedBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFFFFF', borderRadius: radius.pill, paddingHorizontal: space.sm + 2, paddingVertical: 5, ...shadow(1) },
+  trendingFeaturedBadgeText: { ...T.microStrong, letterSpacing: 0.2 },
+  trendingFeaturedHeart: { position: 'absolute', top: 12, right: 12, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   trendingFeaturedTextWrap: { position: 'absolute', left: 16, right: 16, bottom: 14 },
   trendingFeaturedTitle: { color: '#FFFFFF', ...T.title },
   // Rating and place sit in their own row with a gap, not joined by a
@@ -1837,15 +1971,37 @@ const styles = StyleSheet.create({
   trendingFeaturedRatingText: { color: '#FFFFFF', ...T.microStrong },
   trendingFeaturedSub: { color: '#E5E7EB', ...T.label, flexShrink: 1 },
 
-  gemsGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12 },
-  gemCard: { height: 175, borderRadius: 20, overflow: 'hidden', position: 'relative', marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
-  gemHeartBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center', padding: 4, zIndex: 10 },
-  gemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  ratingBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, zIndex: 10 },
-  ratingBadgeText: { color: '#FFFFFF', ...T.microStrong },
-  gemTextContainer: { paddingHorizontal: 12, paddingVertical: 10, flex: 1, justifyContent: 'center' },
-  gemTitle: { ...T.label },
-  gemSubText: { ...T.micro, marginTop: 1 },
+  gemsGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 16, rowGap: 22 },
+
+  // The one card anatomy used for every spot photo tile on this screen —
+  // grid or horizontal scroll, "Recommended" or "Near You" — so the screen
+  // reads as one system instead of a different card shape per section.
+  // Only the image is a bounded, rounded, shadowed surface; the title,
+  // rating and place sit directly on the page background beneath it, the
+  // way a listing card's info block never gets its own outline.
+  // No overflow:'hidden' here on purpose — that would clip the shadow
+  // applied at the call site along with this style. Image clips its own
+  // corners to spotCardImage's borderRadius natively, so nothing needs a
+  // clipping parent; the wrapper is free to carry the shadow instead. A
+  // soft lift under every photo (Airbnb's own cards carry one, however
+  // faint) is what was missing — every card on this screen was completely
+  // flat before, relying on corner radius alone.
+  spotCardImageWrap: { width: '100%', aspectRatio: 1.05, borderRadius: radius.lg },
+  spotCardImage: { width: '100%', height: '100%', resizeMode: 'cover', borderRadius: radius.lg },
+  spotCardConditionBadge: { position: 'absolute', top: 10, left: 10, width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', ...shadow(1) },
+  // One heart, everywhere on this screen: a bare icon, no chip behind it —
+  // on this small card, on the hero, and on the trending-featured photo
+  // alike. A white circle chip here and a plain icon there was the exact
+  // inconsistency this whole pass exists to remove. A shadow directly on the
+  // icon (onPhotoHeartIcon, not a background) is what keeps a plain white
+  // heart legible on any photo without reintroducing a visible backdrop.
+  spotCardHeart: { position: 'absolute', top: 10, right: 10, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  onPhotoHeartIcon: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  spotCardInfoRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.sm, marginTop: space.sm },
+  spotCardTitle: { ...T.headline, flex: 1 },
+  spotCardRating: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  spotCardRatingText: { ...T.footnote },
+  spotCardSubtitle: { ...T.subhead, marginTop: 1 },
 
   backButtonContainer: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   backButtonText: { ...T.emphasis },
@@ -1864,15 +2020,6 @@ const styles = StyleSheet.create({
 
   sectionResultsHeaderRow: { paddingHorizontal: 20, marginTop: 6, marginBottom: 4 },
   resultsCountText: { ...T.label },
-  sortChipsScroll: { paddingHorizontal: 20, gap: 8, paddingBottom: 14 },
-  sortChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1 },
-  sortChipText: { ...T.overline },
-
-  suggestionsWrap: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 },
-  suggestionsLabel: { ...T.microStrong, letterSpacing: 1, marginBottom: 8 },
-  suggestionsChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  suggestionChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  suggestionChipText: { ...T.label },
 
   // One shared border + radius for the whole list; rows divide with a
   // hairline (set inline, per-row) instead of each carrying its own card.
@@ -1920,15 +2067,5 @@ const styles = StyleSheet.create({
   weatherTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   weatherPillBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   weatherPillText: { ...T.microStrong },
-  weatherScrollContainer: { paddingHorizontal: 20, gap: 12, paddingBottom: 4, alignItems: 'flex-start' },
-  weatherCard: { width: 160, height: 110, borderRadius: 20, overflow: 'hidden', position: 'relative', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 6, elevation: 1 },
-  weatherCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  weatherCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },
-  weatherHeartBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 12, padding: 4, zIndex: 10 },
-  weatherConditionBadge: { position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  weatherRatingBadge: { position: 'absolute', top: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 10, zIndex: 10 },
-  weatherRatingBadgeText: { color: '#FFFFFF', ...T.micro },
-  weatherTextContainer: { position: 'absolute', bottom: 10, left: 10, right: 10 },
-  weatherCardTitle: { color: '#FFFFFF', ...T.label },
-  weatherCardSub: { color: '#E5E7EB', ...T.micro, marginTop: 1 },
+  weatherScrollContainer: { paddingHorizontal: 20, gap: 16, paddingBottom: 4, alignItems: 'flex-start' },
 });

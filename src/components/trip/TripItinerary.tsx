@@ -106,13 +106,13 @@ export default function TripItinerary({
   const [copilotModalVisible, setCopilotModalVisible] = useState(false);
   const [copilotTab, setCopilotTab] = useState<'day' | 'ai' | 'warnings'>('day');
   const [isAiLoading, setIsAiLoading] = useState(false);
-  
+
   // Day selection and destinations
   const [activeDay, setActiveDay] = useState<number>(0);
   const [dayDestinations, setDayDestinations] = useState<string[]>([]);
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
   const [naturalQuery, setNaturalQuery] = useState<string>('');
-  
+
   // Suggested places
   const [aiSuggestions, setAiSuggestions] = useState<InteractiveSuggestedStop[]>([]);
   const [rejectedSuggestions, setRejectedSuggestions] = useState<string[]>([]);
@@ -261,7 +261,7 @@ export default function TripItinerary({
     const evalWarnings = () => {
       const list: WarningItem[] = [];
       const itinerary = trip.itinerary || [];
-      
+
       const dayCounts: Record<number, number> = {};
       itinerary.forEach((item: any) => {
         dayCounts[item.dayIndex] = (dayCounts[item.dayIndex] || 0) + 1;
@@ -344,7 +344,7 @@ export default function TripItinerary({
               id: `too_far_${current.id}_${next.id}`,
               type: 'too_far_apart',
               title: 'Distant Locations',
-              message: `"${current.title}" and "${next.title}" are far apart. Travel takes over ${Math.round(travelTime/60)} hours.${distancePhrase} Consider choosing a closer activity or moving one to another day.`,
+              message: `"${current.title}" and "${next.title}" are far apart. Travel takes over ${Math.round(travelTime / 60)} hours.${distancePhrase} Consider choosing a closer activity or moving one to another day.`,
               itemId: current.id,
               itemId2: next.id,
               dayIndex: dayIdx,
@@ -565,10 +565,10 @@ export default function TripItinerary({
 
   const handleAddStopFromAi = async (s: InteractiveSuggestedStop) => {
     const cleanTitle = s.title.trim();
-    const isDup = (trip.itinerary || []).some((item: any) => 
-      item.dayIndex === activeDay && 
+    const isDup = (trip.itinerary || []).some((item: any) =>
+      item.dayIndex === activeDay &&
       (item.title.toLowerCase() === cleanTitle.toLowerCase() ||
-       (cleanTitle.toLowerCase().includes('lunch') && item.title.toLowerCase().includes('lunch')))
+        (cleanTitle.toLowerCase().includes('lunch') && item.title.toLowerCase().includes('lunch')))
     );
 
     if (isDup) {
@@ -634,7 +634,7 @@ export default function TripItinerary({
         const dayStops = (trip.itinerary || [])
           .filter((i: any) => i.dayIndex === warning.dayIndex)
           .sort((a: any, b: any) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
-        
+
         let curMin = 8.5 * 60;
         for (let stop of dayStops) {
           const timeStr = formatMinToTime(curMin);
@@ -790,7 +790,7 @@ export default function TripItinerary({
       return `Which vibes should we prioritize for ${dest} on Day ${activeDay + 1}? I'll find nearby spots and match them with ideal time brackets.`;
     }
     const count = warnings.filter(w => !acknowledgedWarnings.includes(w.id)).length;
-    return count === 0 
+    return count === 0
       ? `Agilito schedule analysis complete: No overlaps or transit conflicts detected on Day ${activeDay + 1}.`
       : `I detected ${count} warning markers. Select fix parameters below to let me automatically align the durations.`;
   };
@@ -1019,7 +1019,7 @@ export default function TripItinerary({
       <Modal visible={copilotModalVisible} transparent animationType="none" onRequestClose={handleCloseCopilot}>
         {/* Dim backdrop overlay */}
         <Pressable style={styles.sheetBackdrop} onPress={handleCloseCopilot} />
-        
+
         {/* Sliding Bottom Sheet */}
         <Animated.View
           style={[
@@ -1103,7 +1103,7 @@ export default function TripItinerary({
                       placeholderTextColor={colors.textMuted}
                       style={[styles.sheetInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface }]}
                     />
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.sheetActionBtn, { backgroundColor: colors.brand }]}
                       onPress={() => handleConfirmDestination(dayDestinations[activeDay] || '')}
                     >
@@ -1273,7 +1273,7 @@ export default function TripItinerary({
                     style={[styles.sheetInput, { color: colors.text, borderColor: colors.cardBorder, backgroundColor: colors.surface, marginBottom: 18 }]}
                   />
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.sheetLargeBtn, { backgroundColor: colors.brand, width: '100%', marginBottom: 16 }]}
                     onPress={handleFetchSuggestions}
                   >
@@ -1350,19 +1350,19 @@ export default function TripItinerary({
 
                                 {/* Card Footer Actions */}
                                 <View style={styles.iosCardActionRow}>
-                                  <TouchableOpacity 
+                                  <TouchableOpacity
                                     style={[styles.iosRoundActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.85)' }]}
                                     onPress={() => handleRejectStop(place.title)}
                                   >
                                     <Ionicons name="close" size={12} color="#FFFFFF" />
                                   </TouchableOpacity>
-                                  <TouchableOpacity 
+                                  <TouchableOpacity
                                     style={[styles.iosRoundActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}
                                     onPress={() => handleCreatePollForStop(place)}
                                   >
                                     <Ionicons name="checkbox-outline" size={12} color="#FFFFFF" />
                                   </TouchableOpacity>
-                                  <TouchableOpacity 
+                                  <TouchableOpacity
                                     style={[styles.iosAddActionBtn, { backgroundColor: colors.brand }]}
                                     onPress={() => handleAddStopFromAi(place)}
                                   >
@@ -1413,21 +1413,21 @@ export default function TripItinerary({
                             </View>
                           </View>
                           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               style={[styles.sheetWarnMiniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
                               onPress={() => handleResolveWarning(warn, 'ignore')}
                             >
                               <Text style={[T.microStrong, { color: colors.textSecondary }]}>Keep</Text>
                             </TouchableOpacity>
                             {warn.type === 'duplicate' ? (
-                              <TouchableOpacity 
+                              <TouchableOpacity
                                 style={[styles.sheetWarnMiniBtn, { backgroundColor: sc.destructive }]}
                                 onPress={() => handleResolveWarning(warn, 'delete')}
                               >
                                 <Text style={[T.microStrong, { color: '#FFFFFF' }]}>Delete One</Text>
                               </TouchableOpacity>
                             ) : (
-                              <TouchableOpacity 
+                              <TouchableOpacity
                                 style={[styles.sheetWarnMiniBtn, { backgroundColor: colors.brand }]}
                                 onPress={() => handleResolveWarning(warn, 'fix')}
                               >
@@ -1860,7 +1860,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderLeftWidth: 4,
-    
+
     marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
