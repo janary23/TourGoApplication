@@ -188,9 +188,9 @@ export default function TripScrapbookView({
 
   const handleDeleteTrip = () => {
     confirmAction({
-      title: 'Delete Scrapbook Memory',
+      title: 'Delete scrapbook memory?',
       message: `Are you sure you want to permanently delete "${trip.title}"? This will remove all memories and records.`,
-      confirmLabel: 'Delete Permanently',
+      confirmLabel: 'Delete permanently',
       destructive: true,
     }).then(async (ok) => {
       if (!ok) return;

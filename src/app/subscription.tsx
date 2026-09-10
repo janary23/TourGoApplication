@@ -25,6 +25,10 @@ function formatDate(value?: string | null): string | null {
   return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -85,7 +89,7 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={[styles.statusPill, { backgroundColor: colors.successSurface }]}>
                   <Text style={{ ...T.microStrong, color: colors.success }}>
-                    {(sub?.status ?? 'active').toUpperCase()}
+                    {capitalize(sub?.status ?? 'active')}
                   </Text>
                 </View>
               </View>
@@ -111,7 +115,7 @@ export default function SubscriptionScreen() {
             </View>
 
             {/* ── Plan comparison ── */}
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PLANS</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Plans</Text>
 
             {PLANS.map((plan) => {
               const isCurrent = plan.id === sub?.planId;
@@ -139,7 +143,7 @@ export default function SubscriptionScreen() {
                     {isCurrent && (
                       <View style={[styles.statusPill, { backgroundColor: colors.brandLight }]}>
                         <Text style={{ ...T.microStrong, color: colors.brand }}>
-                          CURRENT
+                          Current
                         </Text>
                       </View>
                     )}
@@ -223,7 +227,6 @@ const styles = StyleSheet.create({
   detailValue: { ...T.label },
   sectionLabel: {
     ...T.overline,
-    letterSpacing: 0.8,
     marginTop: 10,
     marginBottom: 10,
   },

@@ -137,7 +137,7 @@ export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
             ]}
           >
             <Text style={styles.doneTxt}>
-              {selected.length === 0 ? 'Skip' : 'Show My Picks'}
+              {selected.length === 0 ? 'Skip' : 'Show my picks'}
             </Text>
             <Ionicons
               name={selected.length === 0 ? 'arrow-forward' : 'sparkles'}

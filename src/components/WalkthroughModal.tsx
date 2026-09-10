@@ -122,7 +122,6 @@ function ConfettiParticle({ colors }: { colors: any }) {
 }
 
 export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Props) {
-  const { isDark } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -612,7 +611,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                     <Ionicons name="checkmark" size={18} color="#FFFFFF" />
                   </Animated.View>
                   <Animated.Text style={[styles.successTitle, { color: '#FFFFFF', opacity: finalePop }]}>
-                    You're All Set!
+                    You're all set
                   </Animated.Text>
                 </View>
 
@@ -625,7 +624,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                   onPress={startFlyHome}
                   style={[styles.doneBtn, { backgroundColor: colors.brand, width: '80%', marginTop: 30 }]}
                 >
-                  <Text style={styles.doneTxt}>Let's Go!</Text>
+                  <Text style={styles.doneTxt}>Let's go</Text>
                 </TouchableOpacity>
               </Animated.View>
 
@@ -736,7 +735,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                       {
                         backgroundColor: idx <= currentStep
                           ? colors.brand
-                          : (isDark ? '#2C2C2E' : '#E5E5EA'),
+                          : (currentStep < 4 ? colors.cardBorder : 'rgba(255,255,255,0.3)'),
                       }
                     ]}
                   />
@@ -745,7 +744,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
 
               <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
                 <Text style={[styles.skipTxt, { color: currentStep < 4 ? colors.textMuted : 'rgba(255,255,255,0.7)' }]}>
-                  {currentStep < 3 ? 'Skip Intro' : currentStep === 3 ? 'Skip' : 'Skip Tour'}
+                  {currentStep < 3 ? 'Skip intro' : currentStep === 3 ? 'Skip' : 'Skip tour'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -771,7 +770,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                 /* ══════════════ STEP 1: Everything Inside a Trip ══════════════ */
                 <Animated.View style={[styles.stepEnter, { opacity: contentOpacity, transform: [{ translateY: contentSlide }] }]}>
                   <ScrollView contentContainerStyle={styles.introScrollContent} showsVerticalScrollIndicator={false}>
-                    <Text style={[styles.prefTitle, { color: colors.text }]}>Everything Inside a Trip</Text>
+                    <Text style={[styles.prefTitle, { color: colors.text }]}>Everything inside a trip</Text>
                     <Text style={[styles.prefSubtitle, { color: colors.textSecondary }]}>
                       Itineraries, checklists, polls, bills & more — all in one place.
                     </Text>
@@ -787,8 +786,8 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                             { opacity: rowStagger(idx, TRIP_FEATURES.length).opacity, transform: [{ translateY: rowStagger(idx, TRIP_FEATURES.length).translateY }] },
                           ]}
                         >
-                          <View style={[styles.pagesIconBox, { backgroundColor: colors.brandLight }]}>
-                            <Ionicons name={feature.icon as any} size={19} color={colors.brand} />
+                          <View style={styles.pagesIconBox}>
+                            <Ionicons name={feature.icon as any} size={21} color={colors.brand} />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.pagesRowTitle, { color: colors.text }]}>{feature.title}</Text>
@@ -1073,8 +1072,6 @@ const styles = StyleSheet.create({
   },
   pagesIconBox: {
     width: 40,
-    height: 40,
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -37,7 +37,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'Trolltunga',
     location: 'Sunnmøre, Norway',
     rating: 5.0,
-    reviews: '15k review',
+    reviews: '15k reviews',
     image: 'https://images.unsplash.com/photo-1527004013197-933c4bb611b3?auto=format&fit=crop&w=800&q=80',
     description: 'Trolltunga is a rock formation situated about 1,100 metres (3,600 ft) above sea level in Ullensvang Municipality in Vestland county, Norway. The cliff juts out horizontally from the mountain, about 700 metres (2,300 ft) above the north side of the lake Ringedalsvatnet.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -47,7 +47,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'Geirangerfjord',
     location: 'Sunnmøre, Norway',
     rating: 4.8,
-    reviews: '12k review',
+    reviews: '12k reviews',
     image: 'https://images.unsplash.com/photo-1601439678777-b2b3c56fa627?auto=format&fit=crop&w=800&q=80',
     description: 'Geirangerfjorden is located entirely in the Strand Municipality. It is a 15-kilometre-long (9.5 mi) branch off the Sunnylvsfjorden, which is a branch off the Storfjorden (Great Fjord). This majestic fjord is one of Norway’s most visited tourist sites.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -57,7 +57,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'El Nido Lagoon',
     location: 'El Nido, Palawan',
     rating: 4.9,
-    reviews: '9.4k review',
+    reviews: '9.4k reviews',
     image: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=800&q=80',
     description: 'El Nido is known for its white-sand beaches, coral reefs, limestone cliffs and as the gateway to the Bacuit Archipelago. This tropical paradise offers clear turquoise waters and secret lagoons surrounded by towering prehistoric rocks.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -67,7 +67,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'Siargao Islands',
     location: 'General Luna, Siargao',
     rating: 4.8,
-    reviews: '8.2k review',
+    reviews: '8.2k reviews',
     image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
     description: 'Siargao is a tear-drop shaped island in the Philippine Sea situated 196 kilometers southeast of Tacloban. It is well-known as the surfing capital of the Philippines, featuring legendary reef breaks like Cloud 9 and pristine coconut-filled forests.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -77,7 +77,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'Baguio Pine Forest',
     location: 'Baguio City, Benguet',
     rating: 4.5,
-    reviews: '5.1k review',
+    reviews: '5.1k reviews',
     image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
     description: 'Baguio, officially the City of Baguio, is a highly urbanized mountain city in the Cordillera Administrative Region of the Philippines. Known as the Summer Capital of the Philippines, it is celebrated for its cool climate, pine forests, and vibrant local arts scene.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -87,7 +87,7 @@ const DESTINATION_DATA: Record<string, DestinationDetails> = {
     title: 'San Juan Surf Town',
     location: 'San Juan, La Union',
     rating: 4.7,
-    reviews: '3.6k review',
+    reviews: '3.6k reviews',
     image: 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?auto=format&fit=crop&w=800&q=80',
     description: 'La Union is a province in the Philippines located in the Ilocos Region in Luzon. Its capital town San Juan is the surfing hub of Northern Luzon, offering great waves, cozy beachfront coffee shops, and beautiful golden sunsets.',
     mapImage: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=400&q=80',
@@ -124,9 +124,9 @@ export default function DestinationDetailScreen() {
 
   const handleStartJourney = () => {
     confirmAction({
-        title: 'Start Journey',
+        title: 'Start journey?',
         message: `Would you like to start planning a trip to ${dest.title}?`,
-        confirmLabel: 'Yes, Plan now!',
+        confirmLabel: 'Plan now',
       }).then((ok) => {
         if (!ok) return;
         router.push('/trip/create');
@@ -144,10 +144,12 @@ export default function DestinationDetailScreen() {
         <View style={styles.imageContainer}>
           <Image source={{ uri: dest.image }} style={styles.headerImage} />
           {/* Custom Back Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.back()} 
+            onPress={() => router.back()}
             style={[styles.backButton, { backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
           >
             <Ionicons name="chevron-back" size={22} color="#1A1D24" />
           </TouchableOpacity>
@@ -182,7 +184,7 @@ export default function DestinationDetailScreen() {
           </Text>
 
           {/* Preview Map Section */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Location Map</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Location map</Text>
           <View style={[styles.mapContainer, { borderColor: colors.cardBorder }]}>
             <Image source={{ uri: dest.mapImage }} style={styles.mapImage} />
             <View style={[styles.mapOverlay, { backgroundColor: 'rgba(240, 240, 240, 0.1)' }]} />
@@ -204,7 +206,7 @@ export default function DestinationDetailScreen() {
           <Text style={styles.journeyButtonText}>Start journey</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleToggleSave}
           style={[styles.bookmarkButton, {
@@ -212,6 +214,8 @@ export default function DestinationDetailScreen() {
             backgroundColor: isSaved ? colors.brandLight : colors.card,
             borderWidth: hairline,
           }]}
+          accessibilityRole="button"
+          accessibilityLabel={isSaved ? 'Remove from wishlist' : 'Add to wishlist'}
         >
           <Ionicons 
             name={isSaved ? 'bookmark' : 'bookmark-outline'} 

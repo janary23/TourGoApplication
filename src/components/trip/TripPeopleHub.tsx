@@ -78,10 +78,10 @@ export default function TripPeopleHub({
     const message =
       me?.role === 'organizer' && otherOrganizers.length === 0 && others.length > 0
         ? `You are the only organizer. Leaving will promote all remaining members to organizers.`
-        : 'You will lose access to this trip workspace.';
+        : 'You will lose access to this trip.';
 
     confirm(
-      'Leave Trip?',
+      'Leave trip?',
       message,
       async () => {
         setIsLeaving(true);
@@ -98,14 +98,14 @@ export default function TripPeopleHub({
           notify(err?.message || 'Something went wrong', 'error');
         }
       },
-      'Leave Trip',
+      'Leave trip',
       true
     );
   };
 
   const handleRemove = (member: any) => {
     confirm(
-      'Remove Member?',
+      'Remove member?',
       `${member.name} will lose access to this trip.`,
       async () => {
         const { error } = await dbKickMember(trip.id, member.userId);
@@ -119,14 +119,14 @@ export default function TripPeopleHub({
 
   const handlePromote = (member: any) => {
     confirm(
-      'Make Organizer?',
+      'Make organizer?',
       `${member.name} will be able to manage this trip.`,
       async () => {
         const { error } = await dbUpdateMemberRole(trip.id, member.userId, 'organizer');
         if (error) notify(error, 'error');
         else loadTrip();
       },
-      'Make Organizer',
+      'Make organizer',
       false
     );
   };

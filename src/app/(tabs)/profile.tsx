@@ -63,9 +63,9 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     confirmAction({
-      title: 'Log Out',
+      title: 'Log out?',
       message: 'Are you sure you want to log out?',
-      confirmLabel: 'Log Out',
+      confirmLabel: 'Log out',
       destructive: true,
     }).then(async (ok) => {
       if (!ok) return;

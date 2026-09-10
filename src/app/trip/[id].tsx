@@ -174,7 +174,7 @@ export default function TripHomeScreen() {
 
   const handleDeleteTrip = () => {
     confirmAction({
-        title: 'Delete Trip',
+        title: 'Delete trip?',
         message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
         confirmLabel: 'Delete',
         destructive: true,
