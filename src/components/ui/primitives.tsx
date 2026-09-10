@@ -353,8 +353,12 @@ export function ListRow({
   const content = (
     <View style={styles.row}>
       {leading ?? (icon ? (
-        <View style={[styles.rowIcon, { backgroundColor: colors.surface }]}>
-          <Ionicons name={icon} size={16} color={destructive ? sc.destructive : colors.textSecondary} />
+        // Sits directly on the surface — no tinted square. A pale icon tile
+        // repeated on every row is decoration, not information (Direction A
+        // Hard Rule); MASTER.md already specified this, this just makes the
+        // implementation match it.
+        <View style={styles.rowIcon}>
+          <Ionicons name={icon} size={19} color={destructive ? sc.destructive : colors.textSecondary} />
         </View>
       ) : null)}
 

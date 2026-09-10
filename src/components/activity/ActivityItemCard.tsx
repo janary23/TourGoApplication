@@ -42,8 +42,8 @@ export default function ActivityItemCard({
       style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
     >
       <View style={styles.rowLayout}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-          <Ionicons name={icon.name as any} size={15} color={icon.color} />
+        <View style={styles.iconContainer}>
+          <Ionicons name={icon.name as any} size={19} color={icon.color} />
         </View>
         <View style={styles.contentContainer}>
           <View style={styles.metaRow}>
@@ -114,7 +114,6 @@ const styles = StyleSheet.create({
   },
   tripLabel: {
     ...T.microStrong,
-    textTransform: 'uppercase',
   },
   timeLabel: {
     ...T.micro,

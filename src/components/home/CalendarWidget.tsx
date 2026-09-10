@@ -239,7 +239,7 @@ export default function CalendarWidget({
             if (!activeTrip) return null;
             const label = activeTrip.isStart && activeTrip.isEnd
               ? activeTrip.dest
-              : `${activeTrip.dest} · day ${activeTrip.dayNum} of ${activeTrip.totalDays}`;
+              : `${activeTrip.dest}, day ${activeTrip.dayNum} of ${activeTrip.totalDays}`;
             return (
               <View style={[styles.miniRangeCaption, { backgroundColor: colors.brandLight }]}>
                 <Ionicons name="calendar" size={11} color={colors.brand} />

@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, RefreshControl, ActivityIndicator, Animated, Platform } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, RefreshControl, Animated, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card } from '../../components/ui/Card';
 import { useTheme } from '../../context/ThemeContext';
 import { getTrips } from '../../services/tripService';
 import { supabase } from '../../services/supabase';
 import ActivityItemCard from '../../components/activity/ActivityItemCard';
-import { EmptyState } from '../../components/ui/primitives';
+import { EmptyState, Chip } from '../../components/ui/primitives';
 import { space, radius, type as T } from '../../components/ui/tokens';
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
@@ -476,7 +474,23 @@ export default function ActivityScreen() {
 
   const getActivityIcon = (item: FeedItem) => {
     if (item.type === 'announcement') {
+      // Itinerary changes, document uploads, and member join/check-in events
+      // are all folded into the 'announcement' type so they share the
+      // "Announce" filter bucket — but that made every one of them render
+      // with the announcement megaphone icon regardless of what actually
+      // happened, including itinerary items (the audit's "a megaphone is
+      // used for itinerary items" bug). Match on the title each of those
+      // paths already sets, same as the leadership/left/joined cases below.
       const lowerTitle = (item.title || '').toLowerCase();
+      if (lowerTitle.includes('itinerary')) {
+        return { name: 'calendar', color: colors.brand };
+      }
+      if (lowerTitle.includes('document')) {
+        return { name: 'folder', color: colors.brand };
+      }
+      if (lowerTitle.includes('checked in')) {
+        return { name: 'checkmark-circle', color: colors.success };
+      }
       if (lowerTitle.includes('leadership') || lowerTitle.includes('handover') || lowerTitle.includes('promoted')) {
         return { name: 'ribbon', color: colors.warning };
       }
@@ -525,27 +539,17 @@ export default function ActivityScreen() {
             </Text>
           </View>
 
-          {/* Horizontal Scroll Filter Chips (Capsules) */}
+          {/* Filter chips */}
           <View style={styles.categoryChipsContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
-              {FILTERS.map(f => {
-                    const active = activeFilter === f.key;
-                    return (
-                      <TouchableOpacity
-                        key={f.key}
-                        activeOpacity={0.8}
-                        onPress={() => setActiveFilter(f.key)}
-                        style={[
-                              styles.categoryChip,
-                              active ? { backgroundColor: colors.brand } : { backgroundColor: colors.cardBorder }
-                        ]}
-                      >
-                        <Text style={[styles.categoryChipText, active ? { color: '#FFFFFF' } : { color: colors.textSecondary }]}>
-                              {f.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-              })}
+              {FILTERS.map(f => (
+                <Chip
+                  key={f.key}
+                  label={f.label}
+                  selected={activeFilter === f.key}
+                  onPress={() => setActiveFilter(f.key)}
+                />
+              ))}
             </ScrollView>
           </View>
 
@@ -614,19 +618,7 @@ const styles = StyleSheet.create({
   categoryChipsScroll: {
     paddingHorizontal: 20,
     gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  categoryChipText: {
-    ...T.caption,
+    alignItems: 'flex-start',
   },
   scrollContent: { padding: 20, paddingBottom: 110 },
-  subtitle: {
-    ...T.label,
-    marginBottom: 20,
-    paddingHorizontal: 2,
-  },
 });

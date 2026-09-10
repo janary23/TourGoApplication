@@ -243,8 +243,8 @@ export default function TripScrapbookView({
 
             {/* Quick Status Tag */}
             <View style={styles.heroStatusPill}>
-              <Ionicons name="checkmark-done-circle" size={13} color="#10B981" />
-              <Text style={styles.heroStatusText}>COMPLETED</Text>
+              <Ionicons name="checkmark-done-circle" size={13} color="#4ADE80" />
+              <Text style={styles.heroStatusText}>Completed</Text>
             </View>
 
             {/* Hero Title & Info */}
@@ -253,7 +253,7 @@ export default function TripScrapbookView({
                 <View style={styles.destPillRow}>
                   <Ionicons name="location-sharp" size={12} color="#FFD700" />
                   <Text style={styles.heroDestination} numberOfLines={1}>
-                    {trip.destination.toUpperCase()}
+                    {trip.destination}
                   </Text>
                 </View>
               )}
@@ -261,7 +261,7 @@ export default function TripScrapbookView({
                 {trip.title}
               </Text>
               <Text style={styles.heroDateRange}>
-                {formatRange(trip.startDate, trip.endDate)} · {totalDays} {totalDays === 1 ? 'Day' : 'Days'}
+                {formatRange(trip.startDate, trip.endDate)} ({totalDays} {totalDays === 1 ? 'day' : 'days'})
               </Text>
             </View>
           </View>
@@ -280,35 +280,44 @@ export default function TripScrapbookView({
         </TouchableOpacity>
       </View>
 
-      {/* ═══ 3. JOURNEY MILESTONES STATS ═══ */}
+      {/* ═══ 3. JOURNEY MILESTONES STATS ═══
+          One icon treatment for all four, not a different rainbow tint per
+          stat (a named Hard Rule) — colour here would mean "which stat",
+          not a real state. "Stops visited" is also skipped entirely when
+          it's 0: a memory screen proudly headlining "0 stops visited" reads
+          as broken, not informative, so it follows the same
+          only-show-when-real pattern the spend stat already used. */}
       <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
         <View style={styles.statItem}>
-          <View style={[styles.statIconBox, { backgroundColor: 'rgba(2, 139, 235, 0.12)' }]}>
-            <Ionicons name="calendar" size={16} color="#028BEB" />
+          <View style={[styles.statIconBox, { backgroundColor: colors.brandLight }]}>
+            <Ionicons name="calendar" size={16} color={colors.brand} />
           </View>
           <Text style={[styles.statValue, { color: colors.text }]}>{totalDays}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-            {totalDays === 1 ? 'Day Trip' : 'Days Total'}
+            {totalDays === 1 ? 'Day trip' : 'Days total'}
           </Text>
         </View>
+
+        {itinerary.length > 0 && (
+          <>
+            <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.statItem}>
+              <View style={[styles.statIconBox, { backgroundColor: colors.brandLight }]}>
+                <Ionicons name="pin" size={16} color={colors.brand} />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>{itinerary.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                {itinerary.length === 1 ? 'Stop visited' : 'Stops visited'}
+              </Text>
+            </View>
+          </>
+        )}
 
         <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
 
         <View style={styles.statItem}>
-          <View style={[styles.statIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-            <Ionicons name="pin" size={16} color="#10B981" />
-          </View>
-          <Text style={[styles.statValue, { color: colors.text }]}>{itinerary.length}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-            {itinerary.length === 1 ? 'Stop Visited' : 'Stops Visited'}
-          </Text>
-        </View>
-
-        <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-
-        <View style={styles.statItem}>
-          <View style={[styles.statIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-            <Ionicons name="people" size={16} color="#F59E0B" />
+          <View style={[styles.statIconBox, { backgroundColor: colors.brandLight }]}>
+            <Ionicons name="people" size={16} color={colors.brand} />
           </View>
           <Text style={[styles.statValue, { color: colors.text }]}>{members.length || 1}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Buddies</Text>
@@ -318,13 +327,13 @@ export default function TripScrapbookView({
           <>
             <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
             <View style={styles.statItem}>
-              <View style={[styles.statIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
-                <Ionicons name="wallet" size={16} color="#8B5CF6" />
+              <View style={[styles.statIconBox, { backgroundColor: colors.brandLight }]}>
+                <Ionicons name="wallet" size={16} color={colors.brand} />
               </View>
               <Text style={[styles.statValue, { color: colors.text }]}>
                 ₱{Math.round(totalSpend).toLocaleString()}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total Spent</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total spent</Text>
             </View>
           </>
         )}
@@ -335,7 +344,7 @@ export default function TripScrapbookView({
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="people-outline" size={18} color={colors.brand} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel Buddies</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel buddies</Text>
             <Text style={[styles.sectionCount, { color: colors.textMuted }]}>({members.length})</Text>
           </View>
 
@@ -381,7 +390,7 @@ export default function TripScrapbookView({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="map-outline" size={18} color={colors.brand} />
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Places Visited & Timeline</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Places visited and timeline</Text>
         </View>
 
         {sortedDays.length === 0 ? (
@@ -465,13 +474,13 @@ export default function TripScrapbookView({
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="wallet-outline" size={18} color={colors.brand} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trip Financial Recap</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Trip financial recap</Text>
           </View>
 
           <View style={[styles.expensesCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <View style={styles.expensesTopRow}>
               <View>
-                <Text style={[styles.expensesLabel, { color: colors.textMuted }]}>TOTAL TRIP EXPENDITURE</Text>
+                <Text style={[styles.expensesLabel, { color: colors.textMuted }]}>Total trip expenditure</Text>
                 <Text style={[styles.expensesTotal, { color: colors.text }]}>
                   ₱{Math.round(totalSpend).toLocaleString()}
                 </Text>
@@ -516,7 +525,7 @@ export default function TripScrapbookView({
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="checkbox-outline" size={18} color={colors.brand} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Group Decisions & Polls</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Group decisions and polls</Text>
           </View>
 
           {polls.map((poll: any, idx: number) => (
@@ -548,7 +557,7 @@ export default function TripScrapbookView({
       {isOrganizer && (
         <View style={styles.section}>
           <TouchableOpacity
-            style={[styles.deleteButton, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2', borderColor: colors.danger }]}
+            style={[styles.deleteButton, { backgroundColor: colors.dangerSurface, borderColor: colors.danger }]}
             onPress={handleDeleteTrip}
             disabled={isDeleting}
             activeOpacity={0.8}
@@ -572,7 +581,7 @@ export default function TripScrapbookView({
           <Text style={[styles.footerSealText, { color: colors.text }]}>TOURGO MEMORIES SCRAPBOOK</Text>
         </View>
         <Text style={[styles.footerTagline, { color: colors.textMuted }]}>
-          Every stamp is a story · Preserved forever in your Albums
+          Every stamp is a story, preserved forever in your albums.
         </Text>
       </View>
 
@@ -747,6 +756,10 @@ const styles = StyleSheet.create({
     ...T.microStrong,
     letterSpacing: 0.8,
   },
+  // Was a translucent 20%-opacity tint with same-hue text — unreadable
+  // against a bright or busy photo (the audit's "badge is unreadable over
+  // the photo" bug). Matches the stamp badge's solid dark treatment instead,
+  // which guarantees contrast regardless of what's behind it.
   heroStatusPill: {
     position: 'absolute',
     top: space.md,
@@ -754,17 +767,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
   },
   heroStatusText: {
-    color: '#10B981',
+    color: '#FFFFFF',
     ...T.microStrong,
-    letterSpacing: 0.5,
   },
   heroContent: {
     gap: 4,
@@ -858,8 +870,6 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...T.micro,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   statDivider: {
     width: 1,
@@ -889,6 +899,7 @@ const styles = StyleSheet.create({
   crewScroll: {
     gap: 10,
     paddingRight: space.md,
+    alignItems: 'flex-start',
   },
   crewCard: {
     alignItems: 'center',
@@ -1055,7 +1066,6 @@ const styles = StyleSheet.create({
   },
   expensesLabel: {
     ...T.microStrong,
-    letterSpacing: 0.8,
   },
   expensesTotal: {
     ...T.display,
@@ -1206,6 +1216,7 @@ const styles = StyleSheet.create({
   presetRow: {
     gap: 8,
     paddingVertical: 2,
+    alignItems: 'flex-start',
   },
   presetChip: {
     paddingHorizontal: 10,
