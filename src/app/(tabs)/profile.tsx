@@ -132,23 +132,12 @@ export default function ProfileScreen() {
             {/* Theme & Appearance (Light / Dark / System) */}
             <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: colors.brandLight,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                  }}
-                >
-                  <Ionicons
-                    name={themeMode === 'dark' ? 'moon' : themeMode === 'light' ? 'sunny' : 'phone-portrait-outline'}
-                    size={18}
-                    color={colors.brand}
-                  />
-                </View>
+                <Ionicons
+                  name={themeMode === 'dark' ? 'moon' : themeMode === 'light' ? 'sunny' : 'phone-portrait-outline'}
+                  size={22}
+                  color={colors.brand}
+                  style={{ marginRight: 12 }}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={{ ...T.bodyStrong, color: colors.text }}>Theme & Appearance</Text>
                   <Text style={{ ...T.caption, color: colors.textSecondary }}>
@@ -336,6 +325,7 @@ export default function ProfileScreen() {
       <PreferencesOnboarding
         visible={showPreferences}
         colors={colors}
+        isDark={isDark}
         onComplete={() => setShowPreferences(false)}
       />
     </SafeAreaView>

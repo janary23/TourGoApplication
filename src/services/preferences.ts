@@ -176,7 +176,7 @@ export function getRecommendedSpots(prefs: Preferences, limit = 6): SpotInfo[] {
       subtitle: d.tags.join(', '),
       latitude: d.latitude,
       longitude: d.longitude,
-      days: [{ title: 'Recommended Time: ' + d.bestTime, activities: ['Take scenic photos', 'Explore the local scenery'] }],
+      days: [],
     };
   });
 }

@@ -22,6 +22,8 @@ interface ActivityItemCardProps {
   colors: any;
   icon: { name: string; color: string };
   onPress: () => void;
+  /** Drops the row divider on the last item of the feed. */
+  isLast?: boolean;
 }
 
 const stripEmojis = (str: string): string => {
@@ -34,12 +36,13 @@ export default function ActivityItemCard({
   colors,
   icon,
   onPress,
+  isLast,
 }: ActivityItemCardProps) {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
-      style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+      style={[styles.activityCard, !isLast && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}
     >
       <View style={styles.rowLayout}>
         <View style={styles.iconContainer}>
@@ -79,16 +82,10 @@ export default function ActivityItemCard({
 }
 
 const styles = StyleSheet.create({
+  // One row inside the caller's single grouped card, not its own card — see
+  // that container for the shared border/radius/shadow.
   activityCard: {
     padding: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.01,
-    shadowRadius: 4,
-    elevation: 1,
   },
   rowLayout: {
     flexDirection: 'row',

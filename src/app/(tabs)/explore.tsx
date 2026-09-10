@@ -24,7 +24,13 @@ import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { captureRef } from 'react-native-view-shot';
-import * as MediaLibrary from 'expo-media-library';
+// expo-media-library's web build has no 'ExpoMediaLibraryNext' native module —
+// a static import crashes the whole web bundle at load time (Expo 57). Camera
+// roll saving is a native-only action anyway, so the module is only required
+// when actually used on a native platform.
+import type * as MediaLibraryType from 'expo-media-library';
+const MediaLibrary: typeof MediaLibraryType | null =
+  Platform.OS !== 'web' ? require('expo-media-library') : null;
 import { useTheme } from '../../context/ThemeContext';
 import { validateProvinceMapping } from '../../lib/provinceValidation';
 import { PHILIPPINES_PROVINCES } from '../../services/philippinesMapData';
@@ -50,9 +56,11 @@ import { supabase } from '../../services/supabase';
 import {
   ExploreMap,
   type ExploreMapHandle,
+  type ExploreLayer,
   type MapFocus,
   type ProvinceMarker,
 } from '../../components/explore/ExploreMap';
+import { ExploreFilterPills } from '../../components/explore/ExploreFilterPills';
 import { ProvinceSheetContent } from '../../components/explore/ProvinceSheetContent';
 import { notify } from '../../components/ui/Feedback';
 import { EmptyState } from '../../components/ui/primitives';
@@ -169,6 +177,10 @@ export default function ExploreScreen() {
   const [selectedDestId, setSelectedDestId] = useState<string | null>(null);
   const [selectedMuniId, setSelectedMuniId] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<MapFocus | null>(null);
+  // The interactive browse map ("View Map" from Albums) — separate from the
+  // export/share map further down, which always renders isExportMode with a
+  // hardcoded layer="all" and stub select handlers.
+  const [browseMapLayer, setBrowseMapLayer] = useState<ExploreLayer>('all');
   const [userTrips, setUserTrips] = useState<any[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [activePresetIdx, setActivePresetIdx] = useState(0);
@@ -189,6 +201,10 @@ export default function ExploreScreen() {
 
   const handleSaveImage = async () => {
     if (isSaving) return;
+    if (!MediaLibrary) {
+      notify('Saving to your photo library needs the mobile app.', 'info');
+      return;
+    }
     try {
       setIsSaving(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -739,7 +755,7 @@ export default function ExploreScreen() {
               }}
             >
               <Ionicons name="heart" size={14} color={exploreTab === 'wishlist' ? colors.brand : colors.textMuted} />
-              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'wishlist' ? 'Poppins-Bold' : 'Poppins-Medium', color: exploreTab === 'wishlist' ? colors.brand : colors.textSecondary }}>
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'wishlist' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'wishlist' ? colors.brand : colors.textSecondary }}>
                 Wishlist
               </Text>
             </TouchableOpacity>
@@ -757,7 +773,7 @@ export default function ExploreScreen() {
               }}
             >
               <Ionicons name="images" size={14} color={exploreTab === 'albums' ? colors.brand : colors.textMuted} />
-              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Poppins-Bold' : 'Poppins-Medium', color: exploreTab === 'albums' ? colors.brand : colors.textSecondary }}>
+              <Text style={{ fontSize: 13, fontFamily: exploreTab === 'albums' ? 'Sora-SemiBold' : 'WorkSans-Medium', color: exploreTab === 'albums' ? colors.brand : colors.textSecondary }}>
                 Albums
               </Text>
             </TouchableOpacity>
@@ -1037,6 +1053,85 @@ export default function ExploreScreen() {
               </View>
               <View style={{ height: 100 }} />
             </ScrollView>
+          ) : viewType === 'map' ? (
+            /* ── Interactive Philippines Map — "View Map" from Albums ──
+               ExploreMap and ExploreFilterPills were both already fully
+               built; ExploreMap only ever rendered in isExportMode (the
+               Story Card generator further below) with stub select
+               handlers, and ExploreFilterPills was never imported by this
+               screen at all. This is their first real interactive use. */
+            <View style={{ flex: 1 }}>
+              <View style={[styles.detailHeader, { paddingHorizontal: 16, marginBottom: 8 }]}>
+                <TouchableOpacity
+                  onPress={() => setViewType('list')}
+                  hitSlop={12}
+                  style={styles.detailBackBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                >
+                  <Ionicons name="arrow-back" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.detailTitle, { color: colors.text }]}>Philippines Map</Text>
+                  <Text style={[styles.detailSubtitle, { color: colors.textMuted }]}>
+                    {log.visitedProvinces.length} of {TOTAL_PROVINCES} provinces explored
+                  </Text>
+                </View>
+              </View>
+
+              <ExploreFilterPills
+                layer={browseMapLayer}
+                onChange={setBrowseMapLayer}
+                counts={{
+                  all: provincePoints.length,
+                  visited: log.visitedProvinces.length,
+                  saved: log.savedProvinces.length,
+                }}
+              />
+
+              <View style={{ flex: 1, position: 'relative' }}>
+                <ExploreMap
+                  ref={mapRef}
+                  provinces={provincePoints}
+                  destinations={destinationMarkers}
+                  layer={browseMapLayer}
+                  regionFilter={null}
+                  focusTarget={focusTarget}
+                  selectedProvinceId={selectedProvinceId}
+                  selectedDestId={selectedDestId}
+                  onSelectProvince={handleMapSelectProvince}
+                  onSelectDestination={handleMapSelectDestination}
+                  themeKey={isDark ? 'cyberpunk' : 'passport'}
+                />
+
+                <View style={styles.mapZoomControls}>
+                  <TouchableOpacity
+                    onPress={() => mapRef.current?.zoomIn()}
+                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Zoom in"
+                  >
+                    <Ionicons name="add" size={20} color={colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => mapRef.current?.zoomOut()}
+                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Zoom out"
+                  >
+                    <Ionicons name="remove" size={20} color={colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => mapRef.current?.resetView()}
+                    style={[styles.mapZoomBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset map view"
+                  >
+                    <Ionicons name="locate-outline" size={18} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           ) : exploreTab === 'albums' ? (
             /* ── Past Memories Scrapbook & Travel Albums Screen ── */
             <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 }}>
@@ -2120,6 +2215,25 @@ const styles = StyleSheet.create({
   },
   detailHeaderActions: {
     flexDirection: 'row',
+  },
+  mapZoomControls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 24,
+    gap: 8,
+  },
+  mapZoomBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   detailCard: {
     borderRadius: 24,

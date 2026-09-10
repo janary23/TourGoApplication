@@ -1,21 +1,18 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet, View, Text, Modal, TouchableOpacity,
-  Image, ScrollView, Platform,
-} from 'react-native';
+import { StyleSheet, View, Modal, Image, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PREFERENCE_TOPICS, savePreferences } from '../services/preferences';
-import { type as T } from './ui/tokens';
+import { space, radius, hairline, shadow } from './ui/tokens';
+import { Txt, Press, Button } from './ui/primitives';
 
 interface Props {
   visible: boolean;
   onComplete: () => void;
   colors: any;
+  isDark?: boolean;
 }
 
-const MIN_SELECT = 1;
-
-export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
+export function PreferencesOnboarding({ visible, onComplete, colors, isDark = false }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggle = (id: string) => {
@@ -36,64 +33,63 @@ export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Top accent + mascot */}
-          <View style={[styles.header, { backgroundColor: (colors.brand) + '14' }]}>
+          {/* Top banner + mascot. A tinted banner behind the whole header reads as
+              a brand moment, not the per-item icon-tile pattern Direction A bans
+              below — the distinction is scale: one banner per screen, never one
+              per row. */}
+          <View style={[styles.header, { backgroundColor: colors.brandLight }]}>
             <Image
               source={require('../../assets/images/EagleMascotS5.png')}
               style={styles.mascot}
             />
-            <Text style={[styles.eyebrow, { color: colors.brand }]}>Tell us what you love</Text>
+            <Txt variant="emphasis" tone="accent">Tell us what you love</Txt>
           </View>
 
-          <Text style={[styles.title, { color: colors.text }]}>
+          <Txt variant="display" align="center" style={styles.title}>
             What kind of trips get you excited?
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Pick a few favorites — we'll use them to surface spots across the Philippines you'll
-            actually like, like a "Recommended for You" feed. You can change these anytime.
-          </Text>
+          </Txt>
+          <Txt variant="subhead" tone="secondary" align="center" style={styles.subtitle}>
+            Pick a few favorites — we'll use them to surface spots across the Philippines
+            you'll actually like. You can change these anytime.
+          </Txt>
 
-          {/* Topic grid */}
+          {/* Topic grid. No tinted icon square per tile (Direction A Hard Rule) —
+              the icon sits bare, sized up so it still carries weight, and the
+              border colour + check mark are what tell selected from not. */}
           <View style={styles.grid}>
             {PREFERENCE_TOPICS.map((topic) => {
               const active = selected.includes(topic.id);
               return (
-                <TouchableOpacity
+                <Press
                   key={topic.id}
-                  activeOpacity={0.85}
                   onPress={() => toggle(topic.id)}
                   style={[
                     styles.topicCard,
                     {
                       backgroundColor: colors.card,
                       borderColor: active ? colors.brand : colors.cardBorder,
+                      borderWidth: active ? 1.5 : hairline,
                     },
+                    !isDark && shadow(1, isDark),
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.topicIcon,
-                      { backgroundColor: active ? colors.brand : colors.surface },
-                    ]}
-                  >
-                    <Ionicons
-                      name={topic.icon as any}
-                      size={22}
-                      color={active ? '#FFFFFF' : colors.brand}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.topicLabel,
-                      { color: active ? colors.brand : colors.text },
-                    ]}
+                  <Ionicons
+                    name={topic.icon as any}
+                    size={26}
+                    color={active ? colors.brand : colors.textSecondary}
+                    style={{ marginBottom: space.sm }}
+                  />
+                  <Txt
+                    variant="headline"
+                    tone={active ? 'accent' : 'primary'}
                     numberOfLines={2}
                   >
                     {topic.label}
-                  </Text>
-                  <Text style={[styles.topicDesc, { color: colors.textMuted }]} numberOfLines={2}>
+                  </Txt>
+                  <Txt variant="caption" tone="muted" numberOfLines={2} style={{ marginTop: 3 }}>
                     {topic.description}
-                  </Text>
+                  </Txt>
+
                   <View
                     style={[
                       styles.checkCircle,
@@ -105,7 +101,7 @@ export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
                   >
                     {active && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                   </View>
-                </TouchableOpacity>
+                </Press>
               );
             })}
           </View>
@@ -118,33 +114,23 @@ export function PreferencesOnboarding({ visible, onComplete, colors }: Props) {
             {
               backgroundColor: colors.card,
               borderTopColor: colors.divider,
-              paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+              paddingBottom: Platform.OS === 'ios' ? 30 : space.lg,
             },
           ]}
         >
-          <Text style={[styles.counter, { color: colors.textMuted }]}>
+          <Txt variant="label" tone="muted" align="center" style={{ marginBottom: space.sm }}>
             {selected.length} selected
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.85}
+          </Txt>
+          <Button
+            // Always enabled: 0 selections finishes onboarding via skip, any
+            // count above that finishes via "Show my picks". The previous
+            // version disabled the button whenever selections were below 1
+            // while also labelling it "Skip" at that same count — Skip was
+            // unclickable.
+            label={selected.length === 0 ? 'Skip for now' : 'Show my picks'}
             onPress={finish}
-            disabled={selected.length < MIN_SELECT}
-            style={[
-              styles.doneBtn,
-              {
-                backgroundColor: selected.length >= MIN_SELECT ? colors.brand : colors.cardBorder,
-              },
-            ]}
-          >
-            <Text style={styles.doneTxt}>
-              {selected.length === 0 ? 'Skip' : 'Show my picks'}
-            </Text>
-            <Ionicons
-              name={selected.length === 0 ? 'arrow-forward' : 'sparkles'}
-              size={16}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
+            fullWidth
+          />
         </View>
       </View>
     </Modal>
@@ -156,75 +142,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: space.xl,
   },
   header: {
     alignItems: 'center',
-    paddingVertical: 28,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingVertical: space.xxl,
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
   },
   mascot: {
     width: 90,
     height: 90,
     resizeMode: 'contain',
-    marginBottom: 8,
-  },
-  eyebrow: {
-    ...T.emphasis,
-    letterSpacing: 0.5,
+    marginBottom: space.sm,
   },
   title: {
-    ...T.display,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 24,
-    paddingHorizontal: 24,
-    letterSpacing: -0.4,
+    marginTop: space.xxl,
+    paddingHorizontal: space.xl,
   },
   subtitle: {
-    ...T.emphasis,
-    textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 28,
-    marginTop: 10,
+    paddingHorizontal: space.xxl + space.xs,
+    marginTop: space.sm,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginTop: 20,
-    gap: 12,
+    paddingHorizontal: space.xl,
+    marginTop: space.xl,
+    gap: space.md,
   },
   topicCard: {
     width: '47%',
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: space.lg,
     position: 'relative',
-  },
-  topicIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  topicLabel: {
-    ...T.headline,
-    fontWeight: '700',
-  },
-  topicDesc: {
-    ...T.caption,
-    lineHeight: 15,
-    marginTop: 4,
   },
   checkCircle: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: space.md,
+    right: space.md,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -233,26 +191,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    borderTopWidth: 1,
-  },
-  counter: {
-    ...T.label,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  doneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 15,
-    borderRadius: 16,
-  },
-  doneTxt: {
-    color: '#FFFFFF',
-    ...T.headline,
-    fontWeight: '700',
+    paddingHorizontal: space.xl,
+    paddingTop: space.md + 2,
+    borderTopWidth: hairline,
   },
 });

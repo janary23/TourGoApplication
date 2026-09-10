@@ -40,7 +40,7 @@ export const NATIONAL_SPOTS: Record<string, SpotInfo[]> = {
       categoryTag: 'Cafe',
       latitude: 16.4124,
       longitude: 120.5972,
-      days: [{ title: 'Visit Details', activities: ['Order Strawberry Shortcake', 'Pair with Benguet Brew'] }]
+      days: []
     },
     {
       id: 'nat-coffee-2',
@@ -58,7 +58,7 @@ export const NATIONAL_SPOTS: Record<string, SpotInfo[]> = {
       categoryTag: 'Heritage Cafe',
       latitude: 16.4152,
       longitude: 120.5941,
-      days: [{ title: 'Visit Details', activities: ['Taste Ruins Brewed Coffee', 'Try their Cinnamon Toast'] }]
+      days: []
     }
   ],
   brunch: [
@@ -78,7 +78,7 @@ export const NATIONAL_SPOTS: Record<string, SpotInfo[]> = {
       categoryTag: 'Fine Dining',
       latitude: 10.3183,
       longitude: 123.9061,
-      days: [{ title: 'Visit Details', activities: ['Try local pork belly sliders', 'Pair with premium cocktails'] }]
+      days: []
     }
   ],
   nightlife: [
@@ -98,7 +98,7 @@ export const NATIONAL_SPOTS: Record<string, SpotInfo[]> = {
       categoryTag: 'Rooftop Bar',
       latitude: 14.5615,
       longitude: 121.0361,
-      days: [{ title: 'Visit Details', activities: ['Enjoy Manila skyline view', 'Drink Sky-Tini cocktail'] }]
+      days: []
     }
   ],
   art: [
@@ -118,7 +118,7 @@ export const NATIONAL_SPOTS: Record<string, SpotInfo[]> = {
       categoryTag: 'Museum',
       latitude: 14.5802,
       longitude: 121.1408,
-      days: [{ title: 'Visit Details', activities: ['Explore white-walled galleries', 'Take photos in the gardens'] }]
+      days: []
     }
   ]
 };
@@ -141,7 +141,7 @@ export const FALLBACK_SPOTS: SpotInfo[] = [
     image: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=800&q=80',
     latitude: 11.179,
     longitude: 119.396,
-    days: [{ title: 'Day 1: Lagoons', activities: ['Rent a kayak at Big Lagoon', 'Swim in Secret Lagoon'] }]
+    days: []
   },
   {
     id: 'slide-boracay',
@@ -160,7 +160,7 @@ export const FALLBACK_SPOTS: SpotInfo[] = [
     image: 'https://images.unsplash.com/photo-1583212292454-1fe6229603b7?auto=format&fit=crop&w=800&q=80',
     latitude: 11.967,
     longitude: 121.925,
-    days: [{ title: 'Day 1: Sunset Sail', activities: ['Stroll along Station 1 sands', 'Book a Paraw sailboat sunset ride'] }]
+    days: []
   }
 ];
 

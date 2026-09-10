@@ -1,180 +1,89 @@
-TourGo full UI redesign
+You are acting as an elite Principal Mobile Product Designer and Senior React Native / Expo Engineer. 
 
-Redesign the entire TourGo app. Use the ui-ux-pro-max plugin skill for every design decision: design system generation, domain searches, stack guidelines, and its pre-delivery checklist. Use the plugin's design-system skill for the token architecture.
+I need you to perform a complete, ground-up UI/UX redesign of the TourGo mobile application. TourGo is a specialized Philippine group travel planner for barkadas (friend groups), families, student orgs, and tour leaders.
 
-Treat the skill's output as input, not the final answer. If a recommendation matches anything in "Hard rules" below, reject it, say why, and search again.
+The current implementation works functionally, but visually it suffers from generic "AI slop" (repetitive rounded white cards, one saturated blue sprayed everywhere, generic weather and calendar widgets, identical icons in pastel squares, stock templates, and lack of craft). We are completely throwing away the current visual design and rebuilding the entire visual layer from scratch to match the craft and quality of world-class apps like Wanderlog, Flighty, Tripsy, and Linear Mobile — while making it authentically tailored to Philippine group travel.
 
-The problem
+Activate and use all of your available skills: `ui-ux-pro-max`, `mobile-design`, `ui-design-system`, `frontend-design`, and `figma`.
 
-The app works, but it reads as generic AI output with no identity. It uses one bright blue on everything, identical rounded cards, icons in tinted squares, all-caps section labels, gradient banners, and photos that don't match the place.
+---
 
-Screenshots of the current app are in design-audit/before/. Look at every one before doing anything else.
+### I. Hard Design Rules — Eradicate "AI Slop"
+1. **No Monochromatic Blue Wash:** Do not use a single saturated blue for brand, buttons, active tabs, badges, icons, and links. Create a rich, curated palette with distinct functional roles (Route Brand, Deep Ink, Warm Paper/Sand backgrounds, Forest/Palm for confirmed states, Amber for pending, Signal Red strictly for alerts).
+2. **No Generic Container Cards:** Stop wrapping every single row or section in identical rounded cards with grey drop shadows. Use architectural layout variety: flat editorial rows separated by fine hairlines, edge-to-edge photo surfaces with high-legibility scrims, and subtle tonal shifts.
+3. **No Icons in Tinted Pastel Boxes:** Stop putting every leading icon inside a small pastel-colored square or circle. Let typography, iconography, and spatial hierarchy drive the layout.
+4. **No Repeated Dashed "+ Add" Placeholders:** Empty states must be designed editorial moments with clear next actions, contextual illustrations, or Agilito (our mascot) guiding the user — never repetitive empty boxes.
+5. **Philippine Typography & Glyphs:** The type system must handle `₱` (Philippine Peso U+20B1) and `ñ` flawlessly across all weights. Avoid generic AI fonts (no Inter, Poppins, or Montserrat). Use distinctive, premium typefaces (e.g. Sora for punchy display headings, Work Sans / Plus Jakarta / bespoke pairings for legible editorial text).
+6. **High Sunlight & Outdoors Readability:** Designed for travelers on phones in bright Philippine sun: minimum 4.5:1 text contrast, at least 44×44pt touch targets, and resilient visual states.
 
-What TourGo is
+---
 
-Design from this, not from a generic travel template.
+### II. Bespoke Redesign of Core Widgets & Components
+Redesign every widget from scratch so they look proprietary to TourGo, not like off-the-shelf templates:
 
-Product: A group trip planner for travel in the Philippines. Users create or join a trip with a code, build a day-by-day itinerary, split expenses, share a checklist, post announcements, and chat. Afterwards they keep a memories scrapbook.
-Users: Filipino students, barkadas, families, and school or org field trips. They are mostly on phones, often outdoors in bright sun, and sometimes on weak mobile data.
-Voice: Friendly and plain. Keep the light Taglish the app already uses ("Biglaang trip?"), and keep it consistent everywhere.
-Mascot: Agilito, the bird character. Keep him, but give him one clear job (for example, trip-prep guide and empty states). He should not be scattered across screens as decoration.
-Logo: Keep the TourGo mark. Its winding route line is a brand asset you can build on.
-Goal
+1. **Bespoke Weather Widget:** 
+   - Not just a temperature number in a generic box.
+   - Tailored to Philippine tropical travel: shows rain probability, UV index, humidity, typhoon/storm warnings, and actionable packing tips (e.g., "Bring umbrella & sunblock for afternoon island hopping").
+2. **Bespoke Calendar & Date Widget:**
+   - Not a cookie-cutter mini-month grid.
+   - A tactile travel-first calendar showing continuous multi-day trip spans, departure count-downs, day badges, and multi-member availability highlights.
+3. **Active Trip Floating Day-Plan Widget:**
+   - A sleek, dynamic travel companion pill/card showing the *current live stop*, upcoming ETA, and next meet-up checkpoint with quick roll-call access.
+4. **Signature Route-Line Timeline:**
+   - The winding route motif from the TourGo mark acts as a living spine running through the itinerary, connecting stops like beads on a journey, visually indicating progress as stops are completed.
+5. **Custom Bottom Navigation Bar:**
+   - Docked, clean, and tactile. Eliminate floating bubble capsules or generic active pills.
 
-Build one cohesive, premium-quality design system and apply it to every screen, so the app feels like a single polished product kit. It should look specific to Philippine group travel, not like Klook, Airbnb, or any other app.
+---
 
-Hard rules: remove these generic patterns
-One saturated blue used for brand, buttons, links, chips, active tabs, and icons. Build a real palette with distinct roles.
-All-caps, letter-spaced labels above sections ("SEE YOUR SCHEDULE HERE", "UP NEXT", "TRIP INFO"). Use sentence-case headings, and only where a heading actually helps.
-Icons inside pale tinted squares or circles on every row, stat, and tile.
-Everything as identical white rounded cards with the same radius, border, and soft grey shadow, including cards nested inside cards.
-Decorative gradient banners, glassmorphism overlays on photos, sparkle and lightning icons used as decoration, and rainbow-tinted stat icons.
-These text formats:
-Meta strings joined with middle dots ("★ 4.5 • Bantayan Island")
-Em-dash labels ("1 of 4 — Trip Type")
-"→" appended to button or link text
-Pill shapes on everything: chips, badges, and a floating bottom nav with a blue active pill.
-Tabs inside tabs inside filter chips (the Checklist screen).
-Repeated dashed "+ Add" boxes as empty states.
-Generic marketing copy and system jargon, such as "Plan, explore, and recall your journeys", "Get ready for an amazing trip", "Workspace Room", and "modules".
-Default fonts (Inter, Poppins, Outfit, Montserrat, Plus Jakarta Sans), unless you can justify the choice for this specific brief.
-The other common generated looks:
-Cream background with a serif display font and terracotta accent
-Near-black background with an acid-green accent
-Purple or pink "AI" gradients
-Issues visible in the screenshots (fix all of them)
+### III. Complete Feature Scope to Rebuild & Redesign
 
-Home
+Ensure every single feature in TourGo is redesigned into this cohesive design system:
 
-The "Best of the Philippines" hero has no image, only a grey gradient.
-The Recommended cards reuse the same beach photo.
-Each card subtitle repeats the place name.
-The mascot avatar beside the search bar has no purpose.
+1. **Home Dashboard:**
+   - Active trip hero banner with countdown, live status, and destination imagery.
+   - Bespoke Weather & Calendar travel widgets.
+   - Quick Action bar: "Create Trip" & "Join Trip with Code".
+   - Curated Philippine Discovery feed & weekend getaway recommendations.
 
-Trips
+2. **Philippine Explorer & 82-Province Interactive Map:**
+   - Interactive SVG/Canvas map of the Philippine archipelago tracking provinces visited out of 82.
+   - Digital Passport & province stamp collector with custom wax/ink stamp aesthetics.
+   - Municipality & spot directory with rich category filtering (beaches, waterfalls, heritage, food trips).
 
-The featured Baliwag trip shows a US desert photo.
-The calendar and weather cards are cramped.
+3. **Trip Creation & Join Wizard:**
+   - Multi-step frictionless wizard (Destination search, multi-day calendar span, barkada size counter with accessible steppers, budget estimates, travel pace).
+   - Instant 6-character trip invite code generation and shareable invite card (with QR code and copy link).
+   - Frictionless "Join Trip" screen with auto-focusing code entry cells.
 
-Trip home
+4. **Active Trip Management Hub:**
+   - **Trip Overview:** Header with trip dates, destination weather, member avatars, and quick-action shortcuts.
+   - **Day-by-Day Itinerary:** Multi-day tabbed timeline with route-line spine, time blocks, transit notes (e.g., van hire, ferry times), location tags, and stop check-offs.
+   - **Shared Expenses & Split:** Bill logging with currency in ₱, payer selection, split toggles (equal vs. custom), category breakdown, and an intuitive "Who Owes Whom" balance matrix with debt settlement actions.
+   - **Dual Checklist:** Clean segmented view for "Group Preparation Tasks" (van rental, downpayments) with member assignments vs. personal "What to Bring" packing checklists.
+   - **Barkada Hub:** Integrated trip group chat, pinned organizer announcements, democratic group voting polls (choosing restaurants, meet times), and roll-call attendance check-ins.
+   - **Document Vault:** Organized storage for plane tickets, hotel vouchers, booking reference numbers, and emergency IDs.
+   - **Safety Hub & Guardian Tracker:** Quick-dial directory for local emergency hotlines (PNP, coast guard, MDRRMO, nearest hospital), one-tap SOS broadcast, and guardian live check-in updates.
+   - **Trip Scrapbook & Memories:** Post-trip photo gallery, visited stops recap, digital souvenir badges, and shareable trip summary card.
 
-The Baguio trip also shows the desert and van photo.
-A "?" avatar appears in Updates.
-"See all" collides with the floating action button.
-The progress bar shows "0%" with no guidance.
+5. **Activity Feed & Notifications:**
+   - Chronological audit log of barkada actions (expenses added, stops checked off, poll results, announcements).
 
-Activity
+6. **Traveler Profile & Travel Stats:**
+   - Visited provinces counter (X / 82), past trips archive, wishlist spots, and offline cache settings.
 
-Icons don't match event types (a megaphone is used for itinerary items).
-The mascot floats over feed items.
-The filter chips give no hint that they scroll.
+---
 
-Create trip
+### IV. Architecture & Execution Strategy
+1. **Safety & Stability:** Do NOT alter database schemas, Supabase queries, authentication logic, or routing parameters. Update the UI and presentation layer exclusively.
+2. **Design Tokens First:** Refactor or replace `tokens.ts` and `ThemeContext.tsx` with our new palette, typography scale, spacing units, and tactile micro-animation tokens.
+3. **Atomic Primitives:** Build or update the shared UI kit (`Button`, `Card`, `TextField`, `SegmentedControl`, `Badge`, `AvatarStack`, `Skeleton`, `EmptyState`).
+4. **Widget Rebuild:** Completely rewrite the Calendar widget, Weather widget, and Active Day-Plan widget.
+5. **Screen-by-Screen Rollout:**
+   - Phase 1: Home Dashboard & Tab Navigation.
+   - Phase 2: Active Trip Hub (Overview, Itinerary, Expenses, Checklist).
+   - Phase 3: Explorer Map & Passport Stamps.
+   - Phase 4: Trip Creation, Join Flow, Safety Hub, and Scrapbook.
+6. **Verification:** Test each screen for visual hierarchy, contrast, touch targets (≥44pt), dark/light mode parity, and zero layout overflows.
 
-Step 3: the destination suggestion tiles render empty.
-Step 3: the traveler count +/− buttons are clipped off-screen.
-Step 4: trip names have inconsistent casing ("vacation Trip", "vacation to Baguio City").
-Step 4: the summary says "1 modules active".
-
-Join trip
-
-The case-insensitive note is repeated twice.
-
-Itinerary
-
-Four identical empty day boxes.
-"Baguio City" is repeated on every day and again in the header.
-
-Checklist
-
-Three stacked levels of tabs and chips.
-A desktop-style table header ("# TASK ASSIGNED") on a mobile screen.
-
-Scrapbook
-
-The "Completed" badge is unreadable over the photo.
-The photo doesn't match Baliwag.
-"0 stops visited" is shown as a headline stat.
-
-Photos everywhere
-
-Never show a photo of a different place.
-If no matching image exists, use a designed fallback (place name plus a brand pattern), not random stock.
-Constraints
-UI layer only. Do not change business logic, API or Supabase calls, database schema, auth, routing, or state management. If a design change needs a data change, list it and ask me first.
-Keep every feature and screen. You may merge, reorder, or simplify UI, but tell me what moved.
-Detect the stack from the repo (package.json, app.json, pubspec.yaml). Don't assume.
-One token file. All colors, type, spacing, radii, shadows, and motion come from a single theme or token file. No raw hex values or magic numbers in components.
-Fonts must render ₱ and ñ correctly.
-Accessibility and readability:
-Text contrast of at least 4.5:1, including text on photos
-Touch targets of at least 44×44
-Labels on icon-only buttons
-Safe areas respected
-Text scaling without clipping
-Reduced-motion preference respected
-Readable in bright sunlight
-Weak data: Use skeleton loaders, image placeholders, and appropriately sized images.
-Motion: Give clear feedback on taps and state changes. Use at most one signature animated moment, and no fade-up on every section.
-Copy:
-Sentence case throughout.
-Buttons name the exact action, and that name stays the same through the flow ("Create trip" leads to "Trip created").
-Errors say what happened and how to fix it.
-Empty states tell the user what to do next.
-Git: Work on a new branch, redesign/ui-v2, and commit after each phase.
-Process
-Phase 1: Audit and direction (stop for approval)
-Read every screenshot in design-audit/before/ and map each one to its screen file. List any screens in the code that aren't in the screenshots (Explore, Profile, and so on).
-Detect the stack.
-Run the ui-ux-pro-max design system generator for the whole app, starting with: "group travel planner Philippines mobile" --design-system -p "TourGo" --variance 6 --motion 4 --density 5 Then supplement with these searches:
---domain typography
---domain color
---domain ux (bottom navigation, multi-step form, empty state, text over images)
---domain icons
---stack <detected stack>
-Propose 2 distinct design directions. For each, give:
-5–6 named hex colors, each with its role
-Typefaces with their roles, plus a type scale
-A layout concept, with ASCII wireframes of Home and Trip home
-One signature element grounded in TourGo's world. Examples: the logo's route line as the itinerary spine, or trip cards that read like boarding passes with the trip code as the ticket number.
-How cards, list rows, headers, and bottom navigation will look
-Check each direction against the Hard rules. Revise any part that would fit any generic travel app, and say what you changed.
-Stop and wait for me to pick a direction.
-Phase 2: Foundation
-Persist the design system with --design-system --persist -p "TourGo" --output-dir <project root>.
-Edit MASTER.md so it matches the direction I approved exactly.
-Build the token file and these shared components:
-Button, IconButton, TextField
-Surface/Card variants, ListRow
-SegmentedControl, Chip, Badge
-Avatar and AvatarStack
-Stepper, ProgressBar
-EmptyState, ScreenHeader, BottomNav
-BottomSheet, Toast, Skeleton
-PhotoWithFallback
-Commit.
-Phase 3: Pilot screens (stop for review)
-Redesign Home and Trip home only, using the new components.
-If you can run the app and capture screenshots (for example, with Playwright on web), save them to design-audit/after/ and compare them with the before screenshots.
-Commit.
-Stop and wait for my feedback.
-Phase 4: Roll out
-
-Redesign the remaining screens in this order, with one commit per group:
-
-Splash, Login, Sign up
-Trips, Join trip, Create trip (all 4 steps)
-Trip home sub-screens: Itinerary, Checklist (Group tasks and What to bring)
-Activity, Scrapbook
-Explore, Profile, and anything else found in Phase 1
-
-Create a pages/<screen>.md override only when a screen truly needs to deviate from MASTER.md.
-
-Phase 5: QA
-Run the ui-ux-pro-max pre-delivery checklist (references/pro-rules.md) on every screen.
-Confirm none of the following remain:
-Old styles or raw hex values
-Any pattern from the Hard rules
-Action names that change partway through a flow
-Lists without empty, loading, and error states
-Report what you fixed and anything still open.
+Please inspect the codebase, outline your design plan, and begin executing Phase 1 immediately.

@@ -1348,7 +1348,7 @@ function RootStack() {
 
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} translucent={false} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: {

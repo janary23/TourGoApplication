@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Txt } from '../../components/ui/primitives';
 import { space, hairline, type as T } from '../../components/ui/tokens';
+
+type CustomTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
 // logs a warning and silently falls back to the JS driver. Declaring the driver
@@ -96,7 +97,7 @@ const TABS = [
   { name: 'profile', label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
 ];
 
-function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function CustomTabBar({ state, descriptors, navigation }: CustomTabBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 

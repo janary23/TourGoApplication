@@ -869,9 +869,12 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                                 },
                               ]}
                             >
-                              <View style={[styles.topicIcon, { backgroundColor: active ? colors.brand : colors.surface }]}>
-                                <Ionicons name={topic.icon as any} size={20} color={active ? '#FFFFFF' : colors.brand} />
-                              </View>
+                              <Ionicons
+                                name={topic.icon as any}
+                                size={26}
+                                color={active ? colors.brand : colors.textSecondary}
+                                style={styles.topicIcon}
+                              />
                               <Text style={[styles.topicLabel, { color: active ? colors.brand : colors.text }]} numberOfLines={1}>
                                 {topic.label}
                               </Text>
@@ -1147,18 +1150,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
-  tourSpeakerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tourSpeakerAvatar: {
-    width: 34,
-    height: 34,
-    resizeMode: 'contain',
-  },
   tourSpeakerAvatarPlain: {
     width: 36,
     height: 36,
@@ -1235,12 +1226,9 @@ const styles = StyleSheet.create({
   topicCardWrap: {
     width: '47.5%',
   },
+  // Bare icon, no tinted square — Direction A Hard Rule. Selected state reads
+  // from icon/label colour + the border and check mark on the card itself.
   topicIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 12,
   },
   topicLabel: {

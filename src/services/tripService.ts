@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { TripFeatureSettings } from './mockData';
 import { GeneratedItineraryItem } from './aiService';
+import { getPlaceImageUrl } from './destinations';
 
 export interface TripWithRole {
   id: string;
@@ -387,7 +388,13 @@ export async function createTrip(
       start_date: startDate === 'TBD' || !startDate ? null : startDate,
       end_date: endDate === 'TBD' || !endDate ? null : endDate,
       code,
-      image_url: imageUrl || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+      // The create-trip wizard never actually passes `imageUrl` — every trip
+      // was getting this one hardcoded red-rock-canyon Unsplash photo
+      // regardless of destination (found live: a Baguio City trip hero'd
+      // with a desert canyon). `getPlaceImageUrl` already does real
+      // keyword-matched photos elsewhere (Home, Explore); using it here too
+      // instead of a single static fallback.
+      image_url: imageUrl || getPlaceImageUrl(destination),
       created_by: uid,
     });
 

@@ -3,7 +3,6 @@ import { StyleSheet, View, Text, ScrollView, TextInput, Alert, TouchableOpacity,
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { TripFeatureSettings } from '../../services/mockData';
 import { createTrip, getTrips, previewTripByCode, type TripCodePreview } from '../../services/tripService';
 import { Button } from '../../components/ui/Button';
@@ -849,13 +848,11 @@ export default function CreateTripScreen() {
             {Math.round(progressPercent)}% complete
           </Text>
         </View>
+        {/* Flat fill, not a gradient — brandFill/brandFillDeep are the same blue
+            faded into itself, the same non-gradient this file's step-1 card
+            selection used to have. */}
         <View style={[styles.trackerLineBackground, { backgroundColor: colors.cardBorder, top: 0 }]}>
-          <LinearGradient
-            colors={[colors.brandFill, colors.brandFillDeep]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.trackerLineFill, { width: `${progressPercent}%` }]}
-          />
+          <View style={[styles.trackerLineFill, { width: `${progressPercent}%`, backgroundColor: colors.brandFill }]} />
         </View>
       </View>
     );
@@ -920,16 +917,18 @@ export default function CreateTripScreen() {
                       }
                     }}
                   >
-                    {isSelected && (
-                      <LinearGradient
-                        colors={['rgba(6, 182, 212, 0.08)', 'rgba(16, 185, 129, 0.02)']}
-                        style={[StyleSheet.absoluteFillObject, { borderRadius: 16 }]}
-                      />
-                    )}
-                    <View style={[styles.catIconWrapper, { backgroundColor: isSelected ? colors.brandLight : colors.background }]}>
-                      <Ionicons name={cat.icon as any} size={22} color={isSelected ? colors.brand : colors.textSecondary} />
-                    </View>
-                    <Text style={[styles.gridName, { color: colors.text, fontFamily: isSelected ? 'Poppins-Bold' : 'Poppins-SemiBold' }]}>
+                    {/* Selected state reads from the border + icon/label colour
+                        already on this card — no fill needed on top. The old
+                        cyan/emerald gradient here didn't match the brand palette
+                        at all (raw rgba, not a token); a decorative gradient was
+                        also a Direction A Hard Rule regardless of colour. */}
+                    <Ionicons
+                      name={cat.icon as any}
+                      size={26}
+                      color={isSelected ? colors.brand : colors.textSecondary}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Text style={[styles.gridName, { color: colors.text, fontFamily: isSelected ? 'Sora-SemiBold' : 'WorkSans-SemiBold' }]}>
                       {cat.label}
                     </Text>
                   </TouchableOpacity>
@@ -1375,16 +1374,20 @@ export default function CreateTripScreen() {
 
               {/* Header row with icon */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
-                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="map-outline" size={22} color={colors.brand} />
-                </View>
+                <Ionicons name="map-outline" size={26} color={colors.brand} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ ...T.bodyStrong, color: colors.text }}>
                     {titleState.trim() || `${formatSubtypeLabel(tripSubtype)} trip`}
                   </Text>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
-                    {formatSubtypeLabel(tripSubtype)} trip
-                  </Text>
+                  {/* Only show the subtype line when it's adding real information —
+                      with no custom title the heading above already reads exactly
+                      "Vacation trip", so repeating it verbatim underneath was a
+                      duplicate, not a subtitle. */}
+                  {!!titleState.trim() && (
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
+                      {formatSubtypeLabel(tripSubtype)} trip
+                    </Text>
+                  )}
                 </View>
               </View>
 
@@ -1441,9 +1444,7 @@ export default function CreateTripScreen() {
 
             {/* Always-on feature indicator */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: colors.brandLight, borderRadius: 12, borderWidth: 1, borderColor: colors.brandLight, marginBottom: 10 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="calendar-outline" size={18} color={colors.brand} />
-              </View>
+              <Ionicons name="calendar-outline" size={22} color={colors.brand} />
               <View style={{ flex: 1 }}>
                 <Text style={{ ...T.emphasis, color: colors.text }}>Itinerary Plan</Text>
                 <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 1 }}>Timeline schedule of daily spots and activities</Text>
@@ -1468,9 +1469,7 @@ export default function CreateTripScreen() {
                 return (
                   <View key={feat.key} style={{ gap: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: isEnabled ? colors.brandLight : colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name={feat.icon} size={18} color={isEnabled ? colors.brand : colors.textMuted} />
-                      </View>
+                      <Ionicons name={feat.icon} size={22} color={isEnabled ? colors.brand : colors.textMuted} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ ...T.emphasis, color: colors.text }}>{feat.label}</Text>
                         <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 1 }}>{feat.desc}</Text>
@@ -1791,14 +1790,6 @@ const styles = StyleSheet.create({
     ...T.micro,
     textAlign: 'center',
     marginTop: 4,
-  },
-  catIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
   },
   subtypeRowItem: {
     borderRadius: 12,

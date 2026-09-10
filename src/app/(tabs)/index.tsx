@@ -12,7 +12,7 @@ import * as Location from 'expo-location';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
-import { space, radius, shadow, type as T } from '../../components/ui/tokens';
+import { space, radius, shadow, hairline, type as T } from '../../components/ui/tokens';
 import { fetchFreePlaces } from '../../services/freePlacesService';
 import { getPlaceImageUrl, DESTINATIONS } from '../../services/destinations';
 import { loadExploreLog, saveExploreLog, type ExploreLog, type SavedSpotMeta } from '../../services/exploreLog';
@@ -23,6 +23,7 @@ import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobal
 import { withTimeout } from '../../lib/async';
 import { EmptyState, PhotoWithFallback, Chip } from '../../components/ui/primitives';
 import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
+
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
 // logs a warning and silently falls back to the JS driver. Declaring the driver
@@ -91,7 +92,7 @@ function mapDestinationToSpot(d: any): SpotInfo {
     subtitle: d.tags.join(', '),
     latitude: d.latitude,
     longitude: d.longitude,
-    days: [{ title: 'Best Time: ' + d.bestTime, activities: ['Explore the scenery', 'Enjoy local activities'] }]
+    days: []
   };
 }
 
@@ -418,6 +419,8 @@ export default function HomeScreen() {
 
   const [isBirdLanded, setIsBirdLanded] = useState(true);
   const [isOnboardingActive, setIsOnboardingActive] = useState(false);
+
+
 
   useEffect(() => {
     setGlobalLoading(loading || searchLoading);
@@ -1026,12 +1029,16 @@ export default function HomeScreen() {
     );
   };
 
-  const renderEventCard = (evt: any) => (
+  // One grouped list (single border, hairline dividers between rows) instead
+  // of a stack of identically-radiused, individually-bordered cards — Direction
+  // A Hard Rule against repeated identical containers. `isLast` drops the
+  // divider on the final row the way ui/primitives' ListGroup does.
+  const renderEventCard = (evt: any, isLast: boolean) => (
     <TouchableOpacity
       key={evt.id}
       activeOpacity={0.85}
       onPress={() => setSelectedSpot(evt)}
-      style={[styles.eventRowCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+      style={[styles.eventRowCard, !isLast && { borderBottomWidth: hairline, borderBottomColor: colors.divider }]}
     >
       <View style={[styles.eventDateBadge, { backgroundColor: colors.brand }]}>
         <Text style={styles.eventDateMonthText}>{evt.dateMonth}</Text>
@@ -1169,20 +1176,21 @@ export default function HomeScreen() {
       >
         {/* Greeting scrolls with the content rather than pinning to the header. */}
         <View style={styles.greetingBlock}>
-          <Text style={[styles.greetingTitle, { color: colors.text }]}>{getGreeting()}, {firstName}</Text>
+          <Text style={[styles.greetingTitle, { color: colors.text }]} numberOfLines={2}>
+            {getGreeting()}, {firstName}
+          </Text>
         </View>
 
-        {/* Quick 1-minute spontaneous day planner */}
+        {/* Quick 1-minute spontaneous day planner. Flat brand-colour fill, not a
+            gradient — brandFill and brandFillDeep were the same blue faded into
+            a darker version of itself, i.e. the "one saturated blue" Hard Rule
+            wearing a gradient as a costume. The "1 MIN" tag no longer carries a
+            decorative flash icon; the text alone says it (another Hard Rule:
+            sparkle/lightning icons used as decoration). */}
         <InteractiveButton onPress={() => router.push('/day-plan')} style={styles.quickPlannerCard} activeScale={0.97}>
-          <LinearGradient
-            colors={[colors.brandFill, colors.brandFillDeep]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.quickPlannerGradient}
-          >
+          <View style={[styles.quickPlannerGradient, { backgroundColor: colors.brandFill }]}>
             <View style={styles.quickPlannerBody}>
               <View style={styles.quickPlannerTag}>
-                <Ionicons name="flash" size={11} color="#FFFFFF" />
                 <Text style={styles.quickPlannerTagText}>1 MIN</Text>
               </View>
               <Text style={styles.quickPlannerTitle}>Build an itinerary in a minute</Text>
@@ -1193,7 +1201,7 @@ export default function HomeScreen() {
             <View style={styles.quickPlannerArrow}>
               <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </View>
-          </LinearGradient>
+          </View>
         </InteractiveButton>
 
         {/* Hero */}
@@ -1279,8 +1287,8 @@ export default function HomeScreen() {
           <View style={styles.sectionBlock}>
             {/* events keeps no See All: the section page renders spot cards, not events */}
             {renderSectionHeader('events', { hideSeeAll: true })}
-            <View style={[styles.eventsListContainer, { marginTop: 12 }]}>
-              {localEvents.slice(0, 3).map(evt => renderEventCard(evt))}
+            <View style={[styles.eventsListContainer, { marginTop: 12, backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              {localEvents.slice(0, 3).map((evt, i, arr) => renderEventCard(evt, i === arr.length - 1))}
             </View>
           </View>
         )}
@@ -1474,7 +1482,7 @@ export default function HomeScreen() {
           {selectedSpot && (
             <TouchableOpacity activeOpacity={1} style={[styles.modalContentCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               <View style={[styles.notchHandle, { backgroundColor: colors.divider }]} />
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '90%' }} contentContainerStyle={{ paddingBottom: 32 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '85%' }} contentContainerStyle={{ paddingBottom: 16 }}>
                 <View style={{ position: 'relative' }}>
                   <FadeImage sourceUri={selectedSpot.image} style={styles.modalImage} />
                   <TouchableOpacity activeOpacity={0.7} onPress={() => setSelectedSpot(null)} style={styles.modalCloseButton}>
@@ -1547,14 +1555,24 @@ export default function HomeScreen() {
                   {selectedSpot.days && selectedSpot.days.length > 0 && (
                     <View style={{ marginTop: 14 }}>
                       <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>Suggested itinerary</Text>
-                      {selectedSpot.days.map((day, idx) => (
-                        <View key={idx} style={styles.modalDayBlock}>
-                          <Text style={{ ...T.label, color: colors.text }}>Day {idx + 1}</Text>
-                          <Text style={{ ...T.caption, color: colors.textSecondary, marginTop: 2 }}>
-                            {typeof day === 'string' ? day : JSON.stringify(day)}
-                          </Text>
-                        </View>
-                      ))}
+                      {selectedSpot.days.map((day: any, idx: number) => {
+                        const title = typeof day === 'string' ? `Day ${idx + 1}` : day.title || `Day ${idx + 1}`;
+                        const acts = typeof day === 'object' && Array.isArray(day.activities) ? day.activities : [];
+                        return (
+                          <View key={idx} style={styles.modalDayBlock}>
+                            <Text style={{ ...T.label, color: colors.text }}>{title}</Text>
+                            {acts.length > 0 ? (
+                              acts.map((act: string, aIdx: number) => (
+                                <Text key={aIdx} style={{ ...T.caption, color: colors.textSecondary, marginTop: 2 }}>
+                                  • {act}
+                                </Text>
+                              ))
+                            ) : typeof day === 'string' ? (
+                              <Text style={{ ...T.caption, color: colors.textSecondary, marginTop: 2 }}>{day}</Text>
+                            ) : null}
+                          </View>
+                        );
+                      })}
                     </View>
                   )}
 
@@ -1564,7 +1582,7 @@ export default function HomeScreen() {
                       setSelectedSpot(null);
                       router.push({ pathname: '/trip/create', params: { destination: selectedSpot.name } });
                     }}
-                    style={{ marginTop: 24, marginBottom: 14 }}
+                    style={{ marginTop: 20, marginBottom: 8 }}
                   />
                 </View>
               </ScrollView>
@@ -1856,8 +1874,10 @@ const styles = StyleSheet.create({
   suggestionChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
   suggestionChipText: { ...T.label },
 
-  eventsListContainer: { paddingHorizontal: 20, gap: 10 },
-  eventRowCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, padding: 10, height: 80 },
+  // One shared border + radius for the whole list; rows divide with a
+  // hairline (set inline, per-row) instead of each carrying its own card.
+  eventsListContainer: { marginHorizontal: 20, borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
+  eventRowCard: { flexDirection: 'row', alignItems: 'center', padding: 10, height: 80 },
   eventDateBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   eventDateMonthText: { color: '#E0F2FE', ...T.microStrong },
   eventDateDayText: { color: '#FFFFFF', ...T.titleSm, lineHeight: 18 },
@@ -1869,7 +1889,7 @@ const styles = StyleSheet.create({
   eventThumbImage: { width: 54, height: 54, borderRadius: 12, resizeMode: 'cover' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(23, 23, 23, 0.45)', justifyContent: 'flex-end' },
-  modalContentCard: { width: '100%', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderBottomWidth: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 60 },
+  modalContentCard: { width: '100%', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderBottomWidth: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 24 },
   notchHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   modalImage: { width: '100%', height: 160, borderRadius: 16, marginBottom: 12 },
   modalCloseButton: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0, 0, 0, 0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },

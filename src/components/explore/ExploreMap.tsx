@@ -510,8 +510,6 @@ export const ExploreMap = forwardRef<ExploreMapHandle, ExploreMapProps>(
                     fillOpacity={isExportMode ? (isVisited || isSaved ? 0.82 : 0.05) : undefined}
                     strokeOpacity={isExportMode ? (isVisited || isSaved ? 0.95 : 0.30) : undefined}
                     opacity={isExportMode ? undefined : opacity}
-                    accessible
-                    accessibilityLabel={`${prov.name}, ${isVisited ? 'Visited' : 'Not visited'}`}
                     onPress={() => onSelectProvince(prov.id)}
                     {...(Platform.OS === 'web'
                       ? {
@@ -519,7 +517,15 @@ export const ExploreMap = forwardRef<ExploreMapHandle, ExploreMapProps>(
                         onMouseLeave: () => setHoveredProv(null),
                         style: { cursor: 'pointer' },
                       }
-                      : {})}
+                      : {
+                        // react-native-svg's web build forwards unknown props
+                        // straight onto the DOM <path>, and `accessible`/`true`
+                        // isn't a real SVG attribute there — React logs
+                        // "Received `true` for a non-boolean attribute" for
+                        // every province, every render. Native only.
+                        accessible: true,
+                        accessibilityLabel: `${prov.name}, ${isVisited ? 'Visited' : 'Not visited'}`,
+                      })}
                   />
                 </G>
               );

@@ -58,7 +58,7 @@ export const ExploreFilterPills: React.FC<ExploreFilterPillsProps> = ({ layer, o
               style={[
                 styles.label,
                 { color: active ? (isDark ? GOLD_LIGHT_TEXT : GOLD_DARK_TEXT) : colors.textMuted },
-                active && { fontFamily: 'Poppins-Bold', fontWeight: '700' },
+                active && { fontFamily: 'Sora-SemiBold', fontWeight: '700' },
               ]}
             >
               {opt.label}

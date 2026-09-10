@@ -554,18 +554,21 @@ export default function ActivityScreen() {
           </View>
 
           {filteredActivities.length > 0 ? (
-            filteredActivities.map(item => {
-              const icon = getActivityIcon(item);
-              return (
-                <ActivityItemCard
-                  key={item.id}
-                  item={item}
-                  colors={colors}
-                  icon={icon}
-                  onPress={() => router.push(`/trip/${item.tripId}`)}
-                />
-              );
-            })
+            <View style={[styles.feedGroup, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              {filteredActivities.map((item, i) => {
+                const icon = getActivityIcon(item);
+                return (
+                  <ActivityItemCard
+                    key={item.id}
+                    item={item}
+                    colors={colors}
+                    icon={icon}
+                    onPress={() => router.push(`/trip/${item.tripId}`)}
+                    isLast={i === filteredActivities.length - 1}
+                  />
+                );
+              })}
+            </View>
           ) : (
             activeFilter === 'all' ? (
               <EmptyState
@@ -614,6 +617,20 @@ const styles = StyleSheet.create({
   },
   categoryChipsContainer: {
     paddingVertical: 6,
+  },
+  // One border/radius/shadow for the whole feed instead of one per row —
+  // rows divide with a hairline (set per-row via `isLast`) the way
+  // ui/primitives' ListGroup does, rather than each stacking its own card.
+  feedGroup: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 4,
+    elevation: 1,
   },
   categoryChipsScroll: {
     paddingHorizontal: 20,

@@ -153,7 +153,7 @@ export async function fetchWikipediaNearbySpots(
         subtitle: 'Heritage & Scenic Destination',
         latitude: pLat,
         longitude: pLon,
-        days: [{ title: 'Visit Details', activities: ['Explore the landmark', 'Read cultural history'] }]
+        days: []
       });
     }
     return spots;
@@ -211,7 +211,7 @@ async function fetchWikipediaCategorySpots(
         subtitle: `${categoryTag}, Philippines`,
         latitude: pLat,
         longitude: pLon,
-        days: [{ title: 'Sightseeing', activities: [`Tour ${p.title}`, 'Take photos', 'Enjoy local scenery'] }]
+        days: []
       });
     }
     return spots;
@@ -265,7 +265,7 @@ async function searchWikipediaLive(
         subtitle: 'Philippines Destination',
         latitude: pLat,
         longitude: pLon,
-        days: [{ title: 'Visit', activities: [`Explore ${p.title}`, 'Local attractions'] }]
+        days: []
       });
     }
     return spots;
@@ -319,7 +319,7 @@ function mapOverpassPlacesToSpots(places: OverpassPlace[]): SpotInfo[] {
       subtitle: p.address,
       latitude: p.latitude,
       longitude: p.longitude,
-      days: [{ title: 'Visit Details', activities: [`Explore ${p.name}`, 'Take photos', 'Enjoy the area'] }],
+      days: []
     };
   });
 }
@@ -426,7 +426,7 @@ async function fetchCuratedCategorySpots(
         subtitle: pr.address,
         latitude: pr.latitude,
         longitude: pr.longitude,
-        days: [{ title: 'Dining Experience', activities: ['Enjoy local food specialties', 'Try house bestsellers'] }],
+        days: []
       }));
     }
     default:
@@ -537,7 +537,7 @@ export async function fetchFreePlaces(
             subtitle: pr.address,
             latitude: pr.latitude,
             longitude: pr.longitude,
-            days: [{ title: 'Visit Details', activities: ['Sightseeing', 'Explore surroundings'] }]
+            days: []
           };
         });
 

@@ -738,8 +738,6 @@ export default function TripsScreen() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Animation values
-  // Animation values
-  const scrollY = useRef(new Animated.Value(0)).current;
   const searchFocusAnim = useRef(new Animated.Value(0)).current;
   const tabAnim = useRef(new Animated.Value(0)).current;
 
@@ -834,12 +832,6 @@ export default function TripsScreen() {
     Animated.timing(searchFocusAnim, { toValue: 0, duration: 220, useNativeDriver: false }).start();
   };
 
-  const headerBgOpacity = scrollY.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' });
-  const headerTitleOpacity = scrollY.interpolate({ inputRange: [30, 70], outputRange: [0, 1], extrapolate: 'clamp' });
-  const brandOpacity = scrollY.interpolate({ inputRange: [0, 40], outputRange: [1, 0], extrapolate: 'clamp' });
-  const largeTitleOpacity = scrollY.interpolate({ inputRange: [0, 60], outputRange: [1, 0], extrapolate: 'clamp' });
-  const largeTitleScale = scrollY.interpolate({ inputRange: [-60, 0, 60], outputRange: [1.08, 1, 0.95], extrapolate: 'clamp' });
-  const largeTitleTranslateY = scrollY.interpolate({ inputRange: [-60, 0, 60], outputRange: [12, 0, -10], extrapolate: 'clamp' });
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -956,26 +948,14 @@ export default function TripsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      {/* Sticky/Floating Animated Header */}
-      <View style={styles.headerContainer}>
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: colors.card, opacity: headerBgOpacity, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.cardBorder },
-          ]}
-        />
-
-        <Animated.View style={[styles.headerBrandContainer, { opacity: brandOpacity, flexDirection: 'row', alignItems: 'center' }]}>
-          <Image source={require('../../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
-          <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.stickyTitleWrapper, { opacity: headerTitleOpacity }]}>
-          <Text style={[styles.stickyHeaderTitle, { color: colors.text }]}>Trips</Text>
-        </Animated.View>
-
-        {trips.length > 0 && (
-          <View style={styles.headerActions}>
+      {/* Top bar — brand on the left, join + create on the right */}
+      <View style={{ backgroundColor: colors.background, zIndex: 10 }}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerBrandRow}>
+            <Image source={require('../../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+          </View>
+          <View style={styles.headerRight}>
             <InteractiveButton onPress={() => router.push('/trip/join')} style={[styles.smallActionButton, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
               <Ionicons name="enter-outline" size={14} color={colors.brand} style={{ marginRight: 4 }} />
               <Text style={[styles.smallActionButtonText, { color: colors.brand }]}>Join</Text>
@@ -985,7 +965,7 @@ export default function TripsScreen() {
               <Text style={[styles.smallActionButtonText, { color: '#FFFFFF' }]}>Create</Text>
             </InteractiveButton>
           </View>
-        )}
+        </View>
       </View>
 
       {isLoading ? (
@@ -993,19 +973,15 @@ export default function TripsScreen() {
           <SkeletonLoader colors={colors} />
         </View>
       ) : (
-        <Animated.ScrollView
+        <ScrollView
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: NATIVE_DRIVER })}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} progressViewOffset={54} />}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
         >
-          <Animated.View
-            style={[styles.titleContainer, { opacity: largeTitleOpacity, transform: [{ translateY: largeTitleTranslateY }, { scale: largeTitleScale }] }]}
-          >
+          <View style={styles.titleContainer}>
             <Text style={[styles.pageTitle, { color: colors.text }]}>Trips</Text>
             <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>Every trip you're planning or joining, all here.</Text>
-          </Animated.View>
+          </View>
 
           {trips.length > 0 ? (
             <>
@@ -1140,9 +1116,7 @@ export default function TripsScreen() {
                   ]}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <View style={[styles.albumIconBox, { backgroundColor: colors.brandLight }]}>
-                      <Ionicons name="images" size={20} color={colors.brand} />
-                    </View>
+                    <Ionicons name="images" size={26} color={colors.brand} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.albumBannerTitle, { color: colors.text }]}>
                         {pastTrips.length} {pastTrips.length === 1 ? 'Trip Memory' : 'Trip Memories'} in Albums
@@ -1170,7 +1144,7 @@ export default function TripsScreen() {
               buttonSize="sm"
             />
           )}
-        </Animated.ScrollView>
+        </ScrollView>
       )}
 
       {/* ------------------------------------------------------------------ */}
@@ -1255,21 +1229,11 @@ export default function TripsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerContainer: {
-    height: 54,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    zIndex: 10,
-    position: 'relative',
-  },
-  headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 2 },
+  headerBrandRow: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
   appName: { ...T.title, letterSpacing: -0.5 },
-  stickyTitleWrapper: { position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', zIndex: -1 },
-  stickyHeaderTitle: { ...T.titleSm, fontWeight: '700', letterSpacing: -0.2 },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   smallActionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 32, paddingHorizontal: space.md, borderRadius: radius.sm },
   smallActionButtonText: { ...T.label },
   listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
@@ -1301,13 +1265,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
-  },
-  albumIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   albumBannerTitle: {
     ...T.emphasis,

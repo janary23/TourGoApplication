@@ -55,7 +55,7 @@ export default function SplashScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={isDark ? 'light' : 'dark'} translucent />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Animated.View
         style={[
           styles.logoContainer,
