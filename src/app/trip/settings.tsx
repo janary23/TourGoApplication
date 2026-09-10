@@ -54,7 +54,7 @@ export default function TripSettingsScreen() {
       <SafeAreaView style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-SemiBold' }}>Trip not found.</Text>
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.brand }]} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Go Back</Text>
+          <Text style={styles.backBtnText}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -63,15 +63,15 @@ export default function TripSettingsScreen() {
   if (tripRole !== 'organizer') {
     return (
       <SafeAreaView style={[styles.centerContainer, { backgroundColor: colors.background }]}>
-        <View style={[styles.lockIcon, { backgroundColor: '#FEE2E2' }]}>
+        <View style={[styles.lockIcon, { backgroundColor: colors.dangerSurface }]}>
           <Ionicons name="lock-closed" size={32} color={colors.danger} />
         </View>
-        <Text style={[styles.lockTitle, { color: colors.text }]}>Access Denied</Text>
+        <Text style={[styles.lockTitle, { color: colors.text }]}>Access denied</Text>
         <Text style={{ color: colors.textSecondary, fontFamily: 'Poppins-Medium', textAlign: 'center', paddingHorizontal: 40, lineHeight: 20 }}>
-          Only the Trip Organizer can configure features.
+          Only the trip organizer can configure features.
         </Text>
         <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.brand }]} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Go Back</Text>
+          <Text style={styles.backBtnText}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -141,9 +141,9 @@ export default function TripSettingsScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.alwaysLabel, { color: colors.text }]}>Itinerary</Text>
-            <Text style={[styles.alwaysDesc, { color: colors.textSecondary }]}>Always on · Timeline schedule</Text>
+            <Text style={[styles.alwaysDesc, { color: colors.textSecondary }]}>Always on, timeline schedule</Text>
           </View>
-          <Text style={[styles.alwaysBadge, { color: colors.brand, backgroundColor: colors.brandLight }]}>ALWAYS ON</Text>
+          <Text style={[styles.alwaysBadge, { color: colors.brand, backgroundColor: colors.brandLight }]}>Always on</Text>
         </View>
 
         {/* Feature groups */}
@@ -175,7 +175,7 @@ export default function TripSettingsScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
-          <Text style={styles.saveBtnText}>Save Changes</Text>
+          <Text style={styles.saveBtnText}>Save changes</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -234,8 +234,6 @@ const styles = StyleSheet.create({
   groupLabel: {
     ...T.microStrong,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
     marginBottom: 8,
   },
   featureCard: {

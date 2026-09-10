@@ -144,7 +144,7 @@ export default function ActiveDayPlanFloatingWidget() {
           >
             {/* Glowing Icon Badge */}
             <LinearGradient
-              colors={[colors.brand, '#0284C7']}
+              colors={[colors.brandFill, colors.brandFillDeep]}
               style={styles.iconCircle}
             >
               <Ionicons name="flash" size={16} color="#FFFFFF" />
@@ -153,9 +153,9 @@ export default function ActiveDayPlanFloatingWidget() {
             {/* Info Details */}
             <View style={styles.pillTextWrap}>
               <View style={styles.activeTagRow}>
-                <View style={styles.activeDot} />
+                <View style={[styles.activeDot, { backgroundColor: colors.success }]} />
                 <Text style={[styles.activeTagText, { color: colors.brand }]}>
-                  DAY PLAN
+                  Day plan
                 </Text>
               </View>
               <Text style={[styles.pillDestText, { color: colors.text }]} numberOfLines={1}>
@@ -164,7 +164,7 @@ export default function ActiveDayPlanFloatingWidget() {
             </View>
 
             {/* Action indicator */}
-            <View style={[styles.pillActionBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+            <View style={[styles.pillActionBtn, { backgroundColor: colors.surface }]}>
               <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
             </View>
           </TouchableOpacity>
@@ -200,24 +200,24 @@ export default function ActiveDayPlanFloatingWidget() {
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <View style={styles.activeDot} />
+                  <View style={[styles.activeDot, { backgroundColor: colors.success }]} />
                   <Text style={[styles.sheetActiveTag, { color: colors.brand }]}>
-                    CURRENT SPONTANEOUS PLAN
+                    Current spontaneous plan
                   </Text>
                 </View>
                 <Text style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={1}>
                   {displayPlan.destination}
                 </Text>
                 <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                  {displayPlan.dateStr || 'Today'} {displayPlan.timeRange ? `· ${displayPlan.timeRange}` : ''}
-                  {displayPlan.plan?.estimatedTotalCost ? ` · Est: ${displayPlan.plan.estimatedTotalCost}` : ''}
-                  {` · ${stops.length} Stops`}
+                  {displayPlan.dateStr || 'Today'}{displayPlan.timeRange ? `, ${displayPlan.timeRange}` : ''}
+                  {displayPlan.plan?.estimatedTotalCost ? `, est. ${displayPlan.plan.estimatedTotalCost}` : ''}
+                  {`, ${stops.length} stops`}
                 </Text>
               </View>
 
               <TouchableOpacity
                 onPress={() => setModalVisible(false)}
-                style={[styles.closeBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+                style={[styles.closeBtn, { backgroundColor: colors.surface }]}
               >
                 <Ionicons name="close" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -270,7 +270,7 @@ export default function ActiveDayPlanFloatingWidget() {
                             </View>
                           )}
                           {!!stop.estimatedCost && (
-                            <View style={[styles.categoryBadge, { backgroundColor: isDark ? 'rgba(71, 173, 245, 0.12)' : '#E9F4FE' }]}>
+                            <View style={[styles.categoryBadge, { backgroundColor: colors.brandLight }]}>
                               <Text style={[styles.categoryBadgeText, { color: colors.brand, fontWeight: '700' }]}>
                                 {stop.estimatedCost}
                               </Text>

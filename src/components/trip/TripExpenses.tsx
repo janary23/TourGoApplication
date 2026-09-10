@@ -282,7 +282,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
     const choice = await chooseAction({
       title: exp.title,
-      message: `${peso(exp.amount)} · ${iPaid ? 'You paid' : `${exp.paidBy} paid`}`,
+      message: `${peso(exp.amount)}, ${iPaid ? 'you paid' : `${exp.paidBy} paid`}`,
       options: options.map((o) => ({ label: o.label, destructive: o.destructive })),
     });
     if (choice >= 0) options[choice].action();
@@ -298,7 +298,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
           title="Expenses"
           subtitle={
             isViewOnly
-              ? `Preserved Ledger · ${peso(total)} total spent`
+              ? `Preserved ledger, ${peso(total)} total spent`
               : expenses.length > 0
               ? `${peso(total)} spent across ${expenses.length} ${expenses.length === 1 ? 'entry' : 'entries'}`
               : undefined
@@ -306,13 +306,13 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
         />
         {!isViewOnly && (
           <View style={styles.headerActions}>
-            <Press onPress={handleScanReceipt} style={styles.scanBtn}>
+            <Press onPress={handleScanReceipt} style={[styles.scanBtn, { borderColor: colors.cardBorder }]}>
               <Ionicons name="scan-outline" size={17} color={colors.brand} />
-              <Text style={[T.subhead, { color: colors.brand, fontWeight: '600' }]}>Scan Receipt</Text>
+              <Text style={[T.subhead, { color: colors.brand, fontWeight: '600' }]}>Scan receipt</Text>
             </Press>
-            <Press onPress={handleOpenSheet} style={[styles.scanBtn, { backgroundColor: colors.brand }]}>
+            <Press onPress={handleOpenSheet} style={[styles.scanBtn, { backgroundColor: colors.brand, borderColor: colors.brand }]}>
               <Ionicons name="add" size={17} color="#fff" />
-              <Text style={[T.subhead, { color: '#fff', fontWeight: '600' }]}>Add Expense</Text>
+              <Text style={[T.subhead, { color: '#fff', fontWeight: '600' }]}>Add expense</Text>
             </Press>
           </View>
         )}
@@ -404,7 +404,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
                         key={exp.id}
                         icon={iconFor(exp.category)}
                         title={exp.title}
-                        subtitle={`${iPaid ? 'You' : exp.paidBy} paid · ${peso(per)} each`}
+                        subtitle={`${iPaid ? 'You' : exp.paidBy} paid, ${peso(per)} each`}
                         showChevron={false}
                         onPress={!isViewOnly ? () => handleExpenseTap(exp) : undefined}
                         trailing={
@@ -599,7 +599,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'transparent',
     borderWidth: hairline,
-    borderColor: '#6B7280',
   },
   scanSheetBtn: {
     flexDirection: 'row',

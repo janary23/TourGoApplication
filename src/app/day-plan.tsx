@@ -549,7 +549,7 @@ export default function DayPlanScreen() {
               <View style={styles.heroTagRow}>
                 <View style={styles.heroTag}>
                   <Ionicons name="flash" size={11} color="#FFFFFF" />
-                  <Text style={styles.heroTagText}>SPONTANEOUS DAY PLAN</Text>
+                  <Text style={styles.heroTagText}>Spontaneous day plan</Text>
                 </View>
               </View>
               <Text style={styles.heroTitle}>Build an Itinerary in 1 Minute</Text>
@@ -636,7 +636,7 @@ export default function DayPlanScreen() {
               >
                 <Ionicons name="time-outline" size={18} color={colors.brand} style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.timeMicroLabel, { color: colors.textMuted }]}>START TIME</Text>
+                  <Text style={[styles.timeMicroLabel, { color: colors.textMuted }]}>Start time</Text>
                   <Text style={[styles.timeTextValue, { color: startTime ? colors.text : colors.textMuted }]}>
                     {startTime || 'Pick time'}
                   </Text>
@@ -655,7 +655,7 @@ export default function DayPlanScreen() {
               >
                 <Ionicons name="moon-outline" size={18} color={colors.brand} style={{ marginRight: 8 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.timeMicroLabel, { color: colors.textMuted }]}>END TIME</Text>
+                  <Text style={[styles.timeMicroLabel, { color: colors.textMuted }]}>End time</Text>
                   <Text style={[styles.timeTextValue, { color: endTime ? colors.text : colors.textMuted }]}>
                     {endTime || 'Pick time'}
                   </Text>
@@ -762,14 +762,14 @@ export default function DayPlanScreen() {
               <View style={{ marginTop: 8 }}>
                 <View style={styles.resultTag}>
                   <View style={[styles.resultDot, { backgroundColor: colors.brand }]} />
-                  <Text style={[styles.resultTagText, { color: colors.textSecondary }]}>1 Day Plan · Smart Itinerary · Local Picks</Text>
+                  <Text style={[styles.resultTagText, { color: colors.textSecondary }]}>Smart itinerary with local picks</Text>
                 </View>
-                <Text style={[styles.resultTitle, { color: colors.text }]}>Your Day in {metaRef.current.destination}</Text>
+                <Text style={[styles.resultTitle, { color: colors.text }]}>Your day in {metaRef.current.destination}</Text>
                 <Text style={[styles.resultMeta, { color: colors.textSecondary }]}>
                   {dateLabelFor(metaRef.current.date)}
-                  {metaRef.current.timeRange ? ` · ${metaRef.current.timeRange}` : ''}
-                  {metaRef.current.group ? ` · ${groupLabelFor(metaRef.current.group)}` : ''}
-                  {metaRef.current.budget ? ` · ${budgetLabelFor(metaRef.current.budget)}` : ''}
+                  {metaRef.current.timeRange ? `, ${metaRef.current.timeRange}` : ''}
+                  {metaRef.current.group ? `, ${groupLabelFor(metaRef.current.group)}` : ''}
+                  {metaRef.current.budget ? `, ${budgetLabelFor(metaRef.current.budget)}` : ''}
                 </Text>
 
                 {/* ── Budget Summary Banner ── */}
@@ -779,10 +779,10 @@ export default function DayPlanScreen() {
                       <Ionicons name="wallet-outline" size={16} color={colors.brand} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={[styles.budgetBannerLabel, { color: colors.textMuted }]}>ESTIMATED DAY EXPENSES</Text>
+                      <Text style={[styles.budgetBannerLabel, { color: colors.textMuted }]}>Estimated day expenses</Text>
                       <Text style={[styles.budgetBannerValue, { color: colors.text }]}>
                         {plan.estimatedTotalCost || 'Varies by stop'}
-                        {plan.budgetTier ? ` · ${plan.budgetTier}` : ''}
+                        {plan.budgetTier ? `, ${plan.budgetTier}` : ''}
                       </Text>
                     </View>
                   </View>
@@ -815,7 +815,7 @@ export default function DayPlanScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="navigate-circle" size={18} color={colors.brand} />
                       <Text style={[styles.mapHeaderTitle, { color: colors.text }]}>
-                        {optimizing ? 'AI Optimizing Route...' : `Smart Route · ${resolvedMapRouteStops.length} of ${mapRouteStops.length} Stops pinned`}
+                        {optimizing ? 'Optimizing route…' : `Smart route: ${resolvedMapRouteStops.length} of ${mapRouteStops.length} stops pinned`}
                       </Text>
                     </View>
                     <View style={[styles.mapChip, { backgroundColor: colors.brandLight }]}>
@@ -844,7 +844,7 @@ export default function DayPlanScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.miniStopTitle, { color: colors.text }]} numberOfLines={1}>{st.title}</Text>
                           <Text style={[styles.miniStopSub, { color: st.resolved ? colors.textSecondary : colors.textMuted }]}>
-                            {st.resolved ? `${st.time || ''} · ${st.category || ''}` : 'Exact spot not found — not shown on the map'}
+                            {st.resolved ? `${st.time || ''}, ${st.category || ''}` : "Exact spot not found. Not shown on the map."}
                           </Text>
                         </View>
                         {!st.resolved && <Ionicons name="location-outline" size={15} color={colors.textMuted} />}
@@ -969,10 +969,10 @@ export default function DayPlanScreen() {
 
             <View style={[styles.summaryBar, { backgroundColor: colors.surface, borderColor: colors.cardBorder, paddingBottom: 14 }]}>
               <View style={styles.summaryLeft}>
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>TOTAL TIME</Text>
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total time</Text>
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryValue, { color: colors.text }]}>{minuteLabel(totalMinutes)}</Text>
-                  <Text style={[styles.summaryCount, { color: colors.textMuted }]}>· {plan?.stops?.length || 0} Stops</Text>
+                  <Text style={[styles.summaryCount, { color: colors.textMuted }]}>{plan?.stops?.length || 0} stops</Text>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -1084,7 +1084,7 @@ export default function DayPlanScreen() {
                 </Text>
               </View>
 
-              <Text style={[styles.clockSubLabel, { color: colors.textMuted }]}>SELECT HOUR</Text>
+              <Text style={[styles.clockSubLabel, { color: colors.textMuted }]}>Select hour</Text>
               <View style={styles.clockGrid}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
                   <TouchableOpacity
@@ -1112,7 +1112,7 @@ export default function DayPlanScreen() {
 
               <View style={styles.clockMinutePeriodRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.clockSubLabel, { color: colors.textMuted }]}>MINUTE</Text>
+                  <Text style={[styles.clockSubLabel, { color: colors.textMuted }]}>Minute</Text>
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     {['00', '15', '30', '45'].map((m) => (
                       <TouchableOpacity

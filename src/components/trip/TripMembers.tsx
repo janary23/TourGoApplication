@@ -84,7 +84,7 @@ export default function TripMembers({
           title="Members"
           subtitle={
             attendanceOn
-              ? `${members.length} on this trip · ${checkedIn.length} checked in`
+              ? `${members.length} on this trip, ${checkedIn.length} checked in`
               : `${members.length} ${members.length === 1 ? 'traveller' : 'travellers'} on this trip`
           }
           action={embedded ? undefined : { icon: 'chevron-back', onPress: onBack, label: 'Back' }}
@@ -164,7 +164,7 @@ export default function TripMembers({
                     subtitle={
                       attendanceOn
                         ? m.checkedIn
-                          ? `Checked in · ${m.lastCheckedInTime || 'just now'}`
+                          ? `Checked in, ${m.lastCheckedInTime || 'just now'}`
                           : 'Not checked in'
                         : m.email
                         ? m.email

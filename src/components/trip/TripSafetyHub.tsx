@@ -309,8 +309,8 @@ export default function TripSafetyHub({
                 <View style={styles.heroBannerOverlay}>
                   {/* Top row: stop label + all-here badge */}
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={[T.micro, { color: 'rgba(255,255,255,0.82)', flex: 1, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.9 }]}>
-                      Day {(current.dayIndex ?? 0) + 1} · Stop {stopIndex + 1}/{stops.length}
+                    <Text style={[T.micro, { color: 'rgba(255,255,255,0.82)', flex: 1, fontWeight: '700' }]}>
+                      Day {(current.dayIndex ?? 0) + 1}, stop {stopIndex + 1}/{stops.length}
                     </Text>
                     {arrivedCount === members.length && members.length > 0 && (
                       <Badge label="All here ✓" tone="positive" />
@@ -320,7 +320,7 @@ export default function TripSafetyHub({
                   <Text style={[T.title, { color: '#FFFFFF', marginTop: 4 }]} numberOfLines={2}>{current.title}</Text>
                   {(current.time || current.location) && (
                     <Text style={[T.caption, { color: 'rgba(255,255,255,0.7)', marginTop: 2 }]} numberOfLines={1}>
-                      {[current.time, current.location].filter(Boolean).join(' · ')}
+                      {[current.time, current.location].filter(Boolean).join(', ')}
                     </Text>
                   )}
                   {/* Progress bar inline */}
@@ -358,9 +358,9 @@ export default function TripSafetyHub({
               </>
             ) : iArrived ? (
               <Press onPress={() => me && undoArrival(current.id, me.id)} style={{ flex: 1 }}>
-                <View style={[styles.heroNavBtn, { borderColor: sc.positive, backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                <View style={[styles.heroNavBtn, { borderColor: sc.positive, backgroundColor: colors.successSurface }]}>
                   <Ionicons name="checkmark-circle" size={16} color={sc.positive} />
-                  <Text style={[T.caption, { color: sc.positive, fontWeight: '700' }]}>You're checked in · undo</Text>
+                  <Text style={[T.caption, { color: sc.positive, fontWeight: '700' }]}>You're checked in, undo</Text>
                 </View>
               </Press>
             ) : (
@@ -385,8 +385,8 @@ export default function TripSafetyHub({
         <View style={[styles.membersCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           {/* Header row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={[T.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', flex: 1 }]}>
-              Members · {arrivedCount}/{members.length}
+            <Text style={[T.label, { color: colors.textSecondary, flex: 1 }]}>
+              Members, {arrivedCount}/{members.length}
             </Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {isOrganizer && (
@@ -483,7 +483,7 @@ export default function TripSafetyHub({
                     {here ? (
                       <Text style={[T.micro, { color: colors.textMuted, marginTop: 1 }]}>
                         Arrived {clockOf(at)}
-                        {current.time ? ` · sched. ${current.time}` : ''}
+                        {current.time ? `, sched. ${current.time}` : ''}
                       </Text>
                     ) : (
                       <Text style={[T.micro, { color: colors.textMuted, marginTop: 1 }]}>Not yet arrived</Text>
@@ -525,7 +525,7 @@ export default function TripSafetyHub({
           <View style={[styles.infoRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <Ionicons name={liveWeather.currentIcon as any} size={22} color={colors.brand} />
             <View style={{ flex: 1 }}>
-              <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>{liveWeather.currentTemp}°C · {liveWeather.currentCondition}</Text>
+              <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>{liveWeather.currentTemp}°C, {liveWeather.currentCondition}</Text>
               <Text style={[T.micro, { color: colors.textMuted }]} numberOfLines={1}>{liveWeather.advice}</Text>
             </View>
             <Text style={[T.micro, { color: colors.textMuted }]}>💧{liveWeather.currentHumidity}%</Text>
@@ -542,7 +542,7 @@ export default function TripSafetyHub({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[T.caption, { color: colors.text, fontWeight: '700' }]}>Safety Radar & Emergency Map</Text>
-            <Text style={[T.micro, { color: colors.textMuted }]}>Satellite map · nearby hospitals</Text>
+            <Text style={[T.micro, { color: colors.textMuted }]}>Satellite map, nearby hospitals</Text>
           </View>
           <Ionicons name="chevron-forward" size={14} color={colors.brand} />
         </Pressable>
@@ -552,7 +552,7 @@ export default function TripSafetyHub({
           <Press onPress={() => setShowSummary(v => !v)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.md }}>
               <Ionicons name="stats-chart-outline" size={15} color={colors.brand} style={{ marginRight: 8 }} />
-              <Text style={[T.caption, { color: colors.text, fontWeight: '700', flex: 1 }]}>Trip attendance record · {stops.length} stops</Text>
+              <Text style={[T.caption, { color: colors.text, fontWeight: '700', flex: 1 }]}>Trip attendance record, {stops.length} stops</Text>
               <Ionicons name={showSummary ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textMuted} />
             </View>
           </Press>
@@ -562,7 +562,7 @@ export default function TripSafetyHub({
                 <ListRow
                   key={member.id}
                   title={member.name === currentUserName ? `${member.name} (you)` : member.name}
-                  subtitle={lateStops > 0 ? `${lateStops} late · ${lateTotal}m total` : present > 0 ? 'Always on time' : 'No check-ins yet'}
+                  subtitle={lateStops > 0 ? `${lateStops} late, ${lateTotal}m total` : present > 0 ? 'Always on time' : 'No check-ins yet'}
                   leading={<Avatar name={member.name} uri={member.avatar_url || undefined} size={30} />}
                   showChevron={false}
                   trailing={

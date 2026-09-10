@@ -520,9 +520,9 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
                     const dist = memberDistances.get(m.id);
                     const isMe = m.userId === currentUserId || m.id === currentUserId;
                     const sub = isOutside
-                      ? `⚠️ Outside safe zone · ${formatRadius(Math.round(dist ?? 0))} away`
+                      ? `⚠️ Outside safe zone, ${formatRadius(Math.round(dist ?? 0))} away`
                       : isLocated
-                      ? (geofenceActive ? '✓ Inside safe zone · Live sharing' : '● Live sharing active')
+                      ? (geofenceActive ? '✓ Inside safe zone, live sharing' : '● Live sharing active')
                       : m.email || (m.role === 'organizer' ? 'Organizes this trip' : 'Travelling on this trip');
 
                     return (
@@ -739,7 +739,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
                   key={em.id}
                   icon={em.icon as any}
                   title={em.title}
-                  subtitle={`${em.desc} · 📞 ${em.phone}`}
+                  subtitle={`${em.desc}, 📞 ${em.phone}`}
                   onPress={() => {
                     mapRef.current?.flyTo(em.lat, em.lng, 15);
                     setSelectedPin(em);
@@ -761,7 +761,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
                       key={s.id}
                       icon="flag-outline"
                       title={s.title}
-                      subtitle={[s.day, s.time, s.location].filter(Boolean).join(' · ')}
+                      subtitle={[s.day, s.time, s.location].filter(Boolean).join(', ')}
                       onPress={() => {
                         mapRef.current?.flyTo(s.lat, s.lng, 15);
                         setSelectedPin({ kind: 'stop', ...s });
@@ -781,7 +781,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
                       key={s.id}
                       icon="help-circle-outline"
                       title={s.title}
-                      subtitle={[s.day, s.time].filter(Boolean).join(' · ') || 'Add a location to place this on the map'}
+                      subtitle={[s.day, s.time].filter(Boolean).join(', ') || 'Add a location to place this on the map'}
                       showChevron={false}
                     />
                   ))}
@@ -854,7 +854,7 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
           <View>
             <Txt variant="headline">{selectedPin?.title}</Txt>
             <Txt variant="subhead" tone="muted" style={{ marginTop: space.xs }}>
-              {[selectedPin?.day, selectedPin?.time, selectedPin?.location].filter(Boolean).join(' · ')}
+              {[selectedPin?.day, selectedPin?.time, selectedPin?.location].filter(Boolean).join(', ')}
             </Txt>
           </View>
         )}

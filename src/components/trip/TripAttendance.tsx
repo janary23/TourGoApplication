@@ -46,7 +46,7 @@ export default function TripAttendance({
     <ListRow
       key={m.id}
       title={m.name}
-      subtitle={m.checkedIn ? `Arrived · ${m.lastCheckedInTime || 'just now'}` : 'Not arrived yet'}
+      subtitle={m.checkedIn ? `Arrived, ${m.lastCheckedInTime || 'just now'}` : 'Not arrived yet'}
       leading={<Avatar name={m.name} size={32} />}
       showChevron={false}
       trailing={

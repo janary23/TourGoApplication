@@ -136,7 +136,7 @@ export default function TripPolls({
             <Txt variant="headline">{poll.question}</Txt>
             <Txt variant="footnote" tone="muted" style={{ marginTop: 2 }}>
               {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
-              {poll.allowMultiple ? ' · pick more than one' : ''}
+              {poll.allowMultiple ? ', pick more than one' : ''}
             </Txt>
           </View>
           {iVoted && <Badge label="Voted" tone="accent" />}

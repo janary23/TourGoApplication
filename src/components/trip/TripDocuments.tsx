@@ -114,7 +114,7 @@ export default function TripDocuments({
                 key={doc.id}
                 icon={docIcon(doc.title)}
                 title={doc.title}
-                subtitle={`${docKind(doc.title)} · ${doc.fileSize}`}
+                subtitle={`${docKind(doc.title)}, ${doc.fileSize}`}
                 showChevron={false}
                 trailing={
                   isOrganizer ? (
