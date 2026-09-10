@@ -293,7 +293,7 @@ const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(f
         {
           width: mapW,
           height: mapH,
-          backgroundColor: isDark ? '#0B0F19' : '#E2E8F0',
+          backgroundColor: colors.surface,
         },
         style,
       ]}
@@ -339,8 +339,8 @@ const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(f
                   </View>
                 )}
                 {activeMarker.isEmergency && (
-                  <View style={[styles.miniBadge, { backgroundColor: '#FEE2E2' }]}>
-                    <Text style={[styles.miniBadgeText, { color: '#EF4444' }]}>Emergency Spot</Text>
+                  <View style={[styles.miniBadge, { backgroundColor: colors.dangerSurface }]}>
+                    <Text style={[styles.miniBadgeText, { color: colors.danger }]}>Emergency spot</Text>
                   </View>
                 )}
               </View>
@@ -349,15 +349,16 @@ const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(f
               </Text>
               {(activeMarker.description || activeMarker.time) && (
                 <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {activeMarker.time ? `${activeMarker.time} · ` : ''}
-                  {activeMarker.description || activeMarker.subtitle || ''}
+                  {[activeMarker.time, activeMarker.description || activeMarker.subtitle].filter(Boolean).join(', ')}
                 </Text>
               )}
             </View>
 
             <TouchableOpacity
               onPress={() => setActiveMarker(null)}
-              style={[styles.closeCardBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+              style={[styles.closeCardBtn, { backgroundColor: colors.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
             >
               <Ionicons name="close" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -443,11 +444,11 @@ const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(f
       <View style={styles.controlsCol}>
         {showZoomControls && (
           <View style={[styles.zoomBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <TouchableOpacity onPress={handleZoomIn} style={styles.controlBtn}>
+            <TouchableOpacity onPress={handleZoomIn} style={styles.controlBtn} hitSlop={4} accessibilityRole="button" accessibilityLabel="Zoom in">
               <Ionicons name="add" size={18} color={colors.text} />
             </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: colors.divider }} />
-            <TouchableOpacity onPress={handleZoomOut} style={styles.controlBtn}>
+            <TouchableOpacity onPress={handleZoomOut} style={styles.controlBtn} hitSlop={4} accessibilityRole="button" accessibilityLabel="Zoom out">
               <Ionicons name="remove" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -458,6 +459,9 @@ const RasterTileMapViewer = forwardRef<MapViewerRef, RasterTileMapViewerProps>(f
             activeOpacity={0.8}
             onPress={handleRecenter}
             style={[styles.recenterBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Recenter map"
           >
             <Ionicons name="locate" size={18} color={colors.brand} />
           </TouchableOpacity>

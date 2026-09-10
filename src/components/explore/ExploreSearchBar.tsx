@@ -109,7 +109,7 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
         <View style={[styles.results, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           {provinceResults.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROVINCES</Text>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Provinces</Text>
               {provinceResults.map(p => (
                 <Pressable
                   key={p.id}
@@ -134,7 +134,7 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
 
           {googleResults.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LIVE PLACES</Text>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Live places</Text>
               {googleResults.map(place => (
                 <Pressable
                   key={place.id}
@@ -211,8 +211,6 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...T.microStrong,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginHorizontal: 14,
     marginTop: 10,
     marginBottom: 2,

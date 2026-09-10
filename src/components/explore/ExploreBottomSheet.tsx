@@ -180,6 +180,8 @@ export const ExploreBottomSheet: React.FC<ExploreBottomSheetProps> = ({
               hitSlop={12}
               activeOpacity={0.6}
               style={[styles.closeBtn, { backgroundColor: isDark ? '#3A3A3C' : '#F0F0F0' }]}
+              accessibilityRole="button"
+              accessibilityLabel="Collapse panel"
             >
               <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
             </TouchableOpacity>

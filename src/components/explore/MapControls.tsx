@@ -14,9 +14,11 @@ interface MapControlsProps {
 export const MapControls: React.FC<MapControlsProps> = ({ onZoomIn, onZoomOut, onReset, onLocate, onShare }) => {
   const { colors } = useTheme();
 
-  const renderButton = (icon: keyof typeof Ionicons.glyphMap, onPress: () => void, isLast = false) => (
+  const renderButton = (icon: keyof typeof Ionicons.glyphMap, label: string, onPress: () => void, isLast = false) => (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
         styles.btn,
         pressed && { backgroundColor: colors.surface },
@@ -29,11 +31,11 @@ export const MapControls: React.FC<MapControlsProps> = ({ onZoomIn, onZoomOut, o
 
   return (
     <View style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-      {renderButton('add', onZoomIn)}
-      {renderButton('remove', onZoomOut)}
-      {renderButton('compass-outline', onReset)}
-      {renderButton('locate-outline', onLocate)}
-      {renderButton('share-social-outline', onShare, true)}
+      {renderButton('add', 'Zoom in', onZoomIn)}
+      {renderButton('remove', 'Zoom out', onZoomOut)}
+      {renderButton('compass-outline', 'Reset map view', onReset)}
+      {renderButton('locate-outline', 'Find my location', onLocate)}
+      {renderButton('share-social-outline', 'Share map', onShare, true)}
     </View>
   );
 };
@@ -53,8 +55,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   btn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

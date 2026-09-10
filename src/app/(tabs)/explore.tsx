@@ -772,13 +772,13 @@ export default function ExploreScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.provinceDetailContainer}>
               {/* Back Header */}
               <View style={styles.detailHeader}>
-                <TouchableOpacity onPress={() => { setViewType('list'); setSelectedProvinceId(null); setSelectedDestId(null); setSelectedMuniId(null); }} hitSlop={12} style={styles.detailBackBtn}>
+                <TouchableOpacity onPress={() => { setViewType('list'); setSelectedProvinceId(null); setSelectedDestId(null); setSelectedMuniId(null); }} hitSlop={12} style={styles.detailBackBtn} accessibilityRole="button" accessibilityLabel="Back">
                   <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedProvince?.name}</Text>
                   <Text style={[styles.detailSubtitle, { color: colors.textMuted }]}>
-                    {selectedProvince?.region} Region • Philippines
+                    {selectedProvince?.region} Region, Philippines
                   </Text>
                 </View>
                 {selectedProvince && (
@@ -856,7 +856,7 @@ export default function ExploreScreen() {
                       activeOpacity={0.85}
                     >
                       <Ionicons name="calendar-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.planButtonText}>Plan Your First Trip</Text>
+                      <Text style={styles.planButtonText}>Plan your first trip</Text>
                     </TouchableOpacity>
                   </View>
                 )
@@ -865,8 +865,8 @@ export default function ExploreScreen() {
               {/* Municipalities List */}
               {selectedProvinceId && provinceMunis.length > 0 && (
                 <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.detailSectionLabel, { color: colors.textMuted }]}>MUNICIPALITIES</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muniScroll}>
+                  <Text style={[styles.detailSectionLabel, { color: colors.textMuted }]}>Municipalities</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muniScroll} contentContainerStyle={{ alignItems: 'flex-start' }}>
                     <TouchableOpacity
                       style={[
                         styles.muniChip,
@@ -903,7 +903,7 @@ export default function ExploreScreen() {
 
               {/* Destinations Section */}
               <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.detailSectionLabel, { color: colors.textMuted }]}>DESTINATIONS IN THE REGION</Text>
+                <Text style={[styles.detailSectionLabel, { color: colors.textMuted }]}>Destinations in the region</Text>
                 
                 {isPlacesLoading ? (
                   <View style={{ paddingVertical: 40, alignItems: 'center' }}>
@@ -953,6 +953,8 @@ export default function ExploreScreen() {
                               hitSlop={8}
                               onPress={() => toggleDestSaved(dest.id)}
                               style={styles.gemHeartBadge}
+                              accessibilityRole="button"
+                              accessibilityLabel={isSaved ? 'Remove from wishlist' : 'Add to wishlist'}
                             >
                               <Ionicons
                                 name={isSaved ? "heart" : "heart-outline"}
@@ -1020,7 +1022,7 @@ export default function ExploreScreen() {
                               onPress={() => router.push(`/trip/create?dest=${encodeURIComponent(dest.name)}&title=${encodeURIComponent(dest.name)}`)}
                             >
                               <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
-                              <Text style={{ ...T.label, color: '#FFFFFF' }}>Plan Trip</Text>
+                              <Text style={{ ...T.label, color: '#FFFFFF' }}>Plan trip</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1085,8 +1087,8 @@ export default function ExploreScreen() {
                     <Text style={{ ...T.title, color: colors.brand }}>
                       {completedTripAlbums.length}
                     </Text>
-                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {completedTripAlbums.length === 1 ? 'Trip Memory' : 'Trip Memories'}
+                    <Text style={{ ...T.micro, color: colors.textMuted }}>
+                      {completedTripAlbums.length === 1 ? 'Trip memory' : 'Trip memories'}
                     </Text>
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
@@ -1094,8 +1096,8 @@ export default function ExploreScreen() {
                     <Text style={{ ...T.title, color: colors.success }}>
                       {visitedProvincesList.length}
                     </Text>
-                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Provinces Explored
+                    <Text style={{ ...T.micro, color: colors.textMuted }}>
+                      Provinces explored
                     </Text>
                   </View>
                   <View style={{ width: 1, height: 24, backgroundColor: colors.cardBorder }} />
@@ -1103,8 +1105,8 @@ export default function ExploreScreen() {
                     <Text style={{ ...T.title, color: colors.warning }}>
                       {log.visitedDestinations.length}
                     </Text>
-                    <Text style={{ ...T.micro, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Spots on Map
+                    <Text style={{ ...T.micro, color: colors.textMuted }}>
+                      Spots on map
                     </Text>
                   </View>
                 </View>
@@ -1116,8 +1118,8 @@ export default function ExploreScreen() {
                   <View style={{ marginBottom: 26 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                       <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
-                      <Text style={{ ...T.label, color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
-                        Past Memories Scrapbook
+                      <Text style={{ ...T.label, color: colors.textSecondary }}>
+                        Past memories scrapbook
                       </Text>
                     </View>
 
@@ -1172,7 +1174,7 @@ export default function ExploreScreen() {
                                 borderRadius: 8,
                               }}>
                                 <Ionicons name="checkmark-done-outline" size={10} color="#FFFFFF" />
-                                <Text style={{ color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.5 }}>MEMORY</Text>
+                                <Text style={{ color: '#FFFFFF', ...T.microStrong }}>Memory</Text>
                               </View>
 
                               {/* Role Chip */}
@@ -1186,21 +1188,21 @@ export default function ExploreScreen() {
                                 borderRadius: 8,
                               }}>
                                 <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
-                                  {trip.role === 'organizer' ? 'ORGANIZED' : 'JOINED'}
+                                  {trip.role === 'organizer' ? 'Organized' : 'Joined'}
                                 </Text>
                               </View>
                             </View>
 
                             {/* Polaroid Card Details */}
                             <View style={{ paddingTop: 8, paddingHorizontal: 2 }}>
-                              <Text style={{ ...T.microStrong, color: colors.brand, letterSpacing: 0.8 }} numberOfLines={1}>
-                                {trip.destination.split(',')[0].toUpperCase()}
+                              <Text style={{ ...T.microStrong, color: colors.brand }} numberOfLines={1}>
+                                {trip.destination.split(',')[0]}
                               </Text>
                               <Text style={{ ...T.label, color: colors.text, marginVertical: 2 }} numberOfLines={1}>
                                 {trip.title}
                               </Text>
                               <Text style={{ ...T.micro, color: colors.textMuted }}>
-                                {new Date(trip.endDate || trip.startDate).getFullYear()} • {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
+                                {new Date(trip.endDate || trip.startDate).getFullYear()}, {buddyCount} {buddyCount === 1 ? 'buddy' : 'buddies'}
                               </Text>
 
                               {itinCount > 0 && (
@@ -1214,7 +1216,7 @@ export default function ExploreScreen() {
 
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                  <Text style={{ ...T.microStrong, color: colors.brand }}>Open Memory</Text>
+                                  <Text style={{ ...T.microStrong, color: colors.brand }}>Open memory</Text>
                                   <Ionicons name="chevron-forward" size={10} color={colors.brand} />
                                 </View>
 
@@ -1227,6 +1229,8 @@ export default function ExploreScreen() {
                                     }}
                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     style={{ padding: 2 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Share this trip"
                                   >
                                     <Ionicons name="share-social-outline" size={13} color={colors.brand} />
                                   </TouchableOpacity>
@@ -1245,8 +1249,8 @@ export default function ExploreScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
-                          <Text style={{ ...T.label, color: colors.textSecondary, letterSpacing: 1.0, textTransform: 'uppercase' }}>
-                            Collection Map & Footprints
+                          <Text style={{ ...T.label, color: colors.textSecondary }}>
+                            Collection map and footprints
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -1304,7 +1308,7 @@ export default function ExploreScreen() {
                                   >
                                     <Ionicons name="images-outline" size={10} color="#FFFFFF" />
                                     <Text style={{ color: '#FFFFFF', ...T.microStrong }}>
-                                      {matchingDests.length} {matchingDests.length === 1 ? 'SPOT' : 'SPOTS'}
+                                      {matchingDests.length} {matchingDests.length === 1 ? 'spot' : 'spots'}
                                     </Text>
                                   </View>
                                 </ImageBackground>
@@ -1420,6 +1424,8 @@ export default function ExploreScreen() {
                             e.stopPropagation();
                             toggleDestSaved(item.id);
                           }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Remove from wishlist"
                         >
                           <Ionicons name="heart" size={16} color={colors.danger} />
                         </TouchableOpacity>
@@ -1457,8 +1463,8 @@ export default function ExploreScreen() {
             <View style={[styles.modalCard, { backgroundColor: colors.card }]}>
               <View style={[styles.modalHeader, { borderBottomColor: colors.divider }]}>
                 <Ionicons name="trophy-outline" size={20} color={GOLD} />
-                <Text style={[styles.modalTitleText, { color: colors.text }]}>Travel Milestones</Text>
-                <TouchableOpacity onPress={() => setMilestonesOpen(false)} hitSlop={12}>
+                <Text style={[styles.modalTitleText, { color: colors.text }]}>Travel milestones</Text>
+                <TouchableOpacity onPress={() => setMilestonesOpen(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
                   <Ionicons name="close-circle" size={24} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
@@ -1475,7 +1481,7 @@ export default function ExploreScreen() {
                       </Text>
                     </View>
                     <View style={[styles.milestoneBadge, { backgroundColor: item.unlocked ? CRIMSON_WAX : colors.inputBg }]}>
-                      <Text style={[styles.milestoneBadgeText, { color: item.unlocked ? '#FFFFFF' : colors.textMuted }]}>{item.unlocked ? 'UNLOCKED' : 'LOCKED'}</Text>
+                      <Text style={[styles.milestoneBadgeText, { color: item.unlocked ? '#FFFFFF' : colors.textMuted }]}>{item.unlocked ? 'Unlocked' : 'Locked'}</Text>
                     </View>
                   </View>
                 ))}
@@ -1490,8 +1496,8 @@ export default function ExploreScreen() {
             <View style={[styles.modalCard, { backgroundColor: colors.card }]}>
               <View style={[styles.modalHeader, { borderBottomColor: colors.divider }]}>
                 <Ionicons name="time-outline" size={20} color={colors.brand} />
-                <Text style={[styles.modalTitleText, { color: colors.text }]}>Stamps Timeline</Text>
-                <TouchableOpacity onPress={() => setRecentOpen(false)} hitSlop={12}>
+                <Text style={[styles.modalTitleText, { color: colors.text }]}>Stamps timeline</Text>
+                <TouchableOpacity onPress={() => setRecentOpen(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
                   <Ionicons name="close-circle" size={24} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
@@ -1688,7 +1694,7 @@ export default function ExploreScreen() {
                 {/* Floating Navigation Header (Left: Close, Right: Facebook & Download) - Hidden during export */}
                 {!isExporting && (
                   <View style={{ position: 'absolute', top: 12, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', zIndex: 20 }}>
-                    <TouchableOpacity onPress={() => setShareOpen(false)} style={styles.floatingGlassBtn}>
+                    <TouchableOpacity onPress={() => setShareOpen(false)} style={styles.floatingGlassBtn} accessibilityRole="button" accessibilityLabel="Close share preview">
                       <Ionicons name="close" size={22} color="#FFFFFF" />
                     </TouchableOpacity>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -1696,6 +1702,8 @@ export default function ExploreScreen() {
                         onPress={handleFacebookShareImage}
                         disabled={isSharingFacebook}
                         style={[styles.floatingGlassBtn, { backgroundColor: '#1877F2' }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Share to Facebook"
                       >
                         {isSharingFacebook ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1703,7 +1711,7 @@ export default function ExploreScreen() {
                           <Ionicons name="logo-facebook" size={20} color="#FFFFFF" />
                         )}
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={handleSaveImage} style={styles.floatingGlassBtn} disabled={isSaving}>
+                      <TouchableOpacity onPress={handleSaveImage} style={styles.floatingGlassBtn} disabled={isSaving} accessibilityRole="button" accessibilityLabel="Save image">
                         {isSaving ? (
                           <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
@@ -1718,23 +1726,28 @@ export default function ExploreScreen() {
                 {!isExporting && (
                   <View style={{ position: 'absolute', right: 16, top: 80, gap: 12, zIndex: 20 }}>
                     <TouchableOpacity onPress={() => setActiveControlTab(activeControlTab === 'background' ? 'none' : 'background')}
-                      style={[styles.floatingGlassBtn, activeControlTab === 'background' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}>
+                      style={[styles.floatingGlassBtn, activeControlTab === 'background' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}
+                      accessibilityRole="button" accessibilityLabel="Edit background">
                       <Ionicons name="image-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setActiveControlTab(activeControlTab === 'region' ? 'none' : 'region')}
-                      style={[styles.floatingGlassBtn, activeControlTab === 'region' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}>
+                      style={[styles.floatingGlassBtn, activeControlTab === 'region' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}
+                      accessibilityRole="button" accessibilityLabel="Choose region">
                       <Ionicons name="map-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setActiveControlTab(activeControlTab === 'scale' ? 'none' : 'scale')}
-                      style={[styles.floatingGlassBtn, activeControlTab === 'scale' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}>
+                      style={[styles.floatingGlassBtn, activeControlTab === 'scale' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}
+                      accessibilityRole="button" accessibilityLabel="Adjust scale">
                       <Ionicons name="resize-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setActiveControlTab(activeControlTab === 'color' ? 'none' : 'color')}
-                      style={[styles.floatingGlassBtn, activeControlTab === 'color' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}>
+                      style={[styles.floatingGlassBtn, activeControlTab === 'color' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}
+                      accessibilityRole="button" accessibilityLabel="Choose accent color">
                       <Ionicons name="color-palette-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setActiveControlTab(activeControlTab === 'style' ? 'none' : 'style')}
-                      style={[styles.floatingGlassBtn, activeControlTab === 'style' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}>
+                      style={[styles.floatingGlassBtn, activeControlTab === 'style' && { backgroundColor: 'rgba(56, 189, 248, 0.4)' }]}
+                      accessibilityRole="button" accessibilityLabel="Choose map style">
                       <Ionicons name="brush-outline" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
                   </View>
@@ -1744,12 +1757,12 @@ export default function ExploreScreen() {
                   <View style={{ position: 'absolute', bottom: 24, left: 16, right: 16, zIndex: 20 }}>
                     {activeControlTab !== 'none' ? (
                       <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)', padding: 16 }}>
-                        <Text style={{ ...T.microStrong, color: 'rgba(255, 255, 255, 0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
-                          {activeControlTab === 'background' ? 'Select Background' : activeControlTab === 'region' ? 'Map Region' : activeControlTab === 'scale' ? 'Map Scale' : activeControlTab === 'color' ? 'Map Accent Color' : activeControlTab === 'style' ? 'Map Overlay Style' : ''}
+                        <Text style={{ ...T.microStrong, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 10 }}>
+                          {activeControlTab === 'background' ? 'Select background' : activeControlTab === 'region' ? 'Map region' : activeControlTab === 'scale' ? 'Map scale' : activeControlTab === 'color' ? 'Map accent color' : activeControlTab === 'style' ? 'Map overlay style' : ''}
                         </Text>
 
                         {activeControlTab === 'background' && (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'flex-start' }}>
                             {PRESETS.map((preset, idx) => {
                               const isActive = activePresetIdx === idx && !useCustomPhoto;
                               return (
@@ -1823,7 +1836,7 @@ export default function ExploreScreen() {
                         )}
 
                         {activeControlTab === 'style' && (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'flex-start' }}>
                             {MAP_STYLES.map((style, idx) => {
                               const isActive = mapStyleIdx === idx;
                               return (
@@ -1839,7 +1852,7 @@ export default function ExploreScreen() {
                     ) : (
                       <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 14, alignSelf: 'center' }}>
                         <Text style={{ ...T.micro, color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center' }}>
-                          Drag map to reposition • Tap side tools to edit
+                          Drag the map to reposition, then tap the side tools to edit
                         </Text>
                       </View>
                     )}
@@ -1870,23 +1883,25 @@ export default function ExploreScreen() {
                 borderBottomColor: colors.cardBorder,
                 backgroundColor: colors.card
               }}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setSelectedAlbumProvinceId(null)}
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: colors.surface,
                     borderColor: colors.cardBorder,
                     borderWidth: 1
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
                 >
                   <Ionicons name="chevron-back" size={20} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={{ ...T.titleSm, color: colors.text, textAlign: 'center', flex: 1, marginRight: 36 }}>
-                  {CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name || 'Province'} Memories
+                <Text style={{ ...T.titleSm, color: colors.text, textAlign: 'center', flex: 1, marginRight: 44 }}>
+                  {CANONICAL_PROVINCES.find(p => p.id === selectedAlbumProvinceId)?.name || 'Province'} memories
                 </Text>
               </View>
 
@@ -1896,7 +1911,7 @@ export default function ExploreScreen() {
                 contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
               >
                 <Text style={{ ...T.display, color: colors.text, marginBottom: 4 }}>
-                  Footprints Logged
+                  Footprints logged
                 </Text>
                 <Text style={{ ...T.subhead, color: colors.textMuted, marginBottom: 20 }}>
                   Your collection of stamps and captured memories in this province.
@@ -1960,7 +1975,7 @@ export default function ExploreScreen() {
                         <View style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={{ ...T.overline, color: colors.textSecondary }}>
-                              PASSPORT FOOTPRINT LOGGED
+                              Passport footprint logged
                             </Text>
                             <Text style={{ ...T.micro, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>
                               Verified stamps & memories archived
@@ -1976,7 +1991,7 @@ export default function ExploreScreen() {
                             gap: 4
                           }}>
                             <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
-                            <Text style={{ ...T.microStrong, color: colors.brand }}>EXPLORED</Text>
+                            <Text style={{ ...T.microStrong, color: colors.brand }}>Explored</Text>
                           </View>
                         </View>
                       </View>
@@ -1986,7 +2001,7 @@ export default function ExploreScreen() {
                   <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                     <Ionicons name="images-outline" size={48} color={colors.textMuted} />
                     <Text style={{ ...T.bodyStrong, color: colors.textSecondary, marginTop: 12 }}>
-                      No Spots Visited
+                      No spots visited
                     </Text>
                     <Text style={{ ...T.caption, color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
                       Start checking in at destinations to generate album memories.
@@ -2010,52 +2025,8 @@ const styles = StyleSheet.create({
   headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
   appName: { ...T.title, letterSpacing: -0.5 },
-  headerCollectionLabel: { ...T.label, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  emptyHeroTitle: { ...T.title, textAlign: 'center', marginBottom: 8 },
-  emptyHeroSub: { ...T.footnote, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
-  emptyCtaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 16 },
-  emptyCtaButtonText: { color: '#FFFFFF', ...T.label },
-  dashboardContainer: { padding: 16 },
-  profileHeaderCard: { borderRadius: 24, borderWidth: 1, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
-  profileHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  profileTitleText: { ...T.display, fontWeight: '800', letterSpacing: -0.8 },
-  profileSubText: { ...T.label, marginTop: 4 },
-  circularGaugeContainer: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  gaugeInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  gaugePercent: { ...T.titleSm, fontWeight: '800' },
-  gaugeLabel: { ...T.microStrong, fontWeight: '700', letterSpacing: 0.5 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   statBox: { flex: 1, borderRadius: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
-  statValue: { ...T.titleSm, fontWeight: '800' },
-  statLabelText: { ...T.microStrong, fontWeight: '700', marginTop: 2 },
-  actionPillsRow: { flexDirection: 'row', gap: 8 },
-  actionPillBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
-  actionPillBtnText: { ...T.overline, fontWeight: '700', marginLeft: 5 },
-  segmentContainer: { paddingHorizontal: 16, marginBottom: 14 },
-  segmentedSelector: { flexDirection: 'row', padding: 4, borderRadius: 16, gap: 4 },
-  segmentBtn: { flex: 1, flexDirection: 'row', paddingVertical: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  segmentBtnActive: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  segmentBtnText: { ...T.label, fontWeight: '700' },
-  filtersBlock: { paddingHorizontal: 16, marginBottom: 16, gap: 10 },
-  filterPillsRow: { gap: 6 },
-  filterPill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: 'transparent', backgroundColor: 'rgba(0,0,0,0.03)' },
-  filterPillActive: { borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0)' },
-  filterPillText: { ...T.overline, fontWeight: '700' },
-  searchBarContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, gap: 8, marginTop: 4 },
-  searchInputText: { flex: 1, ...T.label, padding: 0 },
-  mapWrapperCard: { alignSelf: 'center', borderRadius: 24, borderWidth: 1, overflow: 'hidden', position: 'relative', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2 },
-  floatingMapResetBtn: { position: 'absolute', right: 12, bottom: 12, width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
-  provinceGridContainer: { paddingHorizontal: 16 },
-  gridContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  collectibleCard: { borderRadius: 4, borderWidth: 1.5, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
-  cardImageBg: { height: 90, width: '100%', position: 'relative' },
-  cardStamp: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  cardStampExplored: { backgroundColor: CRIMSON_WAX, borderWidth: 1, borderColor: '#FFFFFF' },
-  cardStampUnexplored: { backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  cardStampText: { ...T.microStrong, fontWeight: '900', color: '#FFFFFF' },
-  cardDetails: { padding: 10 },
-  cardTitle: { fontSize: 16, fontFamily: 'DMSerifDisplay-Regular', textAlign: 'center' },
-  cardSubTitle: { ...T.micro, marginTop: 3, textAlign: 'center' },
   noMatchingText: { textAlign: 'center', width: '100%', ...T.label, marginVertical: 40 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { height: '65%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20 },
@@ -2092,19 +2063,9 @@ const styles = StyleSheet.create({
   celebrationBtnShare: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   celebrationBtnShareText: { color: '#FFFFFF', ...T.overline },
   shareModalRoot: { flex: 1 },
-  shareHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
-  shareCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  shareTitle: { ...T.titleSm, fontWeight: '700' },
-  shareScrollContent: { paddingVertical: 20, alignItems: 'center' },
-  cardContainer: { width: '100%', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   shareCard: { width: '100%', flex: 1, overflow: 'hidden', backgroundColor: '#000' },
   cardOverlay: { flex: 1, justifyContent: 'space-between', paddingTop: 52, paddingBottom: 36 },
-  shareCardHeader: { alignItems: 'center', marginTop: 10 },
-  shareAppBrand: { ...T.title, color: '#FFFFFF', letterSpacing: 0.5, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  shareAppQuote: { ...T.micro, color: 'rgba(255,255,255,0.8)', marginTop: 2, fontStyle: 'italic', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   shareMapWrapper: { flex: 1, width: '100%' },
-  watermarkBadge: { position: 'absolute', left: 0, right: 0, paddingTop: 16, paddingBottom: 16, paddingHorizontal: 20, alignItems: 'center' },
-  // Strava-style card branding & stats
   stravaTopBrand: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 20, paddingTop: 4 },
   stravaBrandName: { ...T.titleSm, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   stravaBottomStats: { paddingHorizontal: 20, paddingBottom: 8 },
@@ -2116,9 +2077,9 @@ const styles = StyleSheet.create({
   stravaStatDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
   stravaFooterTag: { ...T.micro, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3, marginTop: 2 },
   floatingGlassBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
@@ -2130,44 +2091,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  watermarkLabel: { ...T.label, fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  watermarkStats: { ...T.micro, color: 'rgba(255,255,255,0.9)', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  watermarkFooter: { ...T.micro, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', letterSpacing: 0.5 },
-  controlsContainer: { width: '100%', paddingHorizontal: 20 },
-  controlLabel: { ...T.microStrong, letterSpacing: 1, marginBottom: 10 },
-  presetsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  presetBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
-  presetBtnText: { ...T.label, fontWeight: '600' },
-  tipCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1, marginTop: 4 },
-  tipText: { flex: 1, ...T.label, lineHeight: 16 },
-
-  // Floating Overlay Panels
-  floatingTopPanel: {
-    position: 'absolute',
-    top: 12,
-    left: 16,
-    right: 16,
-    zIndex: 99,
-    gap: 8,
-  },
-  floatingFilterPillsRow: {
-    gap: 6,
-    paddingVertical: 4,
-  },
-  floatingFilterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  floatingBottomPanel: {
-    position: 'absolute',
-    bottom: 94, // Float beautifully above navigation bar
-    left: 16,
-    right: 16,
-    zIndex: 99,
-  },
-  // Full-Screen Province Detail View Styles
   provinceDetailContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -2212,9 +2135,7 @@ const styles = StyleSheet.create({
   detailSectionLabel: {
     ...T.overline,
     fontWeight: '700',
-    letterSpacing: 1,
     marginBottom: 12,
-    textTransform: 'uppercase',
   },
   destCardItem: {
     borderRadius: 20,
@@ -2255,33 +2176,13 @@ const styles = StyleSheet.create({
     padding: 4,
     zIndex: 10,
   },
-  destCardImage: {
-    width: '100%',
-    height: 160,
-    resizeMode: 'cover',
-  },
   destCardBody: {
     padding: 16,
-  },
-  destCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
   },
   destCardName: {
     fontSize: 18,
     fontFamily: 'DMSerifDisplay-Regular',
     flex: 1,
-  },
-  destCardRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  destCardRatingText: {
-    ...T.label,
-    fontWeight: '700',
   },
   destCardAddress: {
     ...T.footnote,
@@ -2319,10 +2220,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     gap: 4,
     flex: 1,
-  },
-  destCardPillText: {
-    ...T.overline,
-    fontWeight: '700',
   },
   toggle: {
     flexDirection: 'row',
@@ -2437,41 +2334,5 @@ const styles = StyleSheet.create({
   muniChipText: {
     ...T.caption,
     fontWeight: '600',
-  },
-  cardTapeTopCenter: {
-    position: 'absolute',
-    top: -6,
-    alignSelf: 'center',
-    width: 32,
-    height: 12,
-    backgroundColor: 'rgba(250, 249, 246, 0.45)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.06)',
-    transform: [{ rotate: '-5deg' }],
-    zIndex: 10,
-  },
-  cardTapeTopLeft: {
-    position: 'absolute',
-    top: -8,
-    left: -8,
-    width: 32,
-    height: 14,
-    backgroundColor: 'rgba(250, 249, 246, 0.45)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.06)',
-    transform: [{ rotate: '-35deg' }],
-    zIndex: 10,
-  },
-  cardTapeTopRight: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 32,
-    height: 14,
-    backgroundColor: 'rgba(250, 249, 246, 0.45)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.06)',
-    transform: [{ rotate: '35deg' }],
-    zIndex: 10,
   },
 });

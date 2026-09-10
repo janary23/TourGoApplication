@@ -16,9 +16,7 @@ export const FootprintBadge: React.FC<FootprintBadgeProps> = ({ destinations, pr
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <Ionicons name="airplane" size={12} color={colors.brand} style={{ marginRight: 6 }} />
       <Text style={[styles.text, { color: colors.text }]}>
-        {destinations} {destinations === 1 ? 'destination' : 'destinations'}
-        <Text style={{ color: colors.textMuted }}> • </Text>
-        {provinces} {provinces === 1 ? 'province' : 'provinces'}
+        {destinations} {destinations === 1 ? 'destination' : 'destinations'}, {provinces} {provinces === 1 ? 'province' : 'provinces'}
       </Text>
     </View>
   );

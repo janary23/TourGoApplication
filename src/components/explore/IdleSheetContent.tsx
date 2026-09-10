@@ -323,7 +323,7 @@ export const IdleSheetContent: React.FC<IdleSheetContentProps> = ({
           style={[styles.searchInput, { color: colors.text }]}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
             <Ionicons name="close-circle" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -490,8 +490,6 @@ const styles = StyleSheet.create({
   floatingRegionText: {
     ...T.microStrong,
     color: '#FFFFFF',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   waxSeal: {
     position: 'absolute',

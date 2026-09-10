@@ -396,7 +396,7 @@ export const RegionPlacesModal: React.FC<Props> = ({
 
         {/* Header */}
         <View style={[modalStyles.header, { borderBottomColor: colors.divider }]}>
-          <TouchableOpacity onPress={handleClose} hitSlop={12} style={modalStyles.backBtn}>
+          <TouchableOpacity onPress={handleClose} hitSlop={12} style={modalStyles.backBtn} accessibilityRole="button" accessibilityLabel="Close">
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>

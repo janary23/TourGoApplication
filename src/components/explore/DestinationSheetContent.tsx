@@ -33,7 +33,7 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
   return (
     <View style={styles.body}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onBack} hitSlop={10} activeOpacity={0.7}>
+        <TouchableOpacity onPress={onBack} hitSlop={10} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
@@ -67,7 +67,7 @@ export const DestinationSheetContent: React.FC<DestinationSheetContentProps> = (
 
         {nearby.length > 0 && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>NEARBY DESTINATIONS</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Nearby destinations</Text>
             {nearby.map(n => (
               <View key={n.id} style={[styles.nearbyRow, { borderColor: colors.cardBorder }]}>
                 <View style={[styles.nearbyDot, { backgroundColor: colors.surface }]} />
@@ -213,8 +213,6 @@ const styles = StyleSheet.create({
   label: {
     ...T.overline,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginBottom: 8,
   },
   nearbyRow: {

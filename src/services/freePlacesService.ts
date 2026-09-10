@@ -208,7 +208,7 @@ async function fetchWikipediaCategorySpots(
         rating: 4.8,
         reviewCount: '2.1K',
         categoryTag,
-        subtitle: `${categoryTag} • Philippines`,
+        subtitle: `${categoryTag}, Philippines`,
         latitude: pLat,
         longitude: pLon,
         days: [{ title: 'Sightseeing', activities: [`Tour ${p.title}`, 'Take photos', 'Enjoy local scenery'] }]

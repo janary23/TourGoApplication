@@ -91,7 +91,7 @@ const CategoryChip: React.FC<{
           chipStyles.chip,
           isSelected
             ? { backgroundColor: colors.brand, borderColor: colors.brand }
-            : { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: isDark ? '#2C2C2E' : '#EFEFEF' },
+            : { backgroundColor: colors.card, borderColor: colors.cardBorder },
         ]}
       >
         <Text style={chipStyles.icon}>{item.icon}</Text>
@@ -213,7 +213,7 @@ const TravelFeedPost: React.FC<{
             postStyles.actionBtnText,
             { color: isSaved ? '#FFFFFF' : colors.textSecondary }
           ]}>
-            {isSaved ? 'Saved' : 'Save Spot'}
+            {isSaved ? 'Saved' : 'Save spot'}
           </Text>
         </TouchableOpacity>
 
@@ -223,7 +223,7 @@ const TravelFeedPost: React.FC<{
           activeOpacity={0.8}
         >
           <Ionicons name="calendar-outline" size={16} color="#FFFFFF" />
-          <Text style={postStyles.planBtnText}>Plan Trip</Text>
+          <Text style={postStyles.planBtnText}>Plan trip</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -402,7 +402,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
         id: d.id,
         name: d.name,
         location: province ? province.name : 'Philippines',
-        category: d.tags.slice(0, 2).join(' · '),
+        category: d.tags.slice(0, 2).join(', '),
         rating: parseFloat(d.rating) || 4.5,
         image: d.image || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=600&q=80',
         tags: d.tags,
@@ -453,7 +453,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
         style={[
           styles.searchBar,
           {
-            backgroundColor: isDark ? '#1C1C1E' : '#F5F5F5',
+            backgroundColor: colors.surface,
             borderColor: colors.cardBorder,
           },
         ]}
@@ -469,7 +469,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
 
       {/* ─── Category Chips ─── */}
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Browse by Type</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Browse by type</Text>
       </View>
       <ScrollView
         horizontal
@@ -491,7 +491,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
 
       {/* ─── Scrollable Travel Log Feed ─── */}
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Traveler Diaries Feed</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Traveler diaries feed</Text>
       </View>
       <View style={styles.feedContainer}>
         {dynamicRecommended.length > 0 ? (
@@ -533,7 +533,7 @@ export const ExploreDiscovery: React.FC<ExploreDiscoveryProps> = ({
                 <Ionicons name="map" size={26} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.mapBannerTitle}>View Travel Footprint</Text>
+                <Text style={styles.mapBannerTitle}>View travel footprint</Text>
                 <Text style={styles.mapBannerSub}>Your interactive travel diaries footprint</Text>
               </View>
             </View>

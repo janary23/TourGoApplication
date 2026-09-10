@@ -26,7 +26,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
   return (
     <View style={styles.body}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onBack} hitSlop={10} activeOpacity={0.7}>
+        <TouchableOpacity onPress={onBack} hitSlop={10} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
@@ -56,10 +56,10 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
           </View>
         </View>
 
-        <Card variant="sky" style={styles.tipCard}>
+        <Card style={[styles.tipCard, { backgroundColor: colors.brandLight, borderColor: colors.brand }]}>
           <View style={styles.tipLayout}>
             <Ionicons name="sparkles" size={20} color={colors.brand} style={{ marginRight: 10 }} />
-            <Text style={styles.tipText}>
+            <Text style={[styles.tipText, { color: colors.brand }]}>
               You found this spot using Google Places! Tap "Plan a Trip" to coordinate a journey here with your group.
             </Text>
           </View>
@@ -68,7 +68,7 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
 
       <View style={styles.actions}>
         <Button
-          title="Plan a Trip Here"
+          title="Plan a trip here"
           onPress={onViewDestination}
           variant="accent"
           size="medium"
@@ -80,8 +80,8 @@ export const GooglePlaceSheetContent: React.FC<GooglePlaceSheetContentProps> = (
   );
 };
 
-// Helper card since UI Card is not imported, let's just make it a styled View
-const Card = ({ children, style, variant }: { children: React.ReactNode, style?: any, variant?: string }) => {
+// Local tinted-surface wrapper; background/border come from the theme at the call site.
+const Card = ({ children, style }: { children: React.ReactNode, style?: any }) => {
   return (
     <View style={[styles.tipCardLayout, style]}>
       {children}
@@ -130,7 +130,6 @@ const styles = StyleSheet.create({
   infoLabel: {
     ...T.caption,
     fontWeight: '500',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   infoValue: {
@@ -148,9 +147,7 @@ const styles = StyleSheet.create({
   tipCardLayout: {
     borderRadius: 16,
     padding: 14,
-    backgroundColor: '#F0F9FF',
     borderWidth: 1,
-    borderColor: '#E0F2FE',
   },
   tipCard: {
     marginTop: 8,
@@ -163,7 +160,6 @@ const styles = StyleSheet.create({
   tipText: {
     flex: 1,
     ...T.label,
-    color: '#0369A1',
     lineHeight: 18,
   },
 });

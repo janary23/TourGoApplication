@@ -75,13 +75,13 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
       {/* ─── Back Header ─── */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} style={styles.backBtn}>
+        <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.7} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Close">
           <Ionicons name="chevron-down" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={[styles.title, { color: colors.text }]}>{province.name}</Text>
           <Text style={[styles.context, { color: colors.textMuted }]}>
-            {province.region} Region • Philippines
+            {province.region} Region, Philippines
           </Text>
         </View>
         <View style={styles.actions}>
@@ -128,7 +128,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
         <View style={[styles.stampCard, { backgroundColor: colors.card, borderColor: GOLD }]}>
           <View style={styles.stampHeader}>
             <View style={[styles.stampSeal, { backgroundColor: CRIMSON_WAX }]}>
-              <Text style={styles.stampSealText}>PASSED</Text>
+              <Text style={styles.stampSealText}>EXPLORED</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.stampStatusTitle, { color: colors.text }]}>PROVINCE COLLECTED</Text>
@@ -169,7 +169,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
             activeOpacity={0.85}
           >
             <Ionicons name="calendar-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.planButtonText}>Plan Your First Trip</Text>
+            <Text style={styles.planButtonText}>Plan your first trip</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -177,7 +177,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
       {/* ─── Trips / Memories Section ─── */}
       {provinceVisited && tripMemories.length > 0 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionLabel, { color: colors.brand }]}>TRAVEL MEMORIES</Text>
+          <Text style={[styles.sectionLabel, { color: colors.brand }]}>Travel memories</Text>
           {tripMemories.map(trip => (
             <View key={trip.id} style={[styles.tripCard, { borderBottomColor: colors.cardBorder }]}>
               <View style={styles.tripHeader}>
@@ -208,8 +208,8 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
       {/* ─── Municipalities ─── */}
       {municipalities.length > 0 && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MUNICIPALITIES</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muniScroll}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Municipalities</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muniScroll} contentContainerStyle={{ alignItems: 'flex-start' }}>
             {municipalities.map(m => (
               <TouchableOpacity
                 key={m.id}
@@ -227,7 +227,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
 
       {/* ─── Popular Destinations List ─── */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>DESTINATIONS IN THE REGION</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Destinations in the region</Text>
         {isLoadingDests ? (
           <View style={{ paddingVertical: 20, alignItems: 'center' }}>
             <ActivityIndicator size="small" color={colors.brand} />
@@ -255,7 +255,7 @@ export const ProvinceSheetContent: React.FC<ProvinceSheetContentProps> = ({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.rowName, { color: colors.text }]}>{dest.name}</Text>
-                  <Text style={[styles.rowTags, { color: colors.textMuted }]}>{dest.tags.join(' · ')}</Text>
+                  <Text style={[styles.rowTags, { color: colors.textMuted }]}>{dest.tags.join(', ')}</Text>
                 </View>
                 <View style={styles.ratingWrap}>
                   <Ionicons name="star" size={11} color={GOLD} style={{ marginRight: 3 }} />
@@ -445,7 +445,6 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...T.microStrong,
     fontWeight: '700',
-    letterSpacing: 1,
     marginBottom: 10,
   },
   muniScroll: {
