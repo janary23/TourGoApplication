@@ -571,6 +571,7 @@ interface FieldProps {
   placeholder?: string;
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric' | 'email-address';
+  autoCapitalize?: TextInput['props']['autoCapitalize'];
   autoFocus?: boolean;
   onSubmitEditing?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -578,7 +579,7 @@ interface FieldProps {
 
 export function Field({
   label, value, onChangeText, placeholder, multiline, keyboardType,
-  autoFocus, onSubmitEditing, style,
+  autoCapitalize, autoFocus, onSubmitEditing, style,
 }: FieldProps) {
   const { colors } = useTheme();
   return (
@@ -595,6 +596,7 @@ export function Field({
         placeholderTextColor={colors.textMuted}
         multiline={multiline}
         keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
         autoFocus={autoFocus}
         onSubmitEditing={onSubmitEditing}
         style={[

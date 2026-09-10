@@ -237,7 +237,7 @@ export default function ProfileScreen() {
               title="Push Notifications"
               subtitle="Manage alerts & reminders"
               colors={colors}
-              onPress={() => { }}
+              onPress={() => notify('Notification settings are coming soon.', 'info')}
             />
 
             {/* GPS Tracking */}
@@ -246,7 +246,7 @@ export default function ProfileScreen() {
               title="GPS Tracking"
               subtitle="Location sharing permissions"
               colors={colors}
-              onPress={() => { }}
+              onPress={() => notify('GPS tracking controls are coming soon.', 'info')}
             />
 
             {/* Privacy */}
@@ -255,7 +255,7 @@ export default function ProfileScreen() {
               title="Privacy & Security"
               subtitle="Data & account controls"
               colors={colors}
-              onPress={() => { }}
+              onPress={() => notify('Privacy & security controls are coming soon.', 'info')}
             />
 
             {/* Travel Preferences */}
@@ -291,10 +291,20 @@ export default function ProfileScreen() {
               title="Help Center & FAQ"
               subtitle="Support & documentation"
               colors={colors}
-              onPress={() => { }}
+              onPress={() => notify('The help center is coming soon.', 'info')}
             />
+          </View>
 
-            {/* Log Out */}
+          {/* Log Out stands alone, not as the last row of routine settings —
+              it's the one destructive, high-consequence action on this
+              screen and reads more clearly in its own card, with room
+              around it, than buried under Help Center. */}
+          <View
+            style={[
+              styles.settingCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: space.xl },
+            ]}
+          >
             <ProfileSettingRow
               iconName="log-out-outline"
               tone="destructive"

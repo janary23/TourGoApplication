@@ -69,7 +69,7 @@ export default function OtherTripCard({
         ]}
       >
         {/* Destination Photo */}
-        <Image source={{ uri: imageUrl }} style={styles.tripPhoto} />
+        <Image source={{ uri: imageUrl }} style={[styles.tripPhoto, { backgroundColor: colors.surface }]} />
 
         {/* Information Layout */}
         <View style={styles.tripDetails}>
@@ -130,7 +130,6 @@ const styles = StyleSheet.create({
     width: 85,
     height: 85,
     borderRadius: 16,
-    backgroundColor: '#F3F4F6',
   },
   tripDetails: {
     flex: 1,

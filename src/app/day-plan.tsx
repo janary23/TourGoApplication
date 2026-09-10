@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity,
-  Animated, Platform, KeyboardAvoidingView, Alert, Dimensions,
+  Animated, Platform, KeyboardAvoidingView, Dimensions,
   Modal, Pressable, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { space, radius, hairline, type as T, shadow } from '../components/ui/tokens';
+import { notify, confirmAction } from '../components/ui/Feedback';
 import {
   generateSpontaneousDayPlan,
   SpontaneousDayPlan,
@@ -428,7 +429,7 @@ export default function DayPlanScreen() {
       console.error('Day plan error:', e);
       if (optimize) setOptimizing(false);
       setPhase('form');
-      Alert.alert('AI Error', e?.message || 'Failed to generate itinerary with AI. Please try again.');
+      notify(e?.message || 'Failed to generate itinerary with AI. Please try again.', 'error');
     }
   };
 
@@ -459,10 +460,9 @@ export default function DayPlanScreen() {
     runGenerate(false);
   };
 
-  const handleRemoveDayPlanStop = (idx: number) => {
+  const handleRemoveDayPlanStop = async (idx: number) => {
     if (!plan || !plan.stops) return;
     const stopToRemove = plan.stops[idx];
-    const confirmMsg = `Remove "${stopToRemove?.title || 'this stop'}" from your 1-day plan?`;
 
     const executeRemove = async () => {
       const nextStops = plan.stops.filter((_, i) => i !== idx);
@@ -482,16 +482,13 @@ export default function DayPlanScreen() {
       });
     };
 
-    if (Platform.OS === 'web') {
-      const ok = typeof window !== 'undefined' ? window.confirm(confirmMsg) : true;
-      if (ok) executeRemove();
-      return;
-    }
-
-    Alert.alert('Remove Stop', confirmMsg, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: executeRemove },
-    ]);
+    const ok = await confirmAction({
+      title: 'Remove stop?',
+      message: `Remove "${stopToRemove?.title || 'this stop'}" from your 1-day plan?`,
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (ok) await executeRemove();
   };
 
   const groupLabelFor = (g: string) => GROUP_OPTIONS.find((o) => o.id === g)?.label || '';
@@ -989,7 +986,7 @@ export default function DayPlanScreen() {
                   ]}
                   onPress={async () => {
                     await finishActiveDayPlan();
-                    Alert.alert('Day Plan Completed', 'Your active day plan has finished.');
+                    notify('Day plan completed — your active day plan has finished.', 'success');
                     router.replace('/(tabs)');
                   }}
                   activeOpacity={0.85}

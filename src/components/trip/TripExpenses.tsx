@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { addExpense as dbAddExpense, deleteExpense as dbDeleteExpense, markExpenseSettled } from '../../services/tripService';
@@ -9,7 +9,7 @@ import {
   Button, EmptyState, Sheet, Field, Txt, Badge, Avatar, IconButton, Stat, Press,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
-import { notify, confirmAction } from '../ui/Feedback';
+import { notify, confirmAction, chooseAction } from '../ui/Feedback';
 
 interface TripExpensesProps {
   trip: any;
@@ -137,49 +137,41 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
   const handleScanReceipt = async () => {
     // Ask for source: camera or gallery
-    Alert.alert(
-      'Scan Receipt',
-      'Choose how to add your receipt',
-      [
-        {
-          text: 'Take a Photo',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              notify('Camera permission is required to scan receipts.', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.85,
-              base64: true,
-            });
-            if (!result.canceled && result.assets?.[0]?.base64) {
-              await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
-            }
-          },
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              notify('Photo library permission is required.', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.85,
-              base64: true,
-            });
-            if (!result.canceled && result.assets?.[0]?.base64) {
-              await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
-            }
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    const choice = await chooseAction({
+      title: 'Scan receipt',
+      message: 'Choose how to add your receipt',
+      options: [{ label: 'Take a photo' }, { label: 'Choose from gallery' }],
+    });
+
+    if (choice === 0) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        notify('Camera permission is required to scan receipts.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.[0]?.base64) {
+        await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
+      }
+    } else if (choice === 1) {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        notify('Photo library permission is required.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.[0]?.base64) {
+        await processReceiptImage(result.assets[0].base64, result.assets[0].mimeType ?? 'image/jpeg');
+      }
+    }
   };
 
   const processReceiptImage = async (base64: string, mimeType: string) => {
@@ -245,7 +237,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
       });
   };
 
-  const handleExpenseTap = (exp: any) => {
+  const handleExpenseTap = async (exp: any) => {
     if (isViewOnly) return;
     const iPaid = exp.paidBy === currentUserName;
     const iOweThem = exp.splitWith.includes(currentUserName) && !iPaid;
@@ -255,7 +247,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
     // Settle / unsettle — available to anyone who owes on this expense
     if (iOweThem && !exp.isSettled) {
       options.push({
-        label: '✅  Mark as Paid',
+        label: 'Mark as paid',
         action: async () => {
           setSettling(exp.id);
           const { error } = await markExpenseSettled(exp.id, true);
@@ -267,7 +259,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
     }
     if (iOweThem && exp.isSettled) {
       options.push({
-        label: '↩︎  Mark as Unpaid',
+        label: 'Mark as unpaid',
         action: async () => {
           setSettling(exp.id);
           const { error } = await markExpenseSettled(exp.id, false);
@@ -280,7 +272,7 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
     // Delete — only the person who paid can delete
     if (iPaid) {
       options.push({
-        label: '🗑  Remove Expense',
+        label: 'Remove expense',
         destructive: true,
         action: () => confirmDelete(exp),
       });
@@ -288,18 +280,12 @@ export default function TripExpenses({ trip, currentUserName, isViewOnly = false
 
     if (options.length === 0) return; // viewer with no action
 
-    Alert.alert(
-      exp.title,
-      `${peso(exp.amount)} · ${iPaid ? 'You paid' : `${exp.paidBy} paid`}`,
-      [
-        ...options.map((o) => ({
-          text: o.label,
-          style: (o.destructive ? 'destructive' : 'default') as 'destructive' | 'default',
-          onPress: o.action,
-        })),
-        { text: 'Cancel', style: 'cancel' as const },
-      ]
-    );
+    const choice = await chooseAction({
+      title: exp.title,
+      message: `${peso(exp.amount)} · ${iPaid ? 'You paid' : `${exp.paidBy} paid`}`,
+      options: options.map((o) => ({ label: o.label, destructive: o.destructive })),
+    });
+    if (choice >= 0) options[choice].action();
   };
 
   const canSave = !isViewOnly && !!title.trim() && parseFloat(amount) > 0 && !!paidBy;

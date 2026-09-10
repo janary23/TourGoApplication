@@ -1,167 +1,56 @@
+// src/app/(auth)/login.tsx
+//
+// The first screen anyone sees. It previously ran its own visual system —
+// pill-shaped 9999-radius inputs and buttons, a hand-rolled type scale, and a
+// bespoke snackbar — none of which match the product a user lands in one tap
+// later. It now composes from the same tokens and primitives as every other
+// screen: `TextField`, `Button`, `Txt`, and the shared toast instead of a
+// second notification system.
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Pressable,
   Image,
-  Animated,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
-  Alert,
-  ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useFeedback } from '../../components/ui/Feedback';
+import { Txt, TextField } from '../../components/ui/primitives';
+import { Button } from '../../components/ui/Button';
+import { space, hairline } from '../../components/ui/tokens';
 
-// ── Floating Label Input (AniGrow layout, TourGo colors) ─────────────────────
-interface FloatingInputProps {
-  label: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  value: string;
-  onChangeText: (t: string) => void;
-  isPassword?: boolean;
-  keyboardType?: any;
-  autoCapitalize?: any;
-  returnKeyType?: any;
-  onSubmitEditing?: () => void;
-  bgColor: string;
-  brand: string;
-  textColor: string;
-  strokeColor: string;
-  mutedColor: string;
-}
+// react-native-web has no native animated module, so `useNativeDriver: true`
+// logs a warning and silently falls back to the JS driver. Declaring the driver
+// per platform keeps that explicit instead of relying on the fallback.
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
-function FloatingInput({
-  label, icon, value, onChangeText, isPassword,
-  keyboardType, autoCapitalize, returnKeyType, onSubmitEditing,
-  bgColor, brand, textColor, strokeColor, mutedColor,
-}: FloatingInputProps) {
-  const [isFocused, setIsFocused] = useState(false);
-  const [showPw, setShowPw] = useState(false);
-  const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
-  const inputRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: isFocused || !!value ? 1 : 0,
-      duration: 160,
-      useNativeDriver: false,
-    }).start();
-  }, [isFocused, value]);
-
-  const labelTranslateY = progress.interpolate({ inputRange: [0, 1], outputRange: [18, -10] });
-  const labelScale     = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.82] });
-  const borderColor    = isFocused ? brand : strokeColor;
-  const iconColor      = isFocused ? brand : mutedColor;
-  const labelCol       = isFocused || !!value ? brand : mutedColor;
-
-  return (
-    <View style={fl.container}>
-      <Pressable onPress={() => inputRef.current?.focus()} style={fl.pressable}>
-        <Animated.Text
-          style={[
-            fl.label,
-            {
-              transform: [{ translateY: labelTranslateY }, { scale: labelScale }],
-              color: labelCol,
-              backgroundColor: bgColor,
-            },
-          ]}
-        >
-          {label}
-        </Animated.Text>
-
-        <View style={[fl.inputBox, { borderColor, backgroundColor: 'transparent' }]}>
-          <MaterialIcons name={icon} size={20} color={iconColor} style={fl.icon} />
-          <TextInput
-            ref={inputRef}
-            style={[fl.input, { color: textColor }]}
-            value={value}
-            onChangeText={onChangeText}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            secureTextEntry={isPassword && !showPw}
-            placeholderTextColor="transparent"
-            keyboardType={keyboardType}
-            autoCapitalize={autoCapitalize ?? 'sentences'}
-            returnKeyType={returnKeyType}
-            onSubmitEditing={onSubmitEditing}
-          />
-          {isPassword && (
-            <TouchableOpacity
-              onPress={() => setShowPw(v => !v)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MaterialIcons
-                name={showPw ? 'visibility' : 'visibility-off'}
-                size={20}
-                color={iconColor}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      </Pressable>
-    </View>
-  );
-}
-
-const fl = StyleSheet.create({
-  container: { marginBottom: 20, width: '100%' },
-  pressable:  { width: '100%' },
-  label: {
-    position: 'absolute',
-    left: 52,
-    paddingHorizontal: 4,
-    zIndex: 10,
-    fontSize: 15,
-    fontFamily: 'Poppins-Regular',
-  },
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 58,
-    borderWidth: 1.5,
-    borderRadius: 9999,
-    paddingHorizontal: 16,
-  },
-  icon:  { width: 24, textAlign: 'center' },
-  input: {
-    flex: 1,
-    height: '100%',
-    marginLeft: 12,
-    fontSize: 15,
-    fontFamily: 'Poppins-Medium',
-  },
-});
-
-// ── Main Login Screen ─────────────────────────────────────────────────────────
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { signIn, signUp, signInWithGoogle, session } = useAuth();
+  const { toast } = useFeedback();
 
   const [isSignUp, setIsSignUp] = useState(false);
-  const [name,     setName]     = useState('');
-  const [email,    setEmail]    = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ msg: string; type: 'error' | 'success' | 'info' } | null>(null);
 
-  const snackbarOpacity = useRef(new Animated.Value(0)).current;
-  const btnScale        = useRef(new Animated.Value(1)).current;
-  const fadeAnim        = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: NATIVE_DRIVER }).start();
   }, []);
 
   // If already logged in, go straight to tabs
@@ -169,20 +58,11 @@ export default function LoginScreen() {
     if (session) router.replace('/(tabs)');
   }, [session]);
 
-  const showSnackbar = (msg: string, type: 'error' | 'success' | 'info' = 'error') => {
-    setSnackbar({ msg, type });
-    Animated.sequence([
-      Animated.timing(snackbarOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.delay(2500),
-      Animated.timing(snackbarOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start(() => setSnackbar(null));
-  };
-
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
       const { error } = await signInWithGoogle();
-      if (error) Alert.alert('Google sign-in unavailable', error);
+      if (error) toast(error, 'error');
     } finally {
       setIsGoogleLoading(false);
     }
@@ -190,53 +70,42 @@ export default function LoginScreen() {
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
-      showSnackbar('Please enter both email and password.', 'error');
+      toast('Please enter both email and password.', 'error');
       return;
     }
     if (isSignUp && !name.trim()) {
-      showSnackbar('Please enter your full name.', 'error');
+      toast('Please enter your full name.', 'error');
       return;
     }
 
     setIsLoading(true);
-    Animated.sequence([
-      Animated.timing(btnScale, { toValue: 0.97, duration: 80, useNativeDriver: true }),
-      Animated.timing(btnScale, { toValue: 1,    duration: 80, useNativeDriver: true }),
-    ]).start();
 
     if (isSignUp) {
       const { error } = await signUp(email.trim(), password, name.trim());
       setIsLoading(false);
       if (error) {
-        showSnackbar(error, 'error');
+        toast(error, 'error');
       } else {
-        showSnackbar('Account created! Please check your email to confirm, then log in.', 'success');
-        setTimeout(() => setIsSignUp(false), 2000);
+        toast('Account created! Check your email to confirm, then log in.', 'success');
+        setTimeout(() => setIsSignUp(false), 1500);
       }
     } else {
       const { error } = await signIn(email.trim(), password);
       setIsLoading(false);
       if (error) {
-        showSnackbar(error, 'error');
+        toast(error, 'error');
       } else {
-        showSnackbar('Welcome back!', 'success');
-        setTimeout(() => router.replace('/(tabs)'), 800);
+        toast('Welcome back!', 'success');
+        setTimeout(() => router.replace('/(tabs)'), 500);
       }
     }
   };
 
-  const snackbarBg =
-    snackbar?.type === 'success' ? '#22C55E' :
-    snackbar?.type === 'info'    ? colors.brand : '#EF4444';
-
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -252,288 +121,150 @@ export default function LoginScreen() {
                   style={[styles.logo, { tintColor: colors.brand }]}
                   resizeMode="contain"
                 />
-                <Text style={styles.brandName}>
-                  <Text style={{ color: colors.brand }}>TourGo</Text>
-                </Text>
+                <Txt variant="title" tone="accent">TourGo</Txt>
               </View>
-              <Text style={[styles.welcomeHeading, { color: colors.text }]}>
-                {isSignUp ? 'Create account' : 'Welcome back!'}
-              </Text>
-              <Text style={[styles.welcomeSub, { color: colors.textMuted }]}>
-                {isSignUp
-                  ? 'Join TourGo and start planning trips.'
-                  : 'Please login to your account to continue.'}
-              </Text>
+              <Txt variant="largeTitle" style={{ marginBottom: space.xs }}>
+                {isSignUp ? 'Create account' : 'Welcome back'}
+              </Txt>
+              <Txt variant="subhead" tone="muted">
+                {isSignUp ? 'Join TourGo and start planning trips.' : 'Log in to keep planning your trips.'}
+              </Txt>
             </View>
 
             {/* ── Form ── */}
             <View style={styles.form}>
-
               {isSignUp && (
-                <FloatingInput
-                  label="Full Name"
-                  icon="person"
+                <TextField
+                  label="Full name"
+                  icon="person-outline"
                   value={name}
                   onChangeText={setName}
+                  placeholder="Juan Dela Cruz"
                   returnKeyType="next"
-                  bgColor={colors.background}
-                  brand={colors.brand}
-                  textColor={colors.text}
-                  strokeColor={colors.inputBorder}
-                  mutedColor={colors.textMuted}
+                  autoCapitalize="words"
+                  style={{ marginBottom: space.lg }}
                 />
               )}
 
-              <FloatingInput
-                label="Email Address"
-                icon="email"
+              <TextField
+                label="Email address"
+                icon="mail-outline"
                 value={email}
                 onChangeText={setEmail}
+                placeholder="you@example.com"
                 autoCapitalize="none"
+                autoComplete="email"
                 keyboardType="email-address"
                 returnKeyType="next"
-                bgColor={colors.background}
-                brand={colors.brand}
-                textColor={colors.text}
-                strokeColor={colors.inputBorder}
-                mutedColor={colors.textMuted}
+                style={{ marginBottom: space.lg }}
               />
 
-              <View>
-                <FloatingInput
-                  label="Password"
-                  icon="lock"
-                  value={password}
-                  onChangeText={setPassword}
-                  isPassword
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                  bgColor={colors.background}
-                  brand={colors.brand}
-                  textColor={colors.text}
-                  strokeColor={colors.inputBorder}
-                  mutedColor={colors.textMuted}
-                />
-                {!isSignUp && (
-                  <TouchableOpacity style={styles.forgotWrapper} activeOpacity={0.7}>
-                    <Text style={[styles.forgotText, { color: colors.brand }]}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <TextField
+                label="Password"
+                icon="lock-closed-outline"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                secure
+                autoComplete="password"
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+              />
 
-              {/* Submit button */}
-              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[
-                    styles.primaryButton,
-                    { backgroundColor: colors.brand, shadowColor: colors.brand },
-                    isLoading && { opacity: 0.7 },
-                  ]}
-                  onPress={handleSubmit}
-                  disabled={isLoading}
+              {!isSignUp && (
+                <Pressable
+                  onPress={() => toast("Password reset isn't available yet — contact support for help.", 'info')}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  style={styles.forgotWrapper}
                 >
-                  <Text style={styles.primaryButtonText}>
-                    {isLoading
-                      ? (isSignUp ? 'Creating account...' : 'Logging in...')
-                      : (isSignUp ? 'Create Account' : 'Log In')}
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
+                  <Txt variant="emphasis" tone="accent">Forgot password?</Txt>
+                </Pressable>
+              )}
+
+              <Button
+                title={isSignUp ? 'Create account' : 'Log in'}
+                onPress={handleSubmit}
+                size="large"
+                loading={isLoading}
+                disabled={isGoogleLoading}
+                style={{ marginTop: space.xl }}
+              />
 
               {/* Divider */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20 }}>
-                <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
-                <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: colors.textMuted }}>or</Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
+                <Txt variant="caption" tone="muted">OR</Txt>
+                <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
               </View>
 
               {/* Continue with Google */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={isGoogleLoading || isLoading}
+              <Button
+                title={isGoogleLoading ? 'Opening Google…' : 'Continue with Google'}
                 onPress={handleGoogleSignIn}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  marginTop: 16,
-                  paddingVertical: 15,
-                  borderRadius: 14,
-                  backgroundColor: colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.cardBorder,
-                  opacity: (isGoogleLoading || isLoading) ? 0.6 : 1,
-                }}
-              >
-                {isGoogleLoading ? (
-                  <ActivityIndicator size="small" color={colors.brand} />
-                ) : (
-                  <Ionicons name="logo-google" size={17} color="#EA4335" />
-                )}
-                <Text style={{ fontSize: 14, fontFamily: 'Poppins-SemiBold', color: colors.text }}>
-                  {isGoogleLoading ? 'Opening Google...' : 'Continue with Google'}
-                </Text>
-              </TouchableOpacity>
+                variant="outline"
+                size="large"
+                loading={isGoogleLoading}
+                disabled={isLoading}
+                icon={<Ionicons name="logo-google" size={16} color="#EA4335" />}
+              />
 
               {/* Toggle Sign Up / Log In */}
               <View style={styles.authLinkRow}>
-                <Text style={[styles.authLinkPrompt, { color: colors.textMuted }]}>
+                <Txt variant="body" tone="muted">
                   {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                </Text>
-                <TouchableOpacity
+                </Txt>
+                <Pressable
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  activeOpacity={0.7}
                   onPress={() => { setIsSignUp(v => !v); setName(''); setEmail(''); setPassword(''); }}
                 >
-                  <Text style={[styles.authLinkText, { color: colors.brand }]}>
-                    {isSignUp ? 'Log In' : 'Sign Up'}
-                  </Text>
-                </TouchableOpacity>
+                  <Txt variant="bodyStrong" tone="accent">{isSignUp ? 'Log in' : 'Sign up'}</Txt>
+                </Pressable>
               </View>
-
             </View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Snackbar */}
-      {snackbar && (
-        <Animated.View style={[styles.snackbar, { opacity: snackbarOpacity, backgroundColor: snackbarBg }]}>
-          <Ionicons
-            name={
-              snackbar.type === 'success' ? 'checkmark-circle' :
-              snackbar.type === 'info'    ? 'information-circle' : 'alert-circle'
-            }
-            size={18}
-            color="#FFF"
-            style={{ marginRight: 8 }}
-          />
-          <Text style={styles.snackbarText}>{snackbar.msg}</Text>
-        </Animated.View>
-      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea:      { flex: 1 },
-  flex:          { flex: 1 },
   scrollContent: { flexGrow: 1 },
   container: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 32,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.xl,
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 460,
     alignSelf: 'center',
   },
 
   // Branding
-  brandingWrapper: { alignItems: 'flex-start', marginBottom: 40 },
-  brandingRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  logo:            { width: 44, height: 44 },
-  brandName: {
-    fontSize: 24,
-    fontFamily: 'Poppins-ExtraBold',
-    marginLeft: 12,
-    lineHeight: 44,
-  },
-  welcomeHeading: {
-    fontSize: 32,
-    lineHeight: 40,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 8,
-  },
-  welcomeSub: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Regular',
-  },
+  brandingWrapper: { alignItems: 'flex-start', marginBottom: space.xxl },
+  brandingRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.xl },
+  logo: { width: 34, height: 34 },
 
   // Form
   form: { width: '100%' },
   forgotWrapper: {
     alignSelf: 'flex-end',
-    marginTop: -8,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  forgotText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
+    marginTop: space.sm,
   },
 
-  // Primary button
-  primaryButton: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    borderRadius: 9999,
-    paddingVertical: 16,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  primaryButtonText: {
-    fontSize: 17,
-    fontFamily: 'Poppins-Bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-
-  // Guest button
-  guestButton: {
-    width: '100%',
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    borderRadius: 9999,
-    paddingVertical: 16,
-    borderWidth: 1.5,
+    gap: space.md,
+    marginTop: space.xl,
+    marginBottom: space.lg,
   },
-  guestButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Medium',
-  },
+  dividerLine: { flex: 1, height: hairline },
 
-  // Auth link
   authLinkRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 32,
-    marginBottom: 16,
-  },
-  authLinkPrompt: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-  },
-  authLinkText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-
-  // Snackbar
-  snackbar: {
-    position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  snackbarText: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+    marginTop: space.xxl,
   },
 });

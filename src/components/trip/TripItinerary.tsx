@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Alert,
   ActivityIndicator,
   LayoutAnimation,
   Platform,
@@ -699,26 +698,13 @@ export default function TripItinerary({
       }
     };
 
-    if (Platform.OS === 'web') {
-      const ok = typeof window !== 'undefined' ? window.confirm('Do you want to permanently remove this stop?') : true;
-      if (ok) {
-        await doDelete();
-      }
-      return;
-    }
-
-    Alert.alert(
-      'Remove Stop',
-      'Do you want to permanently remove this stop from your itinerary?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: doDelete,
-        },
-      ]
-    );
+    const ok = await confirmAction({
+      title: 'Remove stop?',
+      message: 'This permanently removes it from your itinerary.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (ok) await doDelete();
   };
 
   // Custom Stop Modal actions

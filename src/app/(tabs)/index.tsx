@@ -20,6 +20,7 @@ import { NATIONAL_SPOTS, FALLBACK_SPOTS, HOME_SPOTS, type SpotInfo } from '../..
 import { loadPreferences, getRecommendedSpots } from '../../services/preferences';
 import { parseSearchIntentWithAi, type AiSearchIntent } from '../../services/aiService';
 import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobalLoading } from '../../services/mascotBridge';
+import { withTimeout } from '../../lib/async';
 import { EmptyState } from '../../components/ui/primitives';
 import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
 
@@ -193,10 +194,11 @@ function getGreeting(): string {
 
 // Simple fade-in image
 const FadeImage = ({ sourceUri, style }: { sourceUri: string; style: any }) => {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   return (
     <View style={style}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#F3F4F6' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
       <Animated.Image
         source={{ uri: sourceUri }}
         style={[style, { opacity }]}
@@ -557,22 +559,30 @@ export default function HomeScreen() {
       setLocationName(customName);
     } else {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await withTimeout(Location.requestForegroundPermissionsAsync(), 6000);
         if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            6000
+          );
           coords = pos.coords;
 
-          const geo = await Location.reverseGeocodeAsync({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude
-          });
+          const geo = await withTimeout(
+            Location.reverseGeocodeAsync({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            }),
+            6000
+          );
           if (geo && geo.length > 0) {
             cityName = geo[0].city || geo[0].subregion || geo[0].region || 'Manila';
             setLocationName(cityName);
           }
         }
       } catch (err) {
-        console.warn('GPS location fetch error: ', err);
+        // Falls through to the Manila default set above — a denied prompt,
+        // a timeout, or a real GPS error all land here on purpose.
+        console.warn('GPS location fetch error (falling back to Manila): ', err);
       }
     }
 
@@ -658,7 +668,13 @@ export default function HomeScreen() {
     coords: { latitude: number; longitude: number }
   ): Promise<SpotInfo[]> => {
     try {
-      return await fetchFreePlaces(cityName, query, coords);
+      // fetchFreePlaces has no internal timeout — on a slow or unreachable
+      // connection (spotty mobile signal is the normal case for a travel
+      // app, not the edge case) a single one of these six parallel category
+      // calls can otherwise hold the whole Home screen on its skeleton for
+      // minutes. Six categories run in parallel below, so 10s here is the
+      // screen's real worst-case load time, not 60s.
+      return await withTimeout(fetchFreePlaces(cityName, query, coords), 10000);
     } catch (err) {
       console.error(`Dynamic free places query failed for "${query}": `, err);
       return [];
@@ -692,6 +708,11 @@ export default function HomeScreen() {
   };
 
   const todayWeather = getTodayWeather();
+  // Maps 1:1 to the three conditions getTodayWeather returns above.
+  const todayConditionIcon: keyof typeof Ionicons.glyphMap =
+    todayWeather.condition === 'Rainy Comforts' ? 'rainy'
+      : todayWeather.condition === 'Sunny Vibes' ? 'sunny'
+        : 'partly-sunny';
 
   // Union of every spot the user can see/heart, used for the wishlist meta
   // and for whole-PH search.
@@ -882,11 +903,23 @@ export default function HomeScreen() {
     </View>
   );
 
-  const renderHorizontalCard = (spot: SpotInfo) => (
+  /**
+   * `conditionIcon` is the one thing that makes "Today's Vibe" a different
+   * card from "Recommended For You" beside it — without it the two sections
+   * were the same card shape back-to-back with only the header text saying
+   * why. A small glyph tied to *why this spot is here* earns its place; it
+   * never appears on the personalised row.
+   */
+  const renderHorizontalCard = (spot: SpotInfo, conditionIcon?: keyof typeof Ionicons.glyphMap) => (
     <View key={spot.id} style={[styles.weatherCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
       <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.96}>
         <Image source={{ uri: spot.image }} style={styles.weatherCardImage} />
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.weatherCardGradient} />
+        {!!conditionIcon && (
+          <View style={styles.weatherConditionBadge}>
+            <Ionicons name={conditionIcon} size={12} color="#FFFFFF" />
+          </View>
+        )}
         <View style={styles.weatherTextContainer}>
           <Text style={styles.weatherCardTitle} numberOfLines={1}>{spot.name}</Text>
           <Text style={styles.weatherCardSub} numberOfLines={1}>★ {spot.rating.toFixed(1)} • {spot.location.split(',')[0]}</Text>
@@ -894,6 +927,36 @@ export default function HomeScreen() {
       </InteractiveButton>
       <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(spot.id)} style={styles.weatherHeartBadge}>
         <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  /**
+   * The one large card in "Trending" — everything else on this screen is a
+   * horizontal scroll or a uniform grid, so three sections in a row reading
+   * as the same repeated card shape was the screen's flattest moment. This
+   * borrows the hero card's visual language (full-bleed photo, gradient
+   * scrim, white overline) at a smaller size, so "Trending" reads as the
+   * screen's second editorial moment instead of a fourth grid.
+   */
+  const renderFeaturedTrendingCard = (spot: SpotInfo) => (
+    <View style={styles.trendingFeaturedContainer}>
+      <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
+        <Image source={{ uri: spot.image }} style={styles.trendingFeaturedImage} />
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} style={styles.trendingFeaturedGradient} />
+        <View style={styles.trendingFeaturedBadge}>
+          <Ionicons name="flame" size={11} color="#FFFFFF" />
+          <Text style={styles.trendingFeaturedBadgeText}>Most loved this month</Text>
+        </View>
+        <View style={styles.trendingFeaturedTextWrap}>
+          <Text style={styles.trendingFeaturedTitle} numberOfLines={1}>{spot.name}</Text>
+          <Text style={styles.trendingFeaturedSub} numberOfLines={1}>
+            ★ {spot.rating.toFixed(1)} • {spot.location.split(',')[0]}
+          </Text>
+        </View>
+      </InteractiveButton>
+      <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.trendingFeaturedHeart}>
+        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={15} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
       </TouchableOpacity>
     </View>
   );
@@ -1113,12 +1176,22 @@ export default function HomeScreen() {
         </View>
 
 
-        {/* Trending Across the Philippines */}
+        {/* Trending Across the Philippines — one featured pick + a 2x2 grid,
+            not a sixth uniform row of the same card shape as Near You below. */}
         <View style={styles.sectionBlock}>
-          {renderSectionHeader('trending', { shown: 6 })}
-          <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
-            {getFullSectionData('trending').slice(0, 6).map(spot => renderGridCard(spot))}
-          </View>
+          {renderSectionHeader('trending', { shown: 5 })}
+          {(() => {
+            const [featured, ...rest] = getFullSectionData('trending').slice(0, 5);
+            if (!featured) return null;
+            return (
+              <>
+                {renderFeaturedTrendingCard(featured)}
+                <View style={[styles.gemsGridContainer, { marginTop: 12 }]}>
+                  {rest.map(spot => renderGridCard(spot))}
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* Today's Vibe */}
@@ -1132,7 +1205,7 @@ export default function HomeScreen() {
             shown: 8,
           })}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.weatherScrollContainer, { marginTop: 12 }]}>
-            {todayWeather.spots.slice(0, 8).map(spot => renderHorizontalCard(spot))}
+            {todayWeather.spots.slice(0, 8).map(spot => renderHorizontalCard(spot, todayConditionIcon))}
           </ScrollView>
         </View>
 
@@ -1403,7 +1476,7 @@ export default function HomeScreen() {
 
                   {selectedSpot.highlights && selectedSpot.highlights.length > 0 && (
                     <View style={{ marginTop: 14 }}>
-                      <Text style={[styles.modalSectionHeading, { color: colors.text }]}>KEY HIGHLIGHTS</Text>
+                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>KEY HIGHLIGHTS</Text>
                       <View style={styles.modalBulletList}>
                         {selectedSpot.highlights.map((h, i) => (
                           <View key={i} style={styles.modalBulletRow}>
@@ -1417,7 +1490,7 @@ export default function HomeScreen() {
 
                   {selectedSpot.days && selectedSpot.days.length > 0 && (
                     <View style={{ marginTop: 14 }}>
-                      <Text style={[styles.modalSectionHeading, { color: colors.text }]}>RECOMMENDED ITINERARY</Text>
+                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>RECOMMENDED ITINERARY</Text>
                       {selectedSpot.days.map((day, idx) => (
                         <View key={idx} style={styles.modalDayBlock}>
                           <Text style={{ ...T.label, color: colors.text }}>Day {idx + 1}</Text>
@@ -1453,7 +1526,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => { setLocationPickerVisible(false); loadLocationAndData(); }}
-              style={styles.pickerOptionRow}
+              style={[styles.pickerOptionRow, { borderBottomColor: colors.divider }]}
             >
               <View style={styles.pickerIconContainer}>
                 <Ionicons name="navigate-circle-outline" size={20} color={colors.brand} />
@@ -1469,7 +1542,7 @@ export default function HomeScreen() {
                 key={loc.id}
                 activeOpacity={0.8}
                 onPress={() => { setLocationPickerVisible(false); loadLocationAndData({ latitude: loc.latitude, longitude: loc.longitude }, loc.name); }}
-                style={styles.pickerOptionRow}
+                style={[styles.pickerOptionRow, { borderBottomColor: colors.divider }]}
               >
                 <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
                   <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
@@ -1676,6 +1749,19 @@ const styles = StyleSheet.create({
   categoryTileLabel: { ...T.emphasis },
   categoryTileSub: { ...T.micro, marginTop: 2, lineHeight: 12 },
 
+  // The "Trending" featured card — same big-photo language as the hero above,
+  // scaled down, so this section reads as a second editorial moment rather
+  // than a third repetition of the small grid card.
+  trendingFeaturedContainer: { marginHorizontal: space.xl, height: 190, borderRadius: radius.xl, overflow: 'hidden', position: 'relative' },
+  trendingFeaturedImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  trendingFeaturedGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '75%' },
+  trendingFeaturedBadge: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: radius.sm, paddingHorizontal: space.sm + 2, paddingVertical: 5 },
+  trendingFeaturedBadgeText: { color: '#FFFFFF', ...T.microStrong, letterSpacing: 0.2 },
+  trendingFeaturedHeart: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  trendingFeaturedTextWrap: { position: 'absolute', left: 16, right: 16, bottom: 14 },
+  trendingFeaturedTitle: { color: '#FFFFFF', ...T.title },
+  trendingFeaturedSub: { color: '#E5E7EB', ...T.label, marginTop: 2 },
+
   gemsGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12 },
   gemCard: { height: 175, borderRadius: 20, overflow: 'hidden', position: 'relative', marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   gemHeartBadge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center', padding: 4, zIndex: 10 },
@@ -1688,8 +1774,6 @@ const styles = StyleSheet.create({
 
   backButtonContainer: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   backButtonText: { ...T.emphasis },
-  curatedTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  curatedTopBarTitle: { flex: 1, ...T.titleSm, textAlign: 'center', paddingHorizontal: 8 },
 
   // Section detail banner — echoes the tapped row's image/title so the page
   // feels like that row expanded, not a separate destination.
@@ -1740,7 +1824,7 @@ const styles = StyleSheet.create({
   modalTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   modalTagText: { ...T.microStrong },
   modalDescription: { ...T.label, lineHeight: 19, marginVertical: 6 },
-  modalSectionHeading: { ...T.microStrong, letterSpacing: 1, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 4, marginTop: 8 },
+  modalSectionHeading: { ...T.microStrong, letterSpacing: 1, borderBottomWidth: 1, paddingBottom: 4, marginTop: 8 },
   modalBulletList: { gap: 6, marginTop: 6 },
   modalBulletRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   modalBulletText: { ...T.label },
@@ -1751,7 +1835,7 @@ const styles = StyleSheet.create({
   pickerIconContainer: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   pickerOptionName: { ...T.emphasis },
   pickerOptionSub: { ...T.micro, marginTop: 1 },
-  pickerOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  pickerOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
 
   emptyContainer: { width: '100%', paddingVertical: 60, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptySubtitle: { ...T.emphasis, textAlign: 'center', paddingHorizontal: 30 },
@@ -1764,6 +1848,7 @@ const styles = StyleSheet.create({
   weatherCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   weatherCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },
   weatherHeartBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 12, padding: 4, zIndex: 10 },
+  weatherConditionBadge: { position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   weatherTextContainer: { position: 'absolute', bottom: 10, left: 10, right: 10 },
   weatherCardTitle: { color: '#FFFFFF', ...T.label },
   weatherCardSub: { color: '#E5E7EB', ...T.micro, marginTop: 1 },

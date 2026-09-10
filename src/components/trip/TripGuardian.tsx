@@ -17,6 +17,7 @@ import { distanceMeters, centroid, formatRadius, type LatLng } from '../../servi
 import { searchPhotonPlaces } from '../../services/freePlacesService';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { withTimeout } from '../../lib/async';
 import {
   ScreenHeader, Section, SectionLabel, ListGroup, ListRow, Button,
   EmptyState, Txt, Badge, Avatar, Sheet, Segmented,
@@ -324,12 +325,12 @@ export default function TripGuardian({ trip, loadTrip, onBack, hideHeader = fals
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await withTimeout(Location.requestForegroundPermissionsAsync(), 6000);
       if (status !== 'granted') {
         notify('Location needed. Allow location access to share your position with the group.', 'info');
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const loc = await withTimeout(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), 6000);
       const { error } = await dbUpdateLocation(trip.id, loc.coords.latitude, loc.coords.longitude);
       if (error) { notify(error, 'error'); return; }
       setDeviceCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });

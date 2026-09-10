@@ -8,13 +8,13 @@ import {
   ScrollView,
   Animated,
   Platform,
-  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { notify } from '../ui/Feedback';
 import { type as T } from '../ui/tokens';
 import {
   getActiveDayPlan,
@@ -92,11 +92,7 @@ export default function ActiveDayPlanFloatingWidget() {
       await finishActiveDayPlan();
       setActivePlan(null);
       setModalVisible(false);
-      Alert.alert(
-        'Itinerary Completed',
-        'You have finished your spontaneous day plan.',
-        [{ text: 'OK' }]
-      );
+      notify('Itinerary completed — you finished your spontaneous day plan.', 'success');
     } catch (e) {
       console.warn('Failed to finish day plan:', e);
     } finally {

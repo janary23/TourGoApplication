@@ -118,14 +118,14 @@ function TabButton({ label, iconName, isFocused, onPress, onLongPress }: TabButt
           <Ionicons
             name={iconName as any}
             size={20}
-            color={isFocused ? '#FFFFFF' : colors.textMuted}
+            color={isFocused ? colors.onBrand : colors.textMuted}
           />
 
           {/* Clipping box: maxWidth animates, the label sizes itself. */}
           <Animated.View style={{ maxWidth: labelReveal, overflow: 'hidden' }}>
             <Animated.Text
               numberOfLines={1}
-              style={[styles.label, { opacity: labelOpacity, paddingLeft: LABEL_GAP }]}
+              style={[styles.label, { color: colors.onBrand, opacity: labelOpacity, paddingLeft: LABEL_GAP }]}
             >
               {label}
             </Animated.Text>
@@ -139,10 +139,16 @@ function TabButton({ label, iconName, isFocused, onPress, onLongPress }: TabButt
 // ─────────────────────────────────────────────
 // Custom Tab Bar
 // ─────────────────────────────────────────────
+// `trips` used `bookmark` until this pass — but the app already uses
+// bookmark/heart glyphs everywhere else (Home's save button, Local Events'
+// bookmark) to mean "saved for later". Reusing it here for "your booked
+// trips" made the one tab most central to the product's purpose share an
+// icon with a completely different action. `briefcase` is the travel-app
+// convention for "my trips" precisely because it doesn't collide with save.
 const TABS = [
   { name: 'index', label: 'Home', icon: 'home', iconOutline: 'home-outline' },
   { name: 'explore', label: 'Explore', icon: 'compass', iconOutline: 'compass-outline' },
-  { name: 'trips', label: 'Trips', icon: 'bookmark', iconOutline: 'bookmark-outline' },
+  { name: 'trips', label: 'Trips', icon: 'briefcase', iconOutline: 'briefcase-outline' },
   { name: 'activity', label: 'Activity', icon: 'notifications', iconOutline: 'notifications-outline' },
   { name: 'profile', label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
 ];
@@ -240,7 +246,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   label: {
-    color: '#FFFFFF',
     ...T.label,
   },
 });
