@@ -106,22 +106,19 @@ export default function TripHomeScreen() {
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={{ marginTop: 12, color: colors.textSecondary, fontFamily: 'Poppins-Regular' }}>Loading trip...</Text>
+        <Txt variant="subhead" tone="muted" style={{ marginTop: space.md }}>Loading trip...</Txt>
       </SafeAreaView>
     );
   }
 
   if (error || !trip) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 24 }}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: space.xl }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Text style={{ fontSize: 16, color: '#FF3B30', marginBottom: 16, textAlign: 'center' }}>{error || 'Trip not found.'}</Text>
-        <TouchableOpacity
-          style={{ paddingVertical: 10, paddingHorizontal: 20, backgroundColor: colors.brand, borderRadius: 8 }}
-          onPress={() => router.replace('/(tabs)/trips')}
-        >
-          <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-Bold' }}>Back to Trips</Text>
-        </TouchableOpacity>
+        <Txt variant="bodyStrong" tone="destructive" align="center" style={{ marginBottom: space.lg }}>
+          {error || 'Trip not found. It may have been deleted or the link is out of date.'}
+        </Txt>
+        <Button label="Back to trips" onPress={() => router.replace('/(tabs)/trips')} />
       </SafeAreaView>
     );
   }
@@ -129,21 +126,16 @@ export default function TripHomeScreen() {
   const isMember = (trip.members || []).some((m: any) => m.userId === profile?.id);
   if (!isMember) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 24 }}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: space.xl }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Ionicons name="exit-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
-        <Text style={{ ...T.title, color: colors.text, marginBottom: 6, textAlign: 'center' }}>
+        <Ionicons name="exit-outline" size={48} color={colors.textMuted} style={{ marginBottom: space.md }} />
+        <Txt variant="title" align="center" style={{ marginBottom: space.xs }}>
           You left this trip
-        </Text>
-        <Text style={{ ...T.subhead, color: colors.textSecondary, marginBottom: 20, textAlign: 'center' }}>
-          You are no longer an active member of this trip workspace.
-        </Text>
-        <TouchableOpacity
-          style={{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: colors.brand, borderRadius: 12 }}
-          onPress={() => router.replace('/(tabs)/trips')}
-        >
-          <Text style={{ color: '#FFFFFF', ...T.bodyStrong }}>Back to My Trips</Text>
-        </TouchableOpacity>
+        </Txt>
+        <Txt variant="subhead" tone="muted" align="center" style={{ marginBottom: space.xl }}>
+          You are no longer an active member of this trip.
+        </Txt>
+        <Button label="Back to trips" onPress={() => router.replace('/(tabs)/trips')} />
       </SafeAreaView>
     );
   }
@@ -344,7 +336,7 @@ export default function TripHomeScreen() {
         onBack={handleHeaderBack}
         backLabel={headerBackLabel}
         title={trip.destination}
-        eyebrow={isScrapbook ? 'Scrapbook · View only' : undefined}
+        eyebrow={isScrapbook ? 'View-only scrapbook' : undefined}
         actions={
           isOrganizer
             ? [{ icon: 'create-outline', onPress: openEditModal, accessibilityLabel: 'Edit trip' }]
@@ -407,7 +399,7 @@ export default function TripHomeScreen() {
         </Txt>
 
         <View style={{ marginTop: space.xxl }}>
-          <Txt variant="overline" tone="muted" uppercase style={{ marginBottom: space.sm }}>
+          <Txt variant="overline" tone="muted" style={{ marginBottom: space.sm }}>
             Danger zone
           </Txt>
           <Button

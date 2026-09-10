@@ -24,7 +24,7 @@ import {
   currentDayIndex,
   type Adjustment,
 } from "../../services/tripProgress";
-import { Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card, Button, IconButton, Badge, Avatar, ProgressBar, EmptyState, InlineEmpty, Divider } from "../ui/primitives";
+import { Txt, Press as UiPress, Section, SectionLabel, ListGroup, ListRow, Card, Button, IconButton, Badge, Avatar, ProgressBar, EmptyState, InlineEmpty, Divider, PhotoWithFallback } from "../ui/primitives";
 import { space, radius, hairline, type as T, stateColor, stripEmoji } from "../ui/tokens";
 import { useTheme } from "../../context/ThemeContext";
 import { confirmAction, notify } from '../ui/Feedback';
@@ -114,6 +114,16 @@ export default function TripOverview({
   const lifecycle = deriveTripStatus(trip);
   const isScrapbook = isScrapbookProp || lifecycle === 'completed' || tripPhase.phase === 'after';
 
+  // The hero status dot had no colour set at all (fully transparent, so it
+  // never actually appeared) — this gives the status pill's colour real
+  // meaning instead of decoration: green while happening, brand blue while
+  // planned/upcoming, muted once wrapped, red if cancelled.
+  const statusDotColor =
+    lifecycle === 'active' ? sc.positive
+      : lifecycle === 'cancelled' ? sc.destructive
+        : lifecycle === 'completed' ? colors.textMuted
+          : colors.brand;
+
   // Facebook's web sharer can only carry a text quote — no way to attach a
   // locally-generated image — so the post came through with no visual at
   // all. This captures the same TripShareCard rendered off-screen below and
@@ -162,7 +172,7 @@ export default function TripOverview({
     runLifecycleAction(
       () => completeTrip(trip.id),
       'Mark trip as completed?',
-      'The trip moves to everyone\'s Album — organizer and members alike.'
+      'The trip moves to everyone\'s Album, for the organizer and members alike.'
     );
 
   /** Organizer shares the whole trip (name, destination, dates, highlights,
@@ -230,6 +240,16 @@ export default function TripOverview({
 
   const [votingOptionId, setVotingOptionId] = useState<string | null>(null);
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+
+  // The assistive-touch FAB is fixed at bottom-right; on shorter phone
+  // viewports the Updates section's "See all" link can land in that same
+  // screen band before any scrolling happens (the audit's "'See all'
+  // collides with the FAB" bug — it wasn't just visual, the FAB's touch
+  // area sits above the scroll content and can swallow the tap). The FAB
+  // now only becomes visible/tappable once the user has scrolled a little,
+  // which is also when a floating quick-menu is actually useful — right at
+  // the top, Up Next/Status already put everything one tap away.
+  const [fabVisible, setFabVisible] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fabAnim = useRef(new Animated.Value(0)).current;
@@ -364,7 +384,7 @@ export default function TripOverview({
     if (tripPhase.phase === "during" && nowAct) return `Right now: "${nowAct.title}"`;
     if (tripPhase.phase === "during" && nextAct) return `Up next: "${nextAct.title}" at ${nextAct.time}`;
     if (tripPhase.phase === "after") return "What a trip! Settle up and relive the memories anytime.";
-    return "You're all set — have an amazing trip!";
+    return "You're all set. Have an amazing trip!";
   };
 
   const sortedItinerary = trip.itinerary?.length
@@ -384,7 +404,7 @@ export default function TripOverview({
     if (tripPhase.phase === 'before') {
       const left = totalTasks - completedTasks;
       return {
-        eyebrow: 'GET READY',
+        eyebrow: 'Get ready',
         icon: 'sparkles' as const,
         title: totalTasks === 0
           ? 'Start your packing list'
@@ -400,12 +420,12 @@ export default function TripOverview({
     if (tripPhase.phase === 'during') {
       const act = nowAct || nextAct;
       return {
-        eyebrow: nowAct ? 'HAPPENING NOW' : 'UP NEXT',
+        eyebrow: nowAct ? 'Happening now' : 'Up next',
         icon: 'navigate' as const,
         title: act ? act.title : 'Free time',
         desc: act
-          ? `${act.time || 'TBD'}${act.location ? ` · ${act.location}` : ''}`
-          : 'No stops scheduled right now — go explore.',
+          ? `${act.time || 'TBD'}${act.location ? ` at ${act.location}` : ''}`
+          : 'No stops scheduled right now. Go explore.',
         action: 'View itinerary',
         onPress: goToPlan,
         showProgress: false,
@@ -413,7 +433,7 @@ export default function TripOverview({
     }
     const settleUp = isEnabled('split_expenses') && totalExpenses > 0;
     return {
-      eyebrow: 'TRIP WRAPPED',
+      eyebrow: 'Trip wrapped',
       icon: 'ribbon' as const,
       title: settleUp ? 'Settle shared costs' : 'Relive the trip',
       desc: settleUp ? `₱${totalExpenses.toLocaleString()} logged across the group.` : 'Revisit your photos, docs, and highlights.',
@@ -545,6 +565,22 @@ export default function TripOverview({
   // ── Scroll-driven hero motion ──
   const heroTranslate = scrollY.interpolate({ inputRange: [0, HERO_HEIGHT], outputRange: [0, -HERO_HEIGHT * 0.28], extrapolate: 'clamp' });
   const heroScale = scrollY.interpolate({ inputRange: [-140, 0], outputRange: [1.24, 1], extrapolate: 'clamp' });
+  const fabOpacity = scrollY.interpolate({ inputRange: [100, 220], outputRange: [0, 1], extrapolate: 'clamp' });
+
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => {
+      const shouldShow = value > 160;
+      setFabVisible(prev => (prev === shouldShow ? prev : shouldShow));
+    });
+    return () => scrollY.removeListener(id);
+  }, []);
+
+  // If the sheet scrolls back up while the fan-out menu is open, close it —
+  // an open menu the FAB itself has just faded behind content would be a
+  // stuck, invisible-but-still-tappable trap.
+  useEffect(() => {
+    if (!fabVisible && fabOpen) toggleFab();
+  }, [fabVisible]);
 
   return (
     <View style={styles.root}>
@@ -558,11 +594,21 @@ export default function TripOverview({
 
           {/* ═══ HERO ═══ */}
           <View style={styles.heroWrap}>
-            <Animated.Image
-              source={{ uri: trip.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200' }}
-              style={[styles.heroImg, { transform: [{ translateY: heroTranslate }, { scale: heroScale }] }]}
-              resizeMode="cover"
-            />
+            {trip.image && trip.image.trim() !== '' ? (
+              <Animated.Image
+                source={{ uri: trip.image }}
+                style={[styles.heroImg, { transform: [{ translateY: heroTranslate }, { scale: heroScale }] }]}
+                resizeMode="cover"
+              />
+            ) : (
+              // No cover photo set — a designed fallback (destination name on
+              // a brand-tinted tile) instead of the one fixed stock photo
+              // every trip with no image used to share regardless of place.
+              <PhotoWithFallback
+                placeName={trip.destination || trip.title}
+                style={[styles.heroImg, { top: 0, height: HERO_HEIGHT }]}
+              />
+            )}
             <LinearGradient
               colors={['rgba(0,0,0,0.30)', 'transparent', 'rgba(0,0,0,0.60)', 'rgba(0,0,0,0.88)']}
               locations={[0, 0.38, 0.74, 1]}
@@ -572,9 +618,9 @@ export default function TripOverview({
             <View style={styles.heroTopRow}>
               <View style={styles.statusPill}>
                 {tripPhase.phase === 'during' && (
-                  <Animated.View style={[styles.statusGlow, { transform: [{ scale: pulseAnim }] }]} />
+                  <Animated.View style={[styles.statusGlow, { backgroundColor: statusDotColor, transform: [{ scale: pulseAnim }] }]} />
                 )}
-                <View style={styles.statusDot} />
+                <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
                 <Text style={styles.statusTxt}>{statusLabel(lifecycle)}</Text>
               </View>
               <TouchableOpacity style={styles.heroIconBtn} onPress={handleShareCode} hitSlop={8} activeOpacity={0.8}>
@@ -584,12 +630,13 @@ export default function TripOverview({
 
             <View style={styles.heroContent}>
               {!!trip.destination && (
-                <Text style={styles.heroDest} numberOfLines={1}>{trip.destination.toUpperCase()}</Text>
+                <Text style={styles.heroDest} numberOfLines={1}>{trip.destination}</Text>
               )}
               <Text style={styles.heroTitle} numberOfLines={2}>{trip.title}</Text>
-              <Text style={styles.heroMetaTxt} numberOfLines={1}>
-                {fmtRange(trip.startDate, trip.endDate)} · {countdownText}
-              </Text>
+              <View style={styles.heroMetaRow}>
+                <Text style={styles.heroMetaTxt} numberOfLines={1}>{fmtRange(trip.startDate, trip.endDate)}</Text>
+                <Text style={styles.heroMetaEmphasis} numberOfLines={1}>{countdownText}</Text>
+              </View>
             </View>
           </View>
 
@@ -659,11 +706,11 @@ export default function TripOverview({
                       <Ionicons name={prep.icon} size={17} color={colors.brand} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Txt variant="caption" tone="accent" uppercase>{prep.eyebrow}</Txt>
+                      <Txt variant="caption" tone="accent">{prep.eyebrow}</Txt>
                       <Txt variant="headline" numberOfLines={1} style={{ marginTop: 1 }}>{prep.title}</Txt>
                     </View>
                     {prep.showProgress && (
-                      <Txt variant="mono">{Math.round(prepRatio * 100)}%</Txt>
+                      <Txt variant="mono">{Math.round(prepRatio * 100)}% ready</Txt>
                     )}
                   </View>
 
@@ -905,7 +952,7 @@ export default function TripOverview({
                 <View style={[styles.upNext, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                   <Txt variant="headline">{activePoll.question}</Txt>
                   <Txt variant="footnote" tone="muted" style={{ marginTop: 2 }}>
-                    {activePoll.closed ? 'Closed · final results' : pollStats.hasVoted ? 'You voted' : 'Vote now'}
+                    {activePoll.closed ? 'Voting closed' : pollStats.hasVoted ? 'You voted' : 'Vote now'}
                   </Txt>
 
                   <View style={{ marginTop: space.lg, gap: space.sm }}>
@@ -937,7 +984,7 @@ export default function TripOverview({
 
                   <Txt variant="caption" tone="muted" style={{ marginTop: space.md }}>
                     {pollStats.totalVotes} vote{pollStats.totalVotes !== 1 ? 's' : ''}
-                    {pollStats.extra > 0 ? ` · ${pollStats.extra} more option${pollStats.extra !== 1 ? 's' : ''}` : ''}
+                    {pollStats.extra > 0 ? ` and ${pollStats.extra} more option${pollStats.extra !== 1 ? 's' : ''}` : ''}
                   </Txt>
                 </View>
               </Section>
@@ -973,11 +1020,15 @@ export default function TripOverview({
         });
       })()}
 
-      <Animated.View style={[styles.atBallWrap, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View
+        pointerEvents={fabVisible ? 'auto' : 'none'}
+        style={[styles.atBallWrap, { opacity: fabOpacity, transform: [{ scale: scaleAnim }] }]}
+      >
         <TouchableOpacity
           style={[styles.atBall, { backgroundColor: fabOpen ? colors.brand : isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.55)' }]}
           onPress={toggleFab}
           activeOpacity={0.85}
+          accessibilityLabel="Quick actions"
         >
           <Animated.View style={{ transform: [{ rotate: fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }}>
             <Ionicons name="flash" size={20} color="#fff" />
@@ -1014,22 +1065,17 @@ const styles = StyleSheet.create({
   statusTxt: { color: '#fff', ...T.label },
   heroIconBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.34)', alignItems: 'center', justifyContent: 'center' },
   heroContent: { position: 'absolute', left: 18, right: 18, bottom: 18 },
-  heroDest: { color: 'rgba(255,255,255,0.72)', ...T.label, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
+  heroDest: { color: 'rgba(255,255,255,0.72)', ...T.label, flexShrink: 1 },
   heroTitle: { color: '#FFFFFF', ...T.display, lineHeight: 30, letterSpacing: -0.5 },
+  // Two facts, spatially separated by a gap rather than joined with a
+  // middle dot — the second is bolder/brighter, not punctuation, to still
+  // read as a distinct fact next to the date range.
+  heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   heroMetaTxt: { color: 'rgba(255,255,255,0.82)', ...T.label },
+  heroMetaEmphasis: { color: '#FFFFFF', ...T.emphasis },
 
   body: { paddingHorizontal: 16, paddingTop: 18 },
 
-  /* ── Safety check-in ── */
-
-  /* ── Primary two-column section (countdown sets height; right split 70/30 Agilito:stats) ── */
-
-  /* ── Preparation / countdown card (stretches to match the right column height) ── */
-  prepCard: {
-    flex: 1, justifyContent: 'space-between',
-    borderRadius: 20, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 32,
-    shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
-  },
   atBubble: {
     width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 5, elevation: 5,

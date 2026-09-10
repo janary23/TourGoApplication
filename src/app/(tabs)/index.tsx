@@ -21,7 +21,7 @@ import { loadPreferences, getRecommendedSpots } from '../../services/preferences
 import { parseSearchIntentWithAi, type AiSearchIntent } from '../../services/aiService';
 import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobalLoading } from '../../services/mascotBridge';
 import { withTimeout } from '../../lib/async';
-import { EmptyState } from '../../components/ui/primitives';
+import { EmptyState, PhotoWithFallback, Chip } from '../../components/ui/primitives';
 import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
@@ -185,6 +185,29 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
+/**
+ * A card's one secondary line, under its name.
+ *
+ * Two Hard Rule fixes at once: it never repeats the name itself (the
+ * screenshot audit's "Bantayan Island / ★ 4.5 • Bantayan Island" bug — a
+ * spot's location often starts with its own name), and it never joins two
+ * facts with a middle dot. Rating moves to its own icon+number badge at
+ * every call site instead of living inside this string.
+ */
+function spotSubtitle(spot: SpotInfo): string | null {
+  const nameLower = spot.name.trim().toLowerCase();
+  const category = spot.categoryTag?.trim();
+  if (category && category.toLowerCase() !== nameLower) return category;
+  const place = spot.location?.split(',')[0]?.trim();
+  if (place && place.toLowerCase() !== nameLower) return place;
+  return null;
+}
+
+/** Sentence case for a single lowercase word/tag from a data field — "budget", not "BUDGET". */
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -211,7 +234,10 @@ const FadeImage = ({ sourceUri, style }: { sourceUri: string; style: any }) => {
 };
 
 // Bouncy scale touchable button helper
-function InteractiveButton({ onPress, style, children, activeScale = 0.95, delayPressIn = 0, hitSlop }: any) {
+function InteractiveButton({
+  onPress, style, children, activeScale = 0.95, delayPressIn = 0, hitSlop,
+  accessibilityLabel, accessibilityRole,
+}: any) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
@@ -253,6 +279,8 @@ function InteractiveButton({ onPress, style, children, activeScale = 0.95, delay
         onPressOut={onPressOut}
         delayPressIn={delayPressIn}
         hitSlop={hitSlop}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={accessibilityRole}
         style={touchableStyle}
       >
         {children}
@@ -301,13 +329,25 @@ function HomeSkeletonLoader({ colors }: { colors: any }) {
   );
 }
 
-// Aguilito's home — rendered identically wherever he nests, matching the
-// global floating badge (white/dark circle, brand ring when he's home,
-// dashed placeholder ring + house icon when he's away).
+/**
+ * Aguilito's home — rendered identically wherever he nests, matching the
+ * global floating badge (white/dark circle, brand ring when he's home,
+ * dashed placeholder ring + house icon when he's away).
+ *
+ * The audit flagged this exact button: sitting beside the search bar with
+ * no label or context, it read as decoration rather than the AI search
+ * assistant it actually opens. The small sparkle badge + accessibility
+ * label give it that one clear job without changing its footprint — the
+ * global floating badge elsewhere in the app earns its unlabeled read from
+ * being a persistent, already-understood companion; this static inline
+ * instance had no such context to lean on.
+ */
 function AguilitoHomeButton({ colors, isDark, onPress, landed }: any) {
   return (
     <InteractiveButton
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Ask Agilito to search with AI"
       style={{
         width: 56,
         height: 56,
@@ -325,6 +365,15 @@ function AguilitoHomeButton({ colors, isDark, onPress, landed }: any) {
           <Ionicons name="home" size={20} color={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)'} />
         </View>
       )}
+      <View
+        style={{
+          position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10,
+          backgroundColor: colors.brand, borderWidth: 2, borderColor: colors.background,
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="sparkles" size={10} color="#FFFFFF" />
+      </View>
     </InteractiveButton>
   );
 }
@@ -884,7 +933,7 @@ export default function HomeScreen() {
     <View key={spot.id} style={[styles.gemCard, { width, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
       <TouchableOpacity activeOpacity={0.8} onPress={() => setSelectedSpot(spot)} style={{ flex: 1 }}>
         <View style={{ position: 'relative', height: 110, overflow: 'hidden' }}>
-          <Image source={{ uri: spot.image }} style={styles.gemImage} />
+          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.gemImage} />
           <View style={styles.ratingBadge}>
             <Ionicons name="star" size={10} color={ON_IMAGE_AMBER} style={{ marginRight: 2 }} />
             <Text style={styles.ratingBadgeText}>{spot.rating.toFixed(1)}</Text>
@@ -893,7 +942,7 @@ export default function HomeScreen() {
         <View style={styles.gemTextContainer}>
           <Text style={[styles.gemTitle, { color: colors.text }]} numberOfLines={1}>{spot.name}</Text>
           <Text style={[styles.gemSubText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {(spot.categoryTag || spot.location.split(',')[0])} • {spot.distance}
+            {spotSubtitle(spot) ?? spot.distance}
           </Text>
         </View>
       </TouchableOpacity>
@@ -910,26 +959,33 @@ export default function HomeScreen() {
    * why. A small glyph tied to *why this spot is here* earns its place; it
    * never appears on the personalised row.
    */
-  const renderHorizontalCard = (spot: SpotInfo, conditionIcon?: keyof typeof Ionicons.glyphMap) => (
-    <View key={spot.id} style={[styles.weatherCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
-      <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.96}>
-        <Image source={{ uri: spot.image }} style={styles.weatherCardImage} />
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.weatherCardGradient} />
-        {!!conditionIcon && (
-          <View style={styles.weatherConditionBadge}>
-            <Ionicons name={conditionIcon} size={12} color="#FFFFFF" />
+  const renderHorizontalCard = (spot: SpotInfo, conditionIcon?: keyof typeof Ionicons.glyphMap) => {
+    const subtitle = spotSubtitle(spot);
+    return (
+      <View key={spot.id} style={[styles.weatherCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }]}>
+        <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.96}>
+          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.weatherCardImage} />
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.weatherCardGradient} />
+          {!!conditionIcon && (
+            <View style={styles.weatherConditionBadge}>
+              <Ionicons name={conditionIcon} size={12} color="#FFFFFF" />
+            </View>
+          )}
+          <View style={[styles.weatherRatingBadge, conditionIcon ? { left: 34 } : { left: 8 }]}>
+            <Ionicons name="star" size={9} color={ON_IMAGE_AMBER} />
+            <Text style={styles.weatherRatingBadgeText}>{spot.rating.toFixed(1)}</Text>
           </View>
-        )}
-        <View style={styles.weatherTextContainer}>
-          <Text style={styles.weatherCardTitle} numberOfLines={1}>{spot.name}</Text>
-          <Text style={styles.weatherCardSub} numberOfLines={1}>★ {spot.rating.toFixed(1)} • {spot.location.split(',')[0]}</Text>
-        </View>
-      </InteractiveButton>
-      <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(spot.id)} style={styles.weatherHeartBadge}>
-        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
-      </TouchableOpacity>
-    </View>
-  );
+          <View style={styles.weatherTextContainer}>
+            <Text style={styles.weatherCardTitle} numberOfLines={1}>{spot.name}</Text>
+            {!!subtitle && <Text style={styles.weatherCardSub} numberOfLines={1}>{subtitle}</Text>}
+          </View>
+        </InteractiveButton>
+        <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(spot.id)} style={styles.weatherHeartBadge}>
+          <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={12} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   /**
    * The one large card in "Trending" — everything else on this screen is a
@@ -939,27 +995,36 @@ export default function HomeScreen() {
    * scrim, white overline) at a smaller size, so "Trending" reads as the
    * screen's second editorial moment instead of a fourth grid.
    */
-  const renderFeaturedTrendingCard = (spot: SpotInfo) => (
-    <View style={styles.trendingFeaturedContainer}>
-      <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
-        <Image source={{ uri: spot.image }} style={styles.trendingFeaturedImage} />
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} style={styles.trendingFeaturedGradient} />
-        <View style={styles.trendingFeaturedBadge}>
-          <Ionicons name="flame" size={11} color="#FFFFFF" />
-          <Text style={styles.trendingFeaturedBadgeText}>Most loved this month</Text>
-        </View>
-        <View style={styles.trendingFeaturedTextWrap}>
-          <Text style={styles.trendingFeaturedTitle} numberOfLines={1}>{spot.name}</Text>
-          <Text style={styles.trendingFeaturedSub} numberOfLines={1}>
-            ★ {spot.rating.toFixed(1)} • {spot.location.split(',')[0]}
-          </Text>
-        </View>
-      </InteractiveButton>
-      <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.trendingFeaturedHeart}>
-        <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={15} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
-      </TouchableOpacity>
-    </View>
-  );
+  const renderFeaturedTrendingCard = (spot: SpotInfo) => {
+    const subtitle = spotSubtitle(spot);
+    return (
+      <View style={styles.trendingFeaturedContainer}>
+        <InteractiveButton onPress={() => setSelectedSpot(spot)} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
+          <PhotoWithFallback uri={spot.image} placeName={spot.name} style={styles.trendingFeaturedImage} />
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} style={styles.trendingFeaturedGradient} />
+          <View style={styles.trendingFeaturedBadge}>
+            <Ionicons name="flame" size={11} color="#FFFFFF" />
+            <Text style={styles.trendingFeaturedBadgeText}>Most loved this month</Text>
+          </View>
+          <View style={styles.trendingFeaturedTextWrap}>
+            <Text style={styles.trendingFeaturedTitle} numberOfLines={1}>{spot.name}</Text>
+            <View style={styles.trendingFeaturedMetaRow}>
+              <View style={styles.trendingFeaturedRating}>
+                <Ionicons name="star" size={11} color={ON_IMAGE_AMBER} />
+                <Text style={styles.trendingFeaturedRatingText}>{spot.rating.toFixed(1)}</Text>
+              </View>
+              {!!subtitle && (
+                <Text style={styles.trendingFeaturedSub} numberOfLines={1}>{subtitle}</Text>
+              )}
+            </View>
+          </View>
+        </InteractiveButton>
+        <TouchableOpacity activeOpacity={0.7} hitSlop={8} onPress={() => toggleSave(spot.id)} style={styles.trendingFeaturedHeart}>
+          <Ionicons name={savedIds.includes(spot.id) ? 'heart' : 'heart-outline'} size={15} color={savedIds.includes(spot.id) ? colors.saved : '#FFFFFF'} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderEventCard = (evt: any) => (
     <TouchableOpacity
@@ -980,7 +1045,7 @@ export default function HomeScreen() {
       <TouchableOpacity activeOpacity={0.7} hitSlop={6} onPress={() => toggleSave(evt.id)} style={styles.eventBookmarkContainer}>
         <Ionicons name={savedIds.includes(evt.id) ? 'bookmark' : 'bookmark-outline'} size={18} color={savedIds.includes(evt.id) ? colors.brand : colors.textMuted} />
       </TouchableOpacity>
-      <Image source={{ uri: evt.image }} style={styles.eventThumbImage} />
+      <PhotoWithFallback uri={evt.image} placeName={evt.name} style={styles.eventThumbImage} />
     </TouchableOpacity>
   );
 
@@ -1134,7 +1199,7 @@ export default function HomeScreen() {
         {/* Hero */}
         <View style={styles.heroCardContainer}>
           <InteractiveButton onPress={() => openSection('trending')} style={StyleSheet.absoluteFillObject} activeScale={0.97}>
-            <Image source={{ uri: featuredLandingSpot.image }} style={styles.heroCardImage} />
+            <PhotoWithFallback uri={featuredLandingSpot?.image} placeName="Philippines" style={styles.heroCardImage} />
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']} style={styles.heroCardGradient} />
             <View style={styles.heroTopRow}>
               <View style={styles.heroStatPill}>
@@ -1298,29 +1363,17 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Category Filter Capsules on sub-page */}
+          {/* Category filters */}
           <View style={{ marginTop: 10, marginBottom: 10, paddingVertical: 6 }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsScroll}>
-              {SUBPAGE_FILTERS.map(f => {
-                const active = activeCategoryFilter === f.key;
-                return (
-                  <TouchableOpacity
-                    key={f.key}
-                    activeOpacity={0.8}
-                    onPress={() => setActiveCategoryFilter(f.key)}
-                    style={[
-                      styles.categoryChip,
-                      active
-                        ? { backgroundColor: colors.brand }
-                        : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder }
-                    ]}
-                  >
-                    <Text style={[styles.categoryChipText, active ? { color: '#FFFFFF' } : { color: colors.textSecondary }]}>
-                      {f.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {SUBPAGE_FILTERS.map(f => (
+                <Chip
+                  key={f.key}
+                  label={f.label}
+                  selected={activeCategoryFilter === f.key}
+                  onPress={() => setActiveCategoryFilter(f.key)}
+                />
+              ))}
             </ScrollView>
           </View>
 
@@ -1341,7 +1394,7 @@ export default function HomeScreen() {
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Ionicons name="sparkles" size={14} color={colors.brand} style={{ marginRight: 6 }} />
-                <Text style={{ ...T.overline, color: colors.brand, letterSpacing: 0.5 }}>AI EXPLORE ASSISTANT</Text>
+                <Text style={{ ...T.emphasis, color: colors.brand }}>Matched by Agilito</Text>
               </View>
               <Text style={{ ...T.emphasis, color: colors.text, lineHeight: 18 }}>
                 {aiIntent.reasoning}
@@ -1349,15 +1402,15 @@ export default function HomeScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="wallet-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.budgetCategory.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{capitalize(aiIntent.budgetCategory)}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="car-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.transpoMode.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{capitalize(aiIntent.transpoMode)}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder }}>
                   <Ionicons name="time-outline" size={12} color={colors.brand} style={{ marginRight: 6 }} />
-                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{aiIntent.bestTimeOfDay.toUpperCase()}</Text>
+                  <Text style={{ ...T.microStrong, color: colors.textSecondary }}>{capitalize(aiIntent.bestTimeOfDay)}</Text>
                 </View>
               </View>
             </View>
@@ -1454,17 +1507,20 @@ export default function HomeScreen() {
                   </View>
 
                   <Text style={[styles.modalSubText, { color: colors.textSecondary, marginTop: 4 }]}>
-                    <Ionicons name="location-outline" size={13} color={colors.brand} /> {selectedSpot.distance} • {selectedSpot.location}
+                    <Ionicons name="location-outline" size={13} color={colors.brand} /> {selectedSpot.location}
                   </Text>
+                  {!!selectedSpot.distance && (
+                    <Text style={{ ...T.footnote, color: colors.textMuted, marginTop: 1 }}>{selectedSpot.distance}</Text>
+                  )}
 
                   <View style={styles.modalTagsStrip}>
                     <View style={[styles.modalTag, { backgroundColor: colors.brandLight, flexDirection: 'row', alignItems: 'center' }]}>
                       <Ionicons name="compass-outline" size={12} color={colors.brand} style={{ marginRight: 4 }} />
-                      <Text style={[styles.modalTagText, { color: colors.brand }]}>{(selectedSpot.categoryTag || selectedSpot.vibe).toUpperCase()}</Text>
+                      <Text style={[styles.modalTagText, { color: colors.brand }]}>{capitalize(selectedSpot.categoryTag || selectedSpot.vibe)}</Text>
                     </View>
                     <View style={[styles.modalTag, { backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center' }]}>
                       <Ionicons name="time-outline" size={12} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                      <Text style={[styles.modalTagText, { color: colors.textSecondary }]}>{selectedSpot.season.toUpperCase()}</Text>
+                      <Text style={[styles.modalTagText, { color: colors.textSecondary }]}>{capitalize(selectedSpot.season)}</Text>
                     </View>
                     <View style={[styles.modalTag, { backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center' }]}>
                       <Ionicons name="wallet-outline" size={12} color={colors.textSecondary} style={{ marginRight: 4 }} />
@@ -1476,7 +1532,7 @@ export default function HomeScreen() {
 
                   {selectedSpot.highlights && selectedSpot.highlights.length > 0 && (
                     <View style={{ marginTop: 14 }}>
-                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>KEY HIGHLIGHTS</Text>
+                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>Highlights</Text>
                       <View style={styles.modalBulletList}>
                         {selectedSpot.highlights.map((h, i) => (
                           <View key={i} style={styles.modalBulletRow}>
@@ -1490,7 +1546,7 @@ export default function HomeScreen() {
 
                   {selectedSpot.days && selectedSpot.days.length > 0 && (
                     <View style={{ marginTop: 14 }}>
-                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>RECOMMENDED ITINERARY</Text>
+                      <Text style={[styles.modalSectionHeading, { color: colors.text, borderBottomColor: colors.divider }]}>Suggested itinerary</Text>
                       {selectedSpot.days.map((day, idx) => (
                         <View key={idx} style={styles.modalDayBlock}>
                           <Text style={{ ...T.label, color: colors.text }}>Day {idx + 1}</Text>
@@ -1619,20 +1675,14 @@ export default function HomeScreen() {
             />
 
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ ...T.overline, color: colors.textMuted, marginBottom: 10, letterSpacing: 0.5 }}>TRY THESE EXAMPLES:</Text>
+              <Text style={{ ...T.label, color: colors.textMuted, marginBottom: 10 }}>Try these examples</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {[
                   'nature spots in Pampanga by car',
                   'free historic churches in Manila',
                   'theme parks in Cebu in the afternoon'
                 ].map(ex => (
-                  <TouchableOpacity
-                    key={ex}
-                    onPress={() => setAiSearchInput(ex)}
-                    style={{ backgroundColor: colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder }}
-                  >
-                    <Text style={{ ...T.label, color: colors.textSecondary }}>{ex}</Text>
-                  </TouchableOpacity>
+                  <Chip key={ex} label={ex} onPress={() => setAiSearchInput(ex)} />
                 ))}
               </ScrollView>
             </View>
@@ -1703,8 +1753,6 @@ const styles = StyleSheet.create({
   searchInputText: { flex: 1, ...T.body, height: '100%', padding: 0 },
   categoryChipsContainer: { paddingVertical: 6 },
   categoryChipsScroll: { paddingHorizontal: 20, gap: 8 },
-  categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  categoryChipText: { ...T.caption },
   scrollContent: { paddingBottom: 110 },
 
   quickPlannerCard: { marginHorizontal: space.xl, marginBottom: space.xl, borderRadius: radius.xl, overflow: 'hidden' },
@@ -1760,7 +1808,12 @@ const styles = StyleSheet.create({
   trendingFeaturedHeart: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   trendingFeaturedTextWrap: { position: 'absolute', left: 16, right: 16, bottom: 14 },
   trendingFeaturedTitle: { color: '#FFFFFF', ...T.title },
-  trendingFeaturedSub: { color: '#E5E7EB', ...T.label, marginTop: 2 },
+  // Rating and place sit in their own row with a gap, not joined by a
+  // middle dot in one string — two facts stay two visually distinct pieces.
+  trendingFeaturedMetaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 3 },
+  trendingFeaturedRating: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  trendingFeaturedRatingText: { color: '#FFFFFF', ...T.microStrong },
+  trendingFeaturedSub: { color: '#E5E7EB', ...T.label, flexShrink: 1 },
 
   gemsGridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12 },
   gemCard: { height: 175, borderRadius: 20, overflow: 'hidden', position: 'relative', marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
@@ -1824,7 +1877,7 @@ const styles = StyleSheet.create({
   modalTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   modalTagText: { ...T.microStrong },
   modalDescription: { ...T.label, lineHeight: 19, marginVertical: 6 },
-  modalSectionHeading: { ...T.microStrong, letterSpacing: 1, borderBottomWidth: 1, paddingBottom: 4, marginTop: 8 },
+  modalSectionHeading: { ...T.titleSm, borderBottomWidth: 1, paddingBottom: 4, marginTop: 8 },
   modalBulletList: { gap: 6, marginTop: 6 },
   modalBulletRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   modalBulletText: { ...T.label },
@@ -1849,6 +1902,8 @@ const styles = StyleSheet.create({
   weatherCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },
   weatherHeartBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 12, padding: 4, zIndex: 10 },
   weatherConditionBadge: { position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  weatherRatingBadge: { position: 'absolute', top: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 10, zIndex: 10 },
+  weatherRatingBadgeText: { color: '#FFFFFF', ...T.micro },
   weatherTextContainer: { position: 'absolute', bottom: 10, left: 10, right: 10 },
   weatherCardTitle: { color: '#FFFFFF', ...T.label },
   weatherCardSub: { color: '#E5E7EB', ...T.micro, marginTop: 1 },

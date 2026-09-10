@@ -1012,17 +1012,40 @@ export function ProgressBar({ value }: { value: number }) {
   );
 }
 
-/** Initials avatar. No photos required, consistent everywhere. */
+/**
+ * Initials avatar. No photos required, consistent everywhere.
+ *
+ * A missing `name` used to fall through to literal "?" initials — the
+ * unreadable avatar the audit found on the Updates board when an
+ * announcer's name didn't resolve. A person-outline icon reads as "unknown
+ * person" instead of looking broken.
+ */
 export function Avatar({ name, size = 34, uri, style }: { name?: string; size?: number; uri?: string; style?: StyleProp<ViewStyle> }) {
   const { colors } = useTheme();
-  const initials = (name || '?')
-    .trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+  const trimmedName = (name || '').trim();
+  const initials = trimmedName
+    .split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 
   if (uri) {
     return (
       <View style={[{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: colors.surface }, style]}>
         {/* eslint-disable-next-line @typescript-eslint/no-var-requires */}
         <Animated.Image source={{ uri }} style={{ width: size, height: size }} />
+      </View>
+    );
+  }
+
+  if (!trimmedName) {
+    return (
+      <View
+        style={[{
+          width: size, height: size, borderRadius: size / 2,
+          alignItems: 'center', justifyContent: 'center',
+          backgroundColor: colors.surface,
+          borderWidth: hairline, borderColor: colors.cardBorder,
+        }, style]}
+      >
+        <Ionicons name="person" size={size * 0.5} color={colors.textMuted} />
       </View>
     );
   }
