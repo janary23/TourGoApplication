@@ -6,10 +6,14 @@ import { semantic } from '../components/ui/tokens';
 /**
  * The single source of colour for the whole app.
  *
- * Brand is taken from the TourGo logo (#028BEB, hue 205°). Every other blue in
- * the product is derived from that hue — nothing invents its own. Dark mode
- * lightens the brand rather than swapping it for a different colour, so the app
- * stays recognisably TourGo on both surfaces.
+ * Direction A ("Route Line", approved 2026-09-10 — see
+ * `design-system/tourgo/MASTER.md`). Brand ("Route Blue") is still taken
+ * from the TourGo logo's hue, adjusted to #0B7FD6 for AA contrast on the
+ * warm Paper background below. Dark mode lightens the brand rather than
+ * swapping it for a different colour, so the app stays recognisably TourGo
+ * on both surfaces. Every other role — success/warning/danger — has its own
+ * hue; brand is reserved for interactive/selected, never used to mark which
+ * feature something is.
  *
  * Screens must not hardcode hex. If a colour is missing here, add it here.
  */
@@ -96,83 +100,85 @@ export interface ThemeColors {
 }
 
 // ── Light ────────────────────────────────────────────────────────────────────
-// Neutrals are slate: very slightly blue, so they sit under an azure brand
-// without the grey looking dirty next to it.
+// Neutrals are warm ("Paper"), not slate — a deliberate move away from the
+// generic cool-grey SaaS background, and grounded in the route-line brand
+// mark rather than any one photo's palette.
 const lightColors: ThemeColors = {
-  background: '#F8FAFC',
+  background: '#F7F5F1',
   card: '#FFFFFF',
-  surface: '#F1F5F9',
+  surface: '#F1EEE7',
   surfaceElevated: '#FFFFFF',
 
-  cardBorder: '#E2E8F0',
-  divider: '#EDF1F6',
-  borderStrong: '#CBD5E1',
+  cardBorder: '#E7E3DB',
+  divider: '#EFEBE3',
+  borderStrong: '#D8D2C5',
 
-  text: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  text: '#151A21',
+  textSecondary: '#5B6472',
+  textMuted: '#8A8F98',
   onBrand: '#FFFFFF',
 
-  brand: '#028BEB',
-  brandLight: '#E9F4FE',
-  brandPressed: '#0272C2',
-  brandFill: '#028BEB',
-  brandFillDeep: '#0268B0',
+  brand: '#0B7FD6',
+  brandLight: '#E7F2FC',
+  brandPressed: '#0A6CB8',
+  brandFill: '#0B7FD6',
+  brandFillDeep: '#085E9E',
 
   ...semantic.light,
 
-  pressedOverlay: 'rgba(15, 23, 42, 0.05)',
-  focusRing: 'rgba(2, 139, 235, 0.22)',
-  disabledBg: '#E2E8F0',
-  disabledText: '#94A3B8',
+  pressedOverlay: 'rgba(21, 26, 33, 0.05)',
+  focusRing: 'rgba(11, 127, 214, 0.22)',
+  disabledBg: '#E7E3DB',
+  disabledText: '#8A8F98',
 
   inputBg: '#FFFFFF',
-  inputBorder: '#E2E8F0',
+  inputBorder: '#E7E3DB',
   tabBar: '#FFFFFF',
-  tabBarBorder: '#E2E8F0',
-  header: '#F8FAFC',
-  headerBorder: '#E2E8F0',
-  overlay: 'rgba(15, 23, 42, 0.45)',
+  tabBarBorder: '#E7E3DB',
+  header: '#F7F5F1',
+  headerBorder: '#E7E3DB',
+  overlay: 'rgba(21, 26, 33, 0.45)',
 };
 
 // ── Dark ─────────────────────────────────────────────────────────────────────
-// True black background with near-black surfaces. Separation comes from surface
-// value, not shadow — shadows are invisible on black and only muddy edges.
+// Warm-neutral Paper darkened, not true black. Separation still comes from
+// surface value, not shadow — shadows are invisible on a near-black ground
+// and only muddy edges.
 const darkColors: ThemeColors = {
-  background: '#000000',
-  card: '#121212',
-  surface: '#1C1C1E',
-  surfaceElevated: '#242426',
+  background: '#14171B',
+  card: '#1B1F24',
+  surface: '#232830',
+  surfaceElevated: '#262B33',
 
-  cardBorder: '#242426',
-  divider: '#1C1C1E',
-  borderStrong: '#38383B',
+  cardBorder: '#262B33',
+  divider: '#20242B',
+  borderStrong: '#343A44',
 
-  text: '#F5F5F7',
-  textSecondary: '#A1A1A6',
-  textMuted: '#767680',
+  text: '#F3F1EC',
+  textSecondary: '#A6ADB8',
+  textMuted: '#7E8792',
   onBrand: '#FFFFFF',
 
-  // Same hue as the logo, lifted so it reads on black.
-  brand: '#47ADF5',
-  brandLight: 'rgba(71, 173, 245, 0.16)',
-  brandPressed: '#6FC0F8',
-  brandFill: '#028BEB',
-  brandFillDeep: '#0268B0',
+  // Same hue as the light-mode brand, lifted so it reads on a dark ground.
+  brand: '#4FA3E8',
+  brandLight: 'rgba(79, 163, 232, 0.16)',
+  brandPressed: '#78BBEF',
+  brandFill: '#0B7FD6',
+  brandFillDeep: '#085E9E',
 
   ...semantic.dark,
 
   pressedOverlay: 'rgba(255, 255, 255, 0.07)',
-  focusRing: 'rgba(71, 173, 245, 0.28)',
-  disabledBg: '#1C1C1E',
-  disabledText: '#767680',
+  focusRing: 'rgba(79, 163, 232, 0.28)',
+  disabledBg: '#20242B',
+  disabledText: '#7E8792',
 
-  inputBg: '#121212',
-  inputBorder: '#242426',
-  tabBar: '#000000',
-  tabBarBorder: '#242426',
-  header: '#000000',
-  headerBorder: '#242426',
+  inputBg: '#1B1F24',
+  inputBorder: '#262B33',
+  tabBar: '#14171B',
+  tabBarBorder: '#262B33',
+  header: '#14171B',
+  headerBorder: '#262B33',
   overlay: 'rgba(0, 0, 0, 0.75)',
 };
 

@@ -9,19 +9,16 @@ import { FeedbackProvider } from '../components/ui/Feedback';
 import { mockService } from '../services/mockData';
 import { useFonts } from 'expo-font';
 import {
-  Poppins_400Regular,
-  Poppins_500Medium,
-  Poppins_600SemiBold,
-  Poppins_700Bold,
-  Poppins_800ExtraBold
-} from '@expo-google-fonts/poppins';
+  Sora_600SemiBold,
+  Sora_700Bold,
+  Sora_800ExtraBold,
+} from '@expo-google-fonts/sora';
 import {
-  Outfit_400Regular,
-  Outfit_500Medium,
-  Outfit_600SemiBold,
-  Outfit_700Bold,
-  Outfit_800ExtraBold
-} from '@expo-google-fonts/outfit';
+  WorkSans_400Regular,
+  WorkSans_500Medium,
+  WorkSans_600SemiBold,
+  WorkSans_700Bold,
+} from '@expo-google-fonts/work-sans';
 import {
   DMSerifDisplay_400Regular
 } from '@expo-google-fonts/dm-serif-display';
@@ -1429,16 +1426,31 @@ function useWebFocusRing() {
 export default function RootLayout() {
   useWebFocusRing();
   const [fontsLoaded] = useFonts({
-    'Poppins-Regular': Outfit_400Regular,
-    'Poppins-Medium': Outfit_500Medium,
-    'Poppins-SemiBold': Outfit_600SemiBold,
-    'Poppins-Bold': Outfit_700Bold,
-    'Poppins-ExtraBold': Outfit_800ExtraBold,
-    'Outfit-Regular': Outfit_400Regular,
-    'Outfit-Medium': Outfit_500Medium,
-    'Outfit-SemiBold': Outfit_600SemiBold,
-    'Outfit-Bold': Outfit_700Bold,
-    'Outfit-ExtraBold': Outfit_800ExtraBold,
+    // Direction A's real type pairing — see design-system/tourgo/MASTER.md.
+    // tokens.ts's `type` scale references these two families directly.
+    'Sora-SemiBold': Sora_600SemiBold,
+    'Sora-Bold': Sora_700Bold,
+    'WorkSans-Regular': WorkSans_400Regular,
+    'WorkSans-Medium': WorkSans_500Medium,
+    'WorkSans-SemiBold': WorkSans_600SemiBold,
+    'WorkSans-Bold': WorkSans_700Bold,
+
+    // Back-compat aliases: ~19 files still reference these family names
+    // directly (outside tokens.ts) rather than through a `type` token.
+    // Rather than a risky mass find-replace, the *names* stay and now
+    // resolve to Direction A's real glyphs — Poppins/Outfit (both banned)
+    // are no longer loaded anywhere. Retire these as each screen is swept
+    // in Phase 4 and swapped onto `T.<token>` directly.
+    'Poppins-Regular': WorkSans_400Regular,
+    'Poppins-Medium': WorkSans_500Medium,
+    'Poppins-SemiBold': WorkSans_600SemiBold,
+    'Poppins-Bold': Sora_700Bold,
+    'Poppins-ExtraBold': Sora_800ExtraBold,
+    'Outfit-Regular': WorkSans_400Regular,
+    'Outfit-Medium': WorkSans_500Medium,
+    'Outfit-SemiBold': WorkSans_600SemiBold,
+    'Outfit-Bold': Sora_700Bold,
+    'Outfit-ExtraBold': Sora_800ExtraBold,
     'DMSerifDisplay-Regular': DMSerifDisplay_400Regular,
   });
 

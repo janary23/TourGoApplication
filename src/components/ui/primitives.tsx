@@ -6,11 +6,12 @@
 // of those things lives here, once. That is what keeps fourteen screens feeling
 // like one app instead of fourteen.
 
-import React, { ReactNode, useRef } from 'react';
+import React, { ReactNode, useRef, useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable, Animated, StyleSheet,
   TextInput, ScrollView, ActivityIndicator, Modal, ViewStyle, TextStyle,
   KeyboardAvoidingView, Platform, StyleProp, Switch, Image, ImageSourcePropType,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -135,7 +136,7 @@ export function ScreenHeader({ eyebrow, title, subtitle, action }: ScreenHeaderP
     <View style={styles.header}>
       <View style={{ flex: 1 }}>
         {!!eyebrow && (
-          <Txt variant="overline" tone="accent" uppercase numberOfLines={1}>
+          <Txt variant="overline" tone="accent" numberOfLines={1}>
             {eyebrow}
           </Txt>
         )}
@@ -153,11 +154,18 @@ export function ScreenHeader({ eyebrow, title, subtitle, action }: ScreenHeaderP
   );
 }
 
-/** Uppercase label that sits above a grouped list. */
+/**
+ * Sentence-case label that sits above a grouped list.
+ *
+ * Was rendered letter-spaced all-caps ("SEE YOUR SCHEDULE HERE", "UPDATES") —
+ * a Hard Rule violation under Direction A. Kept as a distinct component from
+ * plain body text because a group header is still a real signal ("Updates",
+ * "Trip info") — it just doesn't need to shout to read as one.
+ */
 export function SectionLabel({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ paddingHorizontal: space.xs, marginBottom: space.sm }, style]}>
-      <Txt variant="overline" tone="muted" uppercase>{children}</Txt>
+      <Txt variant="overline" tone="muted">{children}</Txt>
     </View>
   );
 }
@@ -255,8 +263,7 @@ export function NavBar({
 
       <View style={styles.navTitle}>
         {!!eyebrow && (
-          <Txt variant="microStrong" tone="secondary" uppercase numberOfLines={1}
-            style={{ letterSpacing: 0.5 }}>
+          <Txt variant="microStrong" tone="secondary" numberOfLines={1}>
             {eyebrow}
           </Txt>
         )}
@@ -433,7 +440,7 @@ export function Segmented<V extends string>({ segments, value, onChange }: Segme
                 <Text style={[T.caption, {
                   fontSize: 10,
                   color: active ? '#FFFFFF' : colors.textSecondary,
-                  fontFamily: 'Poppins-Bold',
+                  fontFamily: 'WorkSans-SemiBold',
                 }]}>
                   {seg.badge}
                 </Text>
@@ -557,7 +564,7 @@ export function Badge({
       paddingVertical: 3,
       borderRadius: radius.sm,
     }}>
-      <Text style={[T.caption, { color: s.fg, fontFamily: 'Poppins-Bold' }]}>{label}</Text>
+      <Text style={[T.caption, { color: s.fg, fontFamily: 'WorkSans-SemiBold' }]}>{label}</Text>
     </View>
   );
 }
@@ -585,7 +592,7 @@ export function Field({
   return (
     <View style={style}>
       {!!label && (
-        <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+        <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
           {label}
         </Txt>
       )}
@@ -660,7 +667,7 @@ export function TextField({
   return (
     <View style={style}>
       {!!label && (
-        <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+        <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
           {label}
         </Txt>
       )}
@@ -1029,7 +1036,7 @@ export function Avatar({ name, size = 34, uri, style }: { name?: string; size?: 
         borderWidth: hairline, borderColor: colors.cardBorder,
       }, style]}
     >
-      <Text style={[T.caption, { color: colors.textSecondary, fontFamily: 'Poppins-Bold', fontSize: size * 0.34 }]}>
+      <Text style={[T.caption, { color: colors.textSecondary, fontFamily: 'WorkSans-SemiBold', fontSize: size * 0.34 }]}>
         {initials}
       </Text>
     </View>
@@ -1045,6 +1052,202 @@ export function Stat({ label, value, tone = 'primary' }: {
       <Txt variant="mono" tone={tone} numberOfLines={1}>{value}</Txt>
       <Txt variant="caption" tone="muted" numberOfLines={1} style={{ marginTop: 1 }}>{label}</Txt>
     </View>
+  );
+}
+
+/**
+ * Overlapping avatar cluster — trip members, poll voters, checklist assignees.
+ * Deliberately not a bare "?" circle: `Avatar`'s own initials fallback covers
+ * the missing-photo case, this just handles the stacking and the overflow count.
+ */
+export function AvatarStack({
+  people, max = 3, size = 28,
+}: { people: Array<{ name?: string; uri?: string }>; max?: number; size?: number }) {
+  const { colors } = useTheme();
+  const visible = people.slice(0, max);
+  const overflow = people.length - visible.length;
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      {visible.map((p, i) => (
+        <Avatar
+          key={i}
+          name={p.name}
+          uri={p.uri}
+          size={size}
+          style={{
+            marginLeft: i === 0 ? 0 : -size * 0.35,
+            borderWidth: 2,
+            borderColor: colors.background,
+            zIndex: visible.length - i,
+          }}
+        />
+      ))}
+      {overflow > 0 && (
+        <View
+          style={[
+            styles.avatarOverflow,
+            {
+              width: size, height: size, borderRadius: size / 2,
+              marginLeft: -size * 0.35,
+              backgroundColor: colors.surface,
+              borderColor: colors.background,
+            },
+          ]}
+        >
+          <Text style={[T.caption, { color: colors.textSecondary, fontFamily: 'WorkSans-SemiBold', fontSize: size * 0.32 }]}>
+            +{overflow}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+interface ChipProps {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  icon?: IconName;
+}
+
+/**
+ * A selectable filter, one at a time in a row. Deliberately not a full pill
+ * (radius.md, not radius.pill) — Direction A reserves the pill shape rather
+ * than defaulting every chip/badge/nav bar to it.
+ */
+export function Chip({ label, selected, onPress, icon }: ChipProps) {
+  const { colors } = useTheme();
+  return (
+    <Press onPress={onPress}>
+      <View
+        style={[
+          styles.chip,
+          {
+            backgroundColor: selected ? colors.brandLight : colors.surface,
+            borderColor: selected ? colors.brand : colors.cardBorder,
+          },
+        ]}
+      >
+        {!!icon && (
+          <Ionicons name={icon} size={14} color={selected ? colors.brand : colors.textSecondary} />
+        )}
+        <Text
+          numberOfLines={1}
+          style={[T.label, { color: selected ? colors.brand : colors.textSecondary }]}
+        >
+          {label}
+        </Text>
+      </View>
+    </Press>
+  );
+}
+
+/**
+ * A numeric counter with the +/- targets inset from the row edge and a
+ * fixed 44×44 hit area each — the Create Trip traveler-count step previously
+ * let these clip off the edge of the screen on narrow devices.
+ */
+export function Stepper({
+  value, onChange, min = 1, max = 99, label,
+}: { value: number; onChange: (v: number) => void; min?: number; max?: number; label?: string }) {
+  const { colors } = useTheme();
+  const atMin = value <= min;
+  const atMax = value >= max;
+  return (
+    <View style={[styles.stepper, { borderColor: colors.cardBorder, backgroundColor: colors.inputBg }]}>
+      <Press onPress={() => !atMin && onChange(value - 1)} disabled={atMin}>
+        <View style={[styles.stepperBtn, atMin && { opacity: 0.35 }]}>
+          <Ionicons name="remove" size={20} color={colors.brand} />
+        </View>
+      </Press>
+
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <Text style={[T.display, { color: colors.text }]}>{value}</Text>
+        {!!label && <Txt variant="footnote" tone="muted">{label}</Txt>}
+      </View>
+
+      <Press onPress={() => !atMax && onChange(value + 1)} disabled={atMax}>
+        <View style={[styles.stepperBtn, atMax && { opacity: 0.35 }]}>
+          <Ionicons name="add" size={20} color={colors.brand} />
+        </View>
+      </Press>
+    </View>
+  );
+}
+
+/**
+ * A shimmer block sized to the real content it replaces — the loading state
+ * for weak-data conditions the brief calls out. Respects reduced motion: it
+ * checks once on mount and, if set, holds a static mid-opacity fill instead
+ * of pulsing (matching the existing app-wide rule of rendering the resting
+ * state directly rather than animating toward it).
+ */
+export function Skeleton({
+  width, height, radius: cornerRadius = radius.sm, style,
+}: { width?: number | string; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const { colors } = useTheme();
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | undefined;
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled?.().then((reduced) => {
+      if (cancelled || reduced) return;
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(opacity, { toValue: 0.9, duration: 700, useNativeDriver: NATIVE_DRIVER }),
+          Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: NATIVE_DRIVER }),
+        ])
+      );
+      loop.start();
+    });
+    return () => {
+      cancelled = true;
+      loop?.stop();
+    };
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        { width, height, borderRadius: cornerRadius, backgroundColor: colors.surface, opacity } as ViewStyle,
+        style,
+      ]}
+    />
+  );
+}
+
+/**
+ * The one place a photo reaches the app. Tries the real matched photo; if
+ * there isn't one, or it fails to load, renders a designed fallback — the
+ * place name over a brand-tinted tile — instead of a random or mismatched
+ * stock photo (the Baliwag/Baguio desert-photo bug from the audit).
+ */
+export function PhotoWithFallback({
+  uri, placeName, style,
+}: { uri?: string; placeName: string; style?: StyleProp<ViewStyle> }) {
+  const { colors } = useTheme();
+  const [failed, setFailed] = useState(false);
+
+  if (!uri || failed) {
+    return (
+      <View style={[styles.photoFallback, { backgroundColor: colors.brandLight }, style]}>
+        <Ionicons name="map-outline" size={26} color={colors.brand} style={{ opacity: 0.55, marginBottom: space.xs }} />
+        <Txt variant="emphasis" tone="accent" align="center" numberOfLines={2} style={{ paddingHorizontal: space.md }}>
+          {placeName}
+        </Txt>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      style={style as any}
+      onError={() => setFailed(true)}
+      resizeMode="cover"
+      accessibilityLabel={placeName}
+    />
   );
 }
 
@@ -1185,5 +1388,38 @@ const styles = StyleSheet.create({
     padding: space.xl,
     paddingTop: space.md,
     borderTopWidth: hairline,
+  },
+  avatarOverflow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs + 2,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: hairline,
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 64,
+    borderRadius: radius.lg,
+    borderWidth: hairline,
+    paddingHorizontal: space.sm,
+  },
+  stepperBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
 });
