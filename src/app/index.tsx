@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   brandText: {
     fontSize: 34,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: 'Sora-Bold',
     letterSpacing: -0.5,
     marginTop: 16,
   },

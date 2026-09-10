@@ -173,7 +173,7 @@ export default function LoginScreen() {
 
               {!isSignUp && (
                 <Pressable
-                  onPress={() => toast("Password reset isn't available yet — contact support for help.", 'info')}
+                  onPress={() => toast("Password reset isn't available yet. Contact support for help.", 'info')}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   style={styles.forgotWrapper}
                 >
