@@ -126,7 +126,7 @@ export default function ProfileScreen() {
 
         {/* Application Settings */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Application Settings</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Application settings</Text>
 
           <View style={[styles.settingCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             {/* Theme & Appearance (Light / Dark / System) */}
@@ -165,7 +165,7 @@ export default function ProfileScreen() {
               <View
                 style={{
                   flexDirection: 'row',
-                  backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
+                  backgroundColor: colors.surface,
                   borderRadius: 14,
                   padding: 4,
                   gap: 4,
@@ -351,95 +351,10 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 110,
   },
-  profileCard: {
-    borderRadius: 16,
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    marginBottom: 24,
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-  },
-  cameraIcon: {
-    position: 'absolute',
-    bottom: 0,
-    right: 4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  infoContainer: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  userName: {
-    ...T.display, fontWeight: '800',
-  },
-  userEmail: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  userLocation: {
-    ...T.body, fontWeight: '600',
-    marginLeft: 4,
-  },
-  editBtn: {
-    width: 160,
-    paddingVertical: 10,
-  },
-  form: {
-    width: '100%',
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    ...T.label, fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  formBtn: {
-    flex: 0.48,
-  },
   section: {
     marginBottom: 24,
   },
-  sectionTitle: { ...T.overline, textTransform: 'uppercase' },
+  sectionTitle: { ...T.overline, marginBottom: space.sm },
   settingCard: {
     borderRadius: 20,
     overflow: 'hidden',
@@ -448,34 +363,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 6,
     elevation: 1,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  optionIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  optionTextBox: {
-    flex: 1,
-  },
-  optionText: {
-    ...T.headline, fontWeight: '600',
-  },
-  optionSubText: {
-    ...T.footnote,
-    marginTop: 1,
-  },
-  divider: {
-    height: 1,
-    marginHorizontal: 16,
   },
   footer: {
     alignItems: 'center',

@@ -87,7 +87,7 @@ export default function ProfileInfoCard({
           </View>
           <View style={styles.btnRow}>
             <Button title="Cancel" onPress={onCancel} variant="outline" size="small" style={styles.formBtn} />
-            <Button title="Save Changes" onPress={onSave} variant="primary" size="small" style={styles.formBtn} />
+            <Button title="Save changes" onPress={onSave} variant="primary" size="small" style={styles.formBtn} />
           </View>
         </View>
       ) : (
@@ -99,7 +99,7 @@ export default function ProfileInfoCard({
             <Text style={[styles.userLocation, { color: colors.brand }]}>{profile?.home_city || 'Add home city'}</Text>
           </View>
           <Button
-            title="Edit Profile"
+            title="Edit profile"
             onPress={() => setIsEditing(true)}
             variant="outline"
             size="small"
