@@ -51,9 +51,9 @@ export default function TripPlan({ trip, colors, isOrganizer, isViewOnly = false
           title={trip.title}
           subtitle={
             isViewOnly
-              ? 'Preserved Scrapbook Itinerary'
+              ? 'Preserved from the trip scrapbook'
               : showSegments
-              ? `${stops} ${stops === 1 ? 'stop' : 'stops'} · ${openTasks} ${openTasks === 1 ? 'task' : 'tasks'} open`
+              ? `${stops} ${stops === 1 ? 'stop' : 'stops'}, ${openTasks} ${openTasks === 1 ? 'task' : 'tasks'} open`
               : undefined
           }
         />

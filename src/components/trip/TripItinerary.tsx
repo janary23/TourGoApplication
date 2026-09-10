@@ -172,7 +172,14 @@ export default function TripItinerary({
         if (stored) {
           setDayDestinations(JSON.parse(stored));
         } else {
-          const dests = trip.destination.split(',').map((s: string) => s.trim());
+          // "→" is the multi-stop separator elsewhere in the app (Trips tab's
+          // parseDestinations) — this used to split on "," instead, which
+          // treats an ordinary "City, Province" destination as two stops.
+          // For the (normal) single-destination case that made every day
+          // resolve to the same one segment, repeating the destination
+          // identically under every day header (and again under the trip
+          // title above it).
+          const dests = trip.destination.split('→').map((s: string) => s.trim()).filter(Boolean);
           const initial = Array.from({ length: duration }, (_, i) => dests[i] || dests[dests.length - 1] || trip.destination);
           setDayDestinations(initial);
         }
@@ -433,7 +440,7 @@ export default function TripItinerary({
     if (warn) {
       confirmAction({
         title: 'Already on this day',
-        message: `${spot.name} — ${warn}. Add it anyway?`,
+        message: `${spot.name}: ${warn}. Add it anyway?`,
         confirmLabel: 'Add anyway',
       }).then(ok => { if (ok) doAdd(); });
       return;
@@ -791,6 +798,11 @@ export default function TripItinerary({
   const activeWarnings = warnings.filter(w => !acknowledgedWarnings.includes(w.id));
   const totalStops = (trip.itinerary || []).length;
 
+  // Four identical "Add the first stop" boxes in a row (one per empty day)
+  // read as clutter, not four invitations — only the first stays at full
+  // visual weight, the rest are quieter repeats of the same prompt.
+  let emptyDaysSeen = 0;
+
   return (
     <View style={styles.container}>
       {/* ── Header ── */}
@@ -841,11 +853,16 @@ export default function TripItinerary({
           </Press>
         )}
 
+        {/* A single-destination trip resolves every day to the same one
+            place — showing it again under every "Day N" would just repeat
+            what the trip header already says. It only earns its place once
+            the days actually go somewhere different from each other. */}
         {dayIndices.map(day => {
           const dayActivities = (trip.itinerary || [])
             .filter((i: any) => i.dayIndex === day)
             .sort((a: any, b: any) => parseTimeToMin(a.time) - parseTimeToMin(b.time));
 
+          const hasMultipleDestinations = new Set(dayDestinations.filter(Boolean)).size > 1;
           const isTransition = day > 0 && dayDestinations[day] !== dayDestinations[day - 1];
           const dayLabel = dayDestinations[day] || trip.destination;
 
@@ -854,10 +871,12 @@ export default function TripItinerary({
               {/* Day header — sits outside the group, iOS section style */}
               <View style={styles.dayHeader}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt variant="overline" tone="accent" uppercase>Day {day + 1}</Txt>
-                  <Txt variant="emphasis" tone="secondary" numberOfLines={1} style={{ marginTop: 1 }}>
-                    {dayLabel}
-                  </Txt>
+                  <Txt variant="overline" tone="accent">Day {day + 1}</Txt>
+                  {hasMultipleDestinations && (
+                    <Txt variant="emphasis" tone="secondary" numberOfLines={1} style={{ marginTop: 1 }}>
+                      {dayLabel}
+                    </Txt>
+                  )}
                 </View>
                 {isTransition && <Badge label="Travel day" />}
                 {dayActivities.length > 0 && (
@@ -868,11 +887,13 @@ export default function TripItinerary({
               </View>
 
               {dayActivities.length === 0 ? (
-                isOrganizer ? (
-                  <InlineEmpty icon="add" label="Add the first stop" onPress={handleOpenCustomAdd} />
-                ) : (
-                  <InlineEmpty icon="calendar-outline" label="Nothing planned yet" />
-                )
+                <View style={emptyDaysSeen++ > 0 ? { opacity: 0.55 } : undefined}>
+                  {isOrganizer ? (
+                    <InlineEmpty icon="add" label="Add the first stop" onPress={handleOpenCustomAdd} />
+                  ) : (
+                    <InlineEmpty icon="calendar-outline" label="Nothing planned yet" />
+                  )}
+                </View>
               ) : (
                 dayActivities.map((act: any, idx: number) => {
                   const isLast = idx === dayActivities.length - 1;
@@ -1047,7 +1068,7 @@ export default function TripItinerary({
             <View style={{ marginTop: 16 }}>
               {copilotTab === 'day' && (
                 <View>
-                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Select Day to Plan</Text>
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Select day to plan</Text>
                   <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                     {dayIndices.map(d => (
                       <TouchableOpacity
@@ -1069,7 +1090,7 @@ export default function TripItinerary({
                     ))}
                   </View>
 
-                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Confirm Destination Context</Text>
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Confirm destination</Text>
                   <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     <TextInput
                       value={dayDestinations[activeDay] || ''}
@@ -1107,12 +1128,12 @@ export default function TripItinerary({
 
               {copilotTab === 'ai' && (
                 <View>
-                  {/* ── From Your Wishlist ── places the user already saved ── */}
+                  {/* ── From your wishlist ── places the user already saved ── */}
                   {(isLoadingWishlist || wishlistSpots.length > 0) && (
                     <View style={{ marginBottom: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text style={[styles.sheetSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>
-                          From Your Wishlist
+                          From your wishlist
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <Ionicons name="heart" size={11} color={colors.brand} />
@@ -1211,7 +1232,7 @@ export default function TripItinerary({
                     </View>
                   )}
 
-                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Choose Vibes</Text>
+                  <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Choose vibes</Text>
                   <View style={styles.vibeGrid}>
                     {VIBE_OPTIONS.map(opt => {
                       const isSelected = selectedVibes.includes(opt.value);
@@ -1316,7 +1337,7 @@ export default function TripItinerary({
                                 )}
 
                                 <View style={styles.iosCategoryPill}>
-                                  <Text style={styles.iosCategoryText}>{place.category.toUpperCase()}</Text>
+                                  <Text style={styles.iosCategoryText}>{place.category}</Text>
                                 </View>
 
                                 <Text style={styles.iosCardTitle} numberOfLines={2}>
@@ -1324,7 +1345,7 @@ export default function TripItinerary({
                                 </Text>
 
                                 <Text style={styles.iosCardMeta} numberOfLines={1}>
-                                  Est: {place.costEstimated} • {place.duration}
+                                  {place.costEstimated}, {place.duration}
                                 </Text>
 
                                 {/* Card Footer Actions */}
@@ -1457,7 +1478,7 @@ export default function TripItinerary({
         />
 
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
             Day
           </Txt>
           <View style={styles.dayPicker}>
@@ -1540,7 +1561,7 @@ export default function TripItinerary({
         />
 
         <View style={{ marginTop: space.xl }}>
-          <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+          <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
             Day
           </Txt>
           <View style={styles.dayPicker}>
@@ -1637,8 +1658,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetSectionLabel: {
-    ...T.microStrong,
-    textTransform: 'uppercase',
+    ...T.label,
     marginBottom: 8,
     marginTop: 14,
   },

@@ -12,7 +12,7 @@ import { generatePackingList, AI_FEATURES_ENABLED } from '../../services/aiServi
 import { useTheme } from '../../context/ThemeContext';
 import {
   Section, SectionLabel, ListGroup, ListRow, Card, Button,
-  EmptyState, Sheet, Field, Txt, ProgressBar, Avatar, Loading, Press,
+  EmptyState, Sheet, Field, Txt, ProgressBar, Avatar, Loading, Press, Segmented, Chip,
 } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor } from '../ui/tokens';
 import { notify } from '../ui/Feedback';
@@ -91,13 +91,6 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
 
   const total = visible.length;
   const completed = visible.filter((c: any) => c.completed).length;
-
-  const rowNumberById = useMemo(() => {
-    const ordered = [...open, ...done];
-    const map = new Map<string, number>();
-    ordered.forEach((item: any, i: number) => map.set(item.id, i + 1));
-    return map;
-  }, [open, done]);
 
   const toggle = async (item: any) => {
     await dbToggleChecklist(item.id, item.completed);
@@ -192,7 +185,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
   const handleClaim = async (item: any) => {
     const { error } = await dbAssignChecklistItem(item.id, currentUserId);
     if (error) { notify(error, 'error'); return; }
-    notify("Claimed — it's yours now.", 'success');
+    notify("Claimed. It's yours now.", 'success');
     loadTrip();
   };
 
@@ -236,20 +229,10 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
     const isFormer = !!item.assignedToId && !item.assignedTo;
     const isMine = item.assignedToId === currentUserId;
     const assigneeTappable = isOrganizer || !item.assignedToId || isMine;
-    const rowNumber = rowNumberById.get(item.id);
-    const zebra = tab === 'group' && !!(rowNumber && rowNumber % 2 === 0);
     const showAssigneeName = tab === 'group' && (!!item.assignedTo || !!item.assignedToId);
 
     return (
-      <View
-        key={item.id}
-        style={[styles.taskRow, zebra && { backgroundColor: colors.surface }]}
-      >
-        {tab === 'group' && (
-          <View style={styles.rowNumberCell}>
-            <Text style={[styles.rowNumberText, { color: colors.textMuted }]}>{rowNumber}</Text>
-          </View>
-        )}
+      <View key={item.id} style={styles.taskRow}>
         <Pressable
           onPress={() => toggle(item)}
           onLongPress={() => requestDelete(item)}
@@ -306,40 +289,25 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* ── Tab switcher: Group Tasks / What to Bring ── */}
-        <View style={[styles.tabRow, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-          {(['group', 'personal'] as Tab[]).map((t) => {
-            const active = tab === t;
-            const label = t === 'group' ? 'Group Tasks' : 'What to Bring';
-            const count = t === 'group' ? groupItems.length : personalItems.length;
-            return (
-              <TouchableOpacity
-                key={t}
-                onPress={() => { setTab(t); setFilter('all'); }}
-                style={[styles.tabPill, active && { backgroundColor: colors.brand }]}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.tabPillText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
-                  {label}
-                </Text>
-                {count > 0 && (
-                  <View style={[styles.tabBadge, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : colors.cardBorder }]}>
-                    <Text style={[styles.tabBadgeText, { color: active ? '#FFFFFF' : colors.textMuted }]}>
-                      {count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+        {/* ── Mode switch: Group tasks / What to bring — one segmented
+             control, not the tab+chip+chip stack the audit found. ── */}
+        <View style={{ marginBottom: space.lg }}>
+          <Segmented<Tab>
+            value={tab}
+            onChange={(t) => { setTab(t); setFilter('all'); }}
+            segments={[
+              { value: 'group', label: 'Group tasks', badge: groupItems.length },
+              { value: 'personal', label: 'What to bring', badge: personalItems.length },
+            ]}
+          />
         </View>
 
-        {/* ── "What to Bring" privacy banner ── */}
+        {/* ── "What to bring" privacy banner ── */}
         {tab === 'personal' && (
-          <View style={[styles.privacyBanner, { backgroundColor: isDark ? 'rgba(99,102,241,0.12)' : '#EEF2FF', borderColor: isDark ? 'rgba(99,102,241,0.3)' : '#C7D2FE' }]}>
-            <Ionicons name="lock-closed-outline" size={14} color={isDark ? '#A5B4FC' : '#6366F1'} />
-            <Text style={[styles.privacyText, { color: isDark ? '#A5B4FC' : '#6366F1' }]}>
-              Only you can see this list — it's private to your account.
+          <View style={[styles.privacyBanner, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
+            <Ionicons name="lock-closed-outline" size={14} color={colors.brand} />
+            <Text style={[styles.privacyText, { color: colors.brand }]}>
+              Only you can see this list, it's private to your account.
             </Text>
           </View>
         )}
@@ -361,40 +329,19 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
           </Section>
         )}
 
-        {/* ── Filter pills (group tab only, small inline pills) ── */}
+        {/* ── Assignee filter (group tab only) — Chip, not a second row of
+             tab-shaped pills, so it visually reads as a filter on the list
+             below rather than another mode switch. ── */}
         {tab === 'group' && total > 0 && (
           <View style={styles.filterRow}>
-            {(['all', 'mine', 'unassigned'] as Filter[]).map((f) => {
-              const active = filter === f;
-              const label = f === 'all' ? 'All' : f === 'mine' ? 'Mine' : 'Unassigned';
-              return (
-                <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  style={[
-                    styles.filterPill,
-                    {
-                      backgroundColor: active ? colors.brand : 'transparent',
-                      borderColor: active ? colors.brand : colors.cardBorder,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterPillText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* ── Column header (group tab only) ── */}
-        {tab === 'group' && total > 0 && (
-          <View style={[styles.headerRow, { borderColor: colors.cardBorder }]}>
-            <Text style={[styles.headerCellNum, { color: colors.textMuted }]}>#</Text>
-            <Text style={[styles.headerCellTask, { color: colors.textMuted }]}>TASK</Text>
-            <Text style={[styles.headerCellAssigned, { color: colors.textMuted }]}>ASSIGNED</Text>
+            {(['all', 'mine', 'unassigned'] as Filter[]).map((f) => (
+              <Chip
+                key={f}
+                label={f === 'all' ? 'All' : f === 'mine' ? 'Mine' : 'Unassigned'}
+                selected={filter === f}
+                onPress={() => setFilter(f)}
+              />
+            ))}
           </View>
         )}
 
@@ -405,7 +352,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
             title={tab === 'group' ? 'No group tasks yet' : 'Nothing on your packing list'}
             description={
               tab === 'group'
-                ? 'Track what the group needs to handle — anyone can claim a task or the organizer can assign it.'
+                ? 'Track what the group needs to handle. Anyone can claim a task, or the organizer can assign it.'
                 : 'Only you see this list. Add what you need to personally bring on the trip.'
             }
             action={{ label: tab === 'group' ? 'Add a task' : 'Add an item', onPress: () => setAddOpen(true) }}
@@ -416,13 +363,13 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
           <>
             {open.length > 0 && (
               <Section>
-                <SectionLabel>To do · {open.length}</SectionLabel>
+                <SectionLabel>To do ({open.length})</SectionLabel>
                 <ListGroup>{open.map(renderTask)}</ListGroup>
               </Section>
             )}
             {done.length > 0 && (
               <Section>
-                <SectionLabel>Done · {done.length}</SectionLabel>
+                <SectionLabel>Done ({done.length})</SectionLabel>
                 <ListGroup>{done.map(renderTask)}</ListGroup>
               </Section>
             )}
@@ -457,8 +404,8 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
         {total > 0 && !isViewOnly && (
           <Txt variant="footnote" tone="muted" align="center" style={{ marginTop: space.xl }}>
             {tab === 'group'
-              ? 'Tap to complete · tap avatar to assign · hold to remove'
-              : 'Tap to complete · hold to remove'}
+              ? 'Tap to complete, tap the avatar to assign, or hold to remove'
+              : 'Tap to complete, or hold to remove'}
           </Txt>
         )}
       </ScrollView>
@@ -495,10 +442,10 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
         />
 
         {tab === 'personal' && (
-          <View style={[styles.personalNote, { backgroundColor: isDark ? 'rgba(99,102,241,0.10)' : '#EEF2FF', borderColor: isDark ? 'rgba(99,102,241,0.25)' : '#C7D2FE' }]}>
-            <Ionicons name="lock-closed-outline" size={13} color={isDark ? '#A5B4FC' : '#6366F1'} />
-            <Txt variant="footnote" style={{ flex: 1, color: isDark ? '#A5B4FC' : '#6366F1' }}>
-              Only you can see this — it won't appear in the group's task list.
+          <View style={[styles.personalNote, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
+            <Ionicons name="lock-closed-outline" size={13} color={colors.brand} />
+            <Txt variant="footnote" tone="accent" style={{ flex: 1 }}>
+              Only you can see this. It won't appear in the group's task list.
             </Txt>
           </View>
         )}
@@ -506,12 +453,12 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
         {/* Assign to — organizer: full picker; member: claim toggle; default = Unassigned */}
         {tab === 'group' && (
           <View style={{ marginTop: space.xl }}>
-            <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+            <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
               Assign to (optional)
             </Txt>
 
             {isOrganizer ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingRight: space.lg }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingRight: space.lg, alignItems: 'flex-start' }}>
                 <AssigneeChip
                   label="Unassigned"
                   selected={assigneeId === null}
@@ -537,7 +484,7 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
                   <View style={{ flex: 1 }}>
                     <Txt variant="emphasis">Assign to me</Txt>
                     <Txt variant="footnote" tone="muted" style={{ marginTop: 1 }}>
-                      Leave unticked to keep it open — anyone can claim it.
+                      Leave unticked to keep it open. Anyone can claim it.
                     </Txt>
                   </View>
                 </View>
@@ -551,14 +498,14 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
       <Sheet
         visible={aiOpen}
         onClose={() => { setAiOpen(false); setSuggested([]); setPicked([]); setAiAssigneeId(null); }}
-        title="AI Task Suggestions"
+        title="AI task suggestions"
         primaryAction={
           aiLoading
             ? undefined
             : {
                 label: picked.length > 0
                   ? `Add ${picked.length} item${picked.length === 1 ? '' : 's'}${
-                      isOrganizer && aiScope === 'group' ? ' to Group Tasks' : ' to My List'
+                      isOrganizer && aiScope === 'group' ? ' to group tasks' : ' to my list'
                     }`
                   : 'Select items to add',
                 onPress: handleAddPicked,
@@ -574,41 +521,27 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
             {/* Organizer: choose where suggestions land */}
             {isOrganizer && (
               <View style={{ marginBottom: space.md }}>
-                <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+                <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
                   Add suggestions to
                 </Txt>
                 <View style={{ flexDirection: 'row', gap: space.sm }}>
-                  {(['personal', 'group'] as const).map((s) => {
-                    const active = aiScope === s;
-                    return (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => { setAiScope(s); if (s === 'personal') setAiAssigneeId(null); }}
-                        style={[
-                          styles.filterPill,
-                          {
-                            backgroundColor: active ? colors.brand : 'transparent',
-                            borderColor: active ? colors.brand : colors.cardBorder,
-                            paddingHorizontal: space.md,
-                          },
-                        ]}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[styles.filterPillText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>
-                          {s === 'personal' ? 'My Packing List' : 'Group Tasks'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {(['personal', 'group'] as const).map((s) => (
+                    <Chip
+                      key={s}
+                      label={s === 'personal' ? 'My packing list' : 'Group tasks'}
+                      selected={aiScope === s}
+                      onPress={() => { setAiScope(s); if (s === 'personal') setAiAssigneeId(null); }}
+                    />
+                  ))}
                 </View>
 
                 {/* Assignee picker — only when group is selected */}
                 {aiScope === 'group' && (
                   <View style={{ marginTop: space.md }}>
-                    <Txt variant="caption" tone="muted" uppercase style={{ marginBottom: space.sm, letterSpacing: 0.6 }}>
+                    <Txt variant="label" tone="secondary" style={{ marginBottom: space.sm }}>
                       Assign to (optional)
                     </Txt>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingRight: space.lg }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingRight: space.lg, alignItems: 'flex-start' }}>
                       <AssigneeChip
                         label="Unassigned"
                         selected={aiAssigneeId === null}
@@ -632,9 +565,9 @@ export default function TripChecklist({ trip, isViewOnly = false, loadTrip }: Tr
               </View>
             )}
 
-            <View style={[styles.aiNoteBanner, { backgroundColor: isDark ? 'rgba(99,102,241,0.10)' : '#EEF2FF', borderColor: isDark ? 'rgba(99,102,241,0.25)' : '#C7D2FE' }]}>
-              <Ionicons name="sparkles-outline" size={14} color={isDark ? '#A5B4FC' : '#6366F1'} />
-              <Txt variant="footnote" style={{ flex: 1, color: isDark ? '#A5B4FC' : '#6366F1' }}>
+            <View style={[styles.aiNoteBanner, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
+              <Ionicons name="sparkles-outline" size={14} color={colors.brand} />
+              <Txt variant="footnote" tone="accent" style={{ flex: 1 }}>
                 {isOrganizer && aiScope === 'group'
                   ? 'Selected items will be added as group tasks. Tap the assignee above to assign them.'
                   : 'Tap to select items to add to your personal packing list.'}
@@ -738,41 +671,6 @@ function AssigneeChip({
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 130, paddingTop: space.xs },
 
-  // ── Tab switcher ──
-  tabRow: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    borderRadius: radius.xl,
-    borderWidth: hairline,
-    marginBottom: space.lg,
-  },
-  tabPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: radius.lg,
-  },
-  tabPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-  },
-  tabBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-    minWidth: 18,
-    alignItems: 'center',
-  },
-  tabBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
   // ── Privacy banner ──
   privacyBanner: {
     flexDirection: 'row',
@@ -807,47 +705,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Column header ──
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: space.lg,
-    paddingBottom: space.sm,
-    borderBottomWidth: hairline,
-    marginBottom: 2,
-  },
-  headerCellNum: {
-    width: 22,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  headerCellTask: {
-    flex: 1,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  headerCellAssigned: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    paddingRight: space.lg,
-  },
-
   // ── Task row ──
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  rowNumberCell: {
-    width: 22,
-    alignItems: 'flex-start',
-    paddingLeft: space.lg,
-  },
-  rowNumberText: {
-    fontSize: 11,
-    fontVariant: ['tabular-nums'],
   },
   task: {
     flex: 1,
