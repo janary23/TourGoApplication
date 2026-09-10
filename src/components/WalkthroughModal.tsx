@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, Modal, TouchableOpacity,
-  Image, ScrollView, Platform, Dimensions, Animated, Easing, Pressable,
+  Image, ScrollView, Platform, Dimensions, Animated, Easing, Pressable, AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -140,6 +140,18 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
   const [selected, setSelected] = useState<string[]>([]);
   const [finalPhase, setFinalPhase] = useState<'celebrate' | 'flying'>('celebrate');
   const [travelAngle, setTravelAngle] = useState(0);
+  // Checked once on mount: gates the continuous idle-bob/wing-flap loops and
+  // the confetti burst, and skips straight past the fly-home flight instead
+  // of animating Aguilito across the screen.
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled?.().then((reduced) => {
+      if (!cancelled) setReducedMotion(reduced);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const bubbleScale = useRef(new Animated.Value(0.95)).current;
@@ -209,7 +221,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
 
   // Gentle idle bob for Aguilito wherever he appears (intro steps + bubble + finale)
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || reducedMotion) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(mascotFloat, {
@@ -308,6 +320,12 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
     if (flyTimeoutRef.current) {
       clearTimeout(flyTimeoutRef.current);
       flyTimeoutRef.current = null;
+    }
+
+    // Skip the cross-screen flight for reduced motion — go straight to done.
+    if (reducedMotion) {
+      finishOnboarding();
+      return;
     }
 
     setFinalPhase('flying');
@@ -577,11 +595,13 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                 ]}
                 pointerEvents={finalPhase === 'celebrate' ? 'auto' : 'none'}
               >
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  {Array.from({ length: 80 }).map((_, i) => (
-                    <ConfettiParticle key={i} colors={colors} />
-                  ))}
-                </View>
+                {!reducedMotion && (
+                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    {Array.from({ length: 80 }).map((_, i) => (
+                      <ConfettiParticle key={i} colors={colors} />
+                    ))}
+                  </View>
+                )}
 
                 <Animated.Image
                   source={require('../../assets/images/EagleMascotS5.png')}
