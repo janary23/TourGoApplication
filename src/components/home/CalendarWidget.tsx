@@ -349,15 +349,19 @@ export default function CalendarWidget({
                         { overflow: 'hidden' }
                       ]}
                     >
-                      {/* Crop trip image as background marker if occupied */}
+                      {/* Crop the trip's own image as a background marker when it has
+                          one — a generic stock photo standing in for every trip with
+                          no cover regardless of destination was worse than no photo
+                          at all, so this falls back to a plain brand-tinted fill. */}
                       {dayTripInfo && (
-                        <>
-                          <Image
-                            source={{ uri: dayTripInfo.trip.image && dayTripInfo.trip.image.trim() !== '' ? dayTripInfo.trip.image : 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1000' }}
-                            style={StyleSheet.absoluteFillObject}
-                          />
-                          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isSelected ? 'rgba(2,132,199,0.3)' : 'rgba(0,0,0,0.42)' }]} />
-                        </>
+                        dayTripInfo.trip.image && dayTripInfo.trip.image.trim() !== '' ? (
+                          <>
+                            <Image source={{ uri: dayTripInfo.trip.image }} style={StyleSheet.absoluteFillObject} />
+                            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isSelected ? 'rgba(11,127,214,0.3)' : 'rgba(0,0,0,0.42)' }]} />
+                          </>
+                        ) : (
+                          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.brand }]} />
+                        )
                       )}
                       <Text
                         style={[
@@ -419,9 +423,10 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 14,
     justifyContent: 'space-between',
+    gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.02,
@@ -568,8 +573,6 @@ const styles = StyleSheet.create({
   },
   monthTripsLabel: {
     ...T.overline,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
   },
   monthTripChip: {
     flexDirection: 'row',
@@ -590,44 +593,5 @@ const styles = StyleSheet.create({
   monthTripDates: {
     ...T.caption,
     marginTop: 1,
-  },
-  detailsContainer: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    paddingTop: 18,
-  },
-  detailsDateHeader: {
-    ...T.label,
-    marginBottom: 10,
-    letterSpacing: 0.2,
-  },
-  tripDetailCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
-  },
-  tripDetailImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    marginRight: 12,
-  },
-  tripDetailInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  tripDetailDest: {
-    ...T.microStrong,
-    letterSpacing: 0.2,
-  },
-  tripDetailTitle: {
-    ...T.body,
-    marginTop: 1,
-    marginBottom: 1,
-  },
-  tripDetailDates: {
-    ...T.footnote,
   },
 });

@@ -52,6 +52,18 @@ const getFeatureLabelAndIcon = (key: string) => {
   }
 };
 
+/**
+ * `tripSubtype` is stored as a lowercase slug ('vacation', 'field_trip').
+ * Four different call sites used to turn it into a default trip name each
+ * with its own casing (one all-caps, one plain-lowercase, two mixed) — the
+ * "vacation Trip" / "vacation to Baguio City" inconsistency the redesign
+ * audit found. One helper, one result, everywhere a default name is built.
+ */
+const formatSubtypeLabel = (subtype: string): string => {
+  const words = subtype.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 export default function CreateTripScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -413,7 +425,7 @@ export default function CreateTripScreen() {
       const suggestions = await suggestTripNames(destination, tripType, preferences);
       setAiNameSuggestions(suggestions);
     } catch (err) {
-      setAiNameSuggestions([`${tripSubtype.replace('_', ' ')} to ${destination}`]);
+      setAiNameSuggestions([`${formatSubtypeLabel(tripSubtype)} trip to ${destination}`]);
     } finally {
       setIsAiLoading(false);
     }
@@ -635,7 +647,7 @@ export default function CreateTripScreen() {
   };
 
   const handleCreateFinal = async () => {
-    const finalTitle = titleState.trim() || `${tripSubtype.replace('_', ' ').toUpperCase()} Trip`;
+    const finalTitle = titleState.trim() || `${formatSubtypeLabel(tripSubtype)} trip`;
     const finalDest = destination && destination !== 'TBD' ? destination.trim() : '';
     if (!finalDest) {
       notify('Please enter a destination for your trip.', 'error');
@@ -706,7 +718,7 @@ export default function CreateTripScreen() {
       notify('Trip created.', 'success');
       router.replace(`/trip/${tripId}`);
     } catch (err: any) {
-      notify(err?.message || "Internal database sync failed.", 'error');
+      notify(err?.message || "Couldn't create your trip. Please try again.", 'error');
     } finally {
       setIsCreating(false);
     }
@@ -724,74 +736,69 @@ export default function CreateTripScreen() {
 
   const [titleState, setTitleState] = useState('');
 
-  // Contextual Help Section
+  // Contextual help — one neutral card style for all four cases. These used
+  // to each get their own hardcoded colour (blue/green/purple/amber), which
+  // made colour mean "which trip type" instead of state — the same card
+  // treatment for all four keeps colour meaningful elsewhere in the app.
   const renderContextualHelp = () => {
     const isFieldTrip = tripSubtype === 'field_trip';
     const isOutdoor = tripSubtype === 'hiking' || tripSubtype === 'camping';
     const isBusiness = tripType === 'business' || tripSubtype === 'conference';
     const isGroup = parseInt(travelerCount) > 10;
 
+    let info: { icon: keyof typeof Ionicons.glyphMap; title: string; lines: string[] } | null = null;
+
     if (isFieldTrip) {
-      return (
-        <Card style={[styles.helpContextCard, { borderColor: '#E0F2FE', backgroundColor: isDark ? '#082F49' : '#F0F9FF', marginTop: 12 }]} shadow={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="school" size={20} color={colors.brand} />
-            <Text style={{ ...T.emphasis, color: colors.text }}>Field Trip Setup Active</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
-            • Chaperone controls & safety coordinate tracking is active.{'\n'}
-            • Checklist preloaded with parent consent forms, name tags, and emergency safety guidelines.
-          </Text>
-        </Card>
-      );
+      info = {
+        icon: 'school-outline',
+        title: 'Field trip setup',
+        lines: [
+          'Chaperone controls and safety check-ins turn on automatically.',
+          'Checklist preloaded with consent forms, name tags, and safety guidelines.',
+        ],
+      };
+    } else if (isOutdoor) {
+      info = {
+        icon: 'trail-sign-outline',
+        title: 'Outdoor trip setup',
+        lines: [
+          'Safety checkpoints and a packing list are preloaded.',
+          'Weather warnings stay visible on your timeline.',
+        ],
+      };
+    } else if (isBusiness) {
+      info = {
+        icon: 'briefcase-outline',
+        title: 'Business trip setup',
+        lines: [
+          'Documents are organized for passes, QR codes, and slide decks.',
+          'Networking and schedule features are preloaded on the dashboard.',
+        ],
+      };
+    } else if (isGroup) {
+      info = {
+        icon: 'people-outline',
+        title: `Large group setup (${travelerCount} travelers)`,
+        lines: [
+          'Attendance tracking is recommended to simplify check-ins.',
+          'A group-meals poll template is preloaded.',
+        ],
+      };
     }
 
-    if (isOutdoor) {
-      return (
-        <Card style={[styles.helpContextCard, { borderColor: '#DCFCE7', backgroundColor: isDark ? '#064E3B' : '#F0FDF4', marginTop: 12 }]} shadow={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="trail-sign" size={20} color={colors.success} />
-            <Text style={{ ...T.emphasis, color: colors.text }}>Outdoor trip setup active</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
-            • Safety checkpoints, forest ranger register items, and physical packing lists preloaded.{'\n'}
-            • Water allocations and weather warnings will remain active on your timeline.
-          </Text>
-        </Card>
-      );
-    }
+    if (!info) return null;
 
-    if (isBusiness) {
-      return (
-        <Card style={[styles.helpContextCard, { borderColor: '#F3E8FF', backgroundColor: isDark ? '#3B0764' : '#FAF5FF', marginTop: 12 }]} shadow={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="briefcase" size={20} color="#9333EA" />
-            <Text style={{ ...T.emphasis, color: colors.text }}>Corporate Delegate Workspace Active</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
-            • Documents vaults automatically structured for corporate passes, QR registry codes, and slide decks.{'\n'}
-            • Networking and schedule features preloaded on dashboard.
-          </Text>
-        </Card>
-      );
-    }
-
-    if (isGroup) {
-      return (
-        <Card style={[styles.helpContextCard, { borderColor: '#FEF3C7', backgroundColor: isDark ? '#78350F' : '#FFFBEB', marginTop: 12 }]} shadow={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="people" size={20} color={colors.warning} />
-            <Text style={{ ...T.emphasis, color: colors.text }}>Large Group Workspace ({travelerCount} Travelers)</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
-            • Recommended attendance trackers to simplify check-in checklists.{'\n'}
-            • Group meals polls templates preloaded on setup.
-          </Text>
-        </Card>
-      );
-    }
-
-    return null;
+    return (
+      <Card style={[styles.helpContextCard, { borderColor: colors.cardBorder, backgroundColor: colors.surface, marginTop: 12 }]} shadow={false}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name={info.icon} size={20} color={colors.brand} />
+          <Text style={{ ...T.emphasis, color: colors.text }}>{info.title}</Text>
+        </View>
+        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4, lineHeight: 15 }}>
+          {info.lines.map((line, i) => `• ${line}`).join('\n')}
+        </Text>
+      </Card>
+    );
   };
 
   // Nav Row Helper
@@ -836,10 +843,10 @@ export default function CreateTripScreen() {
       <View style={styles.trackerContainer}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Text style={{ ...T.emphasis, color: colors.brand }}>
-            {displayStep} of {totalSteps} — {stepLabel}
+            Step {displayStep} of {totalSteps}: {stepLabel}
           </Text>
           <Text style={{ ...T.caption, color: colors.textMuted }}>
-            {Math.round(progressPercent)}% Complete
+            {Math.round(progressPercent)}% complete
           </Text>
         </View>
         <View style={[styles.trackerLineBackground, { backgroundColor: colors.cardBorder, top: 0 }]}>
@@ -990,8 +997,8 @@ export default function CreateTripScreen() {
 
                       {isSubSelected && (
                         <View style={[styles.packageDetailsContainer, { borderTopColor: colors.cardBorder }]}>
-                          {/* Included Workspace Modules */}
-                          <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included Workspace Modules</Text>
+                          {/* Included features */}
+                          <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included features</Text>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {Object.entries(subFeatures)
                               .filter(([_, enabled]) => enabled)
@@ -1040,8 +1047,8 @@ export default function CreateTripScreen() {
 
                   {tripSubtype === 'custom_trip' && (
                     <View style={[styles.packageDetailsContainer, { borderTopColor: colors.cardBorder }]}>
-                      {/* Included Workspace Modules */}
-                      <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included Workspace Modules</Text>
+                      {/* Included features */}
+                      <Text style={[styles.packageSectionHeader, { color: colors.text, marginBottom: 6 }]}>Included features</Text>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                         <View style={[styles.featurePill, { backgroundColor: colors.brandLight, borderColor: colors.brand + '30', borderWidth: 1 }]}>
                           <Ionicons name="calendar-outline" size={11} color={colors.brand} />
@@ -1073,7 +1080,7 @@ export default function CreateTripScreen() {
             <Text style={[styles.stageSub, { color: colors.textSecondary, marginBottom: 8 }]}>Add your travel details. Agilito will load smart defaults automatically.</Text>
 
             {/* Friendly reminder banner */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.cardBorder, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, borderColor: colors.cardBorder, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, marginBottom: 12 }}>
               <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
               <Text style={{ ...T.micro, color: colors.textSecondary, flex: 1 }}>
                 Plans change! You can easily edit your dates, destinations, and travelers in the settings dashboard later.
@@ -1083,7 +1090,7 @@ export default function CreateTripScreen() {
 
 
             {/* Destination Input */}
-            <Text style={styles.sectionLabelCompact}>Where are you going?</Text>
+            <Text style={[styles.sectionLabelCompact, { color: colors.textSecondary }]}>Where are you going?</Text>
             <View style={[styles.searchContainer, { marginTop: 8 }]}>
               <Ionicons name="location-outline" size={18} color={colors.brand} style={styles.searchIcon} />
               <TextInput
@@ -1100,8 +1107,21 @@ export default function CreateTripScreen() {
               ) : null}
             </View>
 
-            {/* Popular Destination Chips */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8, marginBottom: 14 }}>
+            {/* Popular Destination Chips
+                Without an explicit height, this horizontal ScrollView could
+                stretch to fill whatever leftover vertical space its flex
+                parent had, and `alignItems: stretch` (the flexbox default)
+                then stretched every chip to match — rendering as tall,
+                near-empty tiles with the label pinned to the top (the
+                redesign audit's "destination suggestion tiles render
+                empty" bug). flexGrow: 0 plus alignItems: 'flex-start' keep
+                the row and its chips sized to their own content. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ gap: 8, marginTop: 8, marginBottom: 14, alignItems: 'flex-start' }}
+            >
               {['El Nido, Palawan', 'Baguio City', 'Boracay', 'Siargao', 'Tagaytay', 'Cebu City'].map((dest) => {
                 const isSelected = destination === dest;
                 return (
@@ -1110,7 +1130,7 @@ export default function CreateTripScreen() {
                     onPress={() => {
                       setDestination(dest);
                       if (!titleState) {
-                        setTitleState(`${tripSubtype.replace(/_/g, ' ')} to ${dest.split(',')[0]}`);
+                        setTitleState(`${formatSubtypeLabel(tripSubtype)} trip to ${dest.split(',')[0]}`);
                       }
                     }}
                     style={{
@@ -1131,7 +1151,7 @@ export default function CreateTripScreen() {
             </ScrollView>
 
             {/* Name Input */}
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Trip Name</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Trip name</Text>
             <View style={styles.searchContainer}>
               <Ionicons name="sparkles-outline" size={18} color={colors.brand} style={styles.searchIcon} />
               <TextInput
@@ -1210,7 +1230,7 @@ export default function CreateTripScreen() {
             {/* Travel Dates Header with Duration */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 8 }}>
               <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0, color: colors.textSecondary }]}>
-                Travel Dates
+                Travel dates
               </Text>
               {calculateDuration() ? (
                 <View style={[styles.durationBadgeCompact, { backgroundColor: colors.brandLight }]}>
@@ -1276,7 +1296,7 @@ export default function CreateTripScreen() {
             />
 
             {/* Travelers counter */}
-            <Text style={[styles.sectionLabel, { marginTop: 18 }]}>How many people are joining?</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 18, color: colors.textSecondary }]}>How many people are joining?</Text>
             <Card style={[styles.crewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} shadow={false}>
               <View style={styles.counterContainer}>
                 <TouchableOpacity
@@ -1284,6 +1304,8 @@ export default function CreateTripScreen() {
                     const val = Math.max(1, (parseInt(travelerCount) || 1) - 1);
                     setTravelerCount(val.toString());
                   }}
+                  accessibilityLabel="Remove one traveler"
+                  accessibilityRole="button"
                   style={[styles.counterBtn, { borderColor: colors.cardBorder, backgroundColor: colors.background }]}
                 >
                   <Ionicons name="remove" size={18} color={colors.text} />
@@ -1322,6 +1344,8 @@ export default function CreateTripScreen() {
                     const val = (parseInt(travelerCount) || 1) + 1;
                     setTravelerCount(val.toString());
                   }}
+                  accessibilityLabel="Add one traveler"
+                  accessibilityRole="button"
                   style={[styles.counterBtn, { borderColor: colors.cardBorder, backgroundColor: colors.background }]}
                 >
                   <Ionicons name="add" size={18} color={colors.text} />
@@ -1343,10 +1367,10 @@ export default function CreateTripScreen() {
         return (
           <View style={styles.stageContainer}>
             <Text style={[styles.stageHeading, { color: colors.text }]}>Almost there!</Text>
-            <Text style={[styles.stageSub, { color: colors.textSecondary, marginBottom: 15 }]}>Review your setup details below before launching the workspace.</Text>
+            <Text style={[styles.stageSub, { color: colors.textSecondary, marginBottom: 15 }]}>Review your setup details below before creating your trip.</Text>
 
             {/* Clean Trip Summary */}
-            <Text style={styles.sectionLabel}>Trip Summary</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Trip summary</Text>
             <Card style={{ padding: 16, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16 }} shadow={false}>
 
               {/* Header row with icon */}
@@ -1356,10 +1380,10 @@ export default function CreateTripScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ ...T.bodyStrong, color: colors.text }}>
-                    {titleState.trim() || `${tripSubtype.replace(/_/g, ' ')} Trip`}
+                    {titleState.trim() || `${formatSubtypeLabel(tripSubtype)} trip`}
                   </Text>
                   <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
-                    {tripType.charAt(0).toUpperCase() + tripType.slice(1)} · {tripSubtype.replace(/_/g, ' ')}
+                    {formatSubtypeLabel(tripSubtype)} trip
                   </Text>
                 </View>
               </View>
@@ -1392,9 +1416,9 @@ export default function CreateTripScreen() {
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
-                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Workspace Tools</Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>Features</Text>
                   <Text style={{ ...T.label, color: colors.text }}>
-                    {Object.values(features).filter(Boolean).length} modules active
+                    {Object.values(features).filter(Boolean).length} turned on
                   </Text>
                 </View>
               </View>
@@ -1428,7 +1452,7 @@ export default function CreateTripScreen() {
             </View>
 
             {/* Toggle Features List */}
-            <Text style={[styles.sectionLabel, { marginTop: 12 }]}>Additional Features</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 12, color: colors.textSecondary }]}>Additional features</Text>
             <Card style={{ padding: 16, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, gap: 14, marginBottom: 10 }} shadow={false}>
               {([
                 { key: 'checklist', label: 'Prep Checklist', desc: 'Track group tasks, to-dos and assignments', icon: 'checkmark-circle-outline' },
@@ -1462,7 +1486,7 @@ export default function CreateTripScreen() {
             <View style={styles.navRow}>
               <Button title="Back" onPress={handleCustomBack} variant="secondary" style={{ flex: 1 }} />
               <Button
-                title={isCreating ? "Launching workspace..." : "Create Trip"}
+                title={isCreating ? "Creating trip…" : "Create trip"}
                 onPress={handleCreateFinal}
                 variant="accent"
                 size="large"
@@ -1528,7 +1552,10 @@ export default function CreateTripScreen() {
           <View style={{ marginTop: space.lg }}>
             <Txt variant="headline">{codePreview.trip.title}</Txt>
             <Txt variant="subhead" tone="muted" style={{ marginTop: 2 }}>
-              {codePreview.trip.destination || 'Destination TBD'} · {codePreview.stops.length} {codePreview.stops.length === 1 ? 'stop' : 'stops'}
+              {codePreview.trip.destination || 'Destination TBD'}
+            </Txt>
+            <Txt variant="footnote" tone="muted">
+              {codePreview.stops.length} {codePreview.stops.length === 1 ? 'stop' : 'stops'} planned
             </Txt>
 
             {codePreview.stops.length > 0 ? (
@@ -1539,7 +1566,7 @@ export default function CreateTripScreen() {
                       <ListRow
                         key={i}
                         title={st.title}
-                        subtitle={`Day ${st.dayIndex + 1} · ${st.time}`}
+                        subtitle={`Day ${st.dayIndex + 1} at ${st.time}`}
                         showChevron={false}
                       />
                     ))}
@@ -1601,13 +1628,13 @@ export default function CreateTripScreen() {
         <View style={styles.dialogOverlay}>
           <Card style={styles.dialogCard}>
             <Ionicons name="location-outline" size={40} color={colors.brand} style={{ marginBottom: 12 }} />
-            <Text style={[styles.dialogTitle, { color: colors.text }]}>Enable Location Permissions?</Text>
-            <Text style={styles.dialogDesc}>
-              Location allows TourGo to provide location-based check-ins, safety coordinator updates, and real-time mapping routes.
+            <Text style={[styles.dialogTitle, { color: colors.text }]}>Enable location permissions?</Text>
+            <Text style={[styles.dialogDesc, { color: colors.textSecondary }]}>
+              Location lets TourGo offer location-based check-ins, safety updates, and real-time mapping routes.
             </Text>
             <View style={styles.dialogBtnRow}>
-              <Button title="Not Now" onPress={handleDenyLocation} variant="outline" style={{ flex: 1 }} />
-              <Button title="Allow Location" onPress={handleAllowLocation} variant="accent" style={{ flex: 1 }} />
+              <Button title="Not now" onPress={handleDenyLocation} variant="outline" style={{ flex: 1 }} />
+              <Button title="Allow location" onPress={handleAllowLocation} variant="accent" style={{ flex: 1 }} />
             </View>
           </Card>
         </View>
@@ -1699,20 +1726,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+    ...T.label,
     color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: 14,
     marginBottom: 8,
   },
   sectionLabelCompact: {
-    fontSize: 12,
-    fontWeight: '700',
+    ...T.label,
     color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   compactAiBtn: {
     flexDirection: 'row',
@@ -1910,10 +1931,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
+  // 44x44 minimum touch target — was 38x38, under the accessibility floor.
   counterBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1962,13 +1984,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginVertical: 2,
-  },
-  customFieldLabel: {
-    ...T.microStrong,
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    marginTop: 10,
-    marginBottom: 6,
   },
   timelineBlock: {
     marginTop: 16,
@@ -2223,38 +2238,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 8,
   },
-  sourceBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sourceBadgeText: {
-    ...T.microStrong,
-    textTransform: 'uppercase',
-  },
   packageDetailsContainer: {
     borderTopWidth: 1,
     marginTop: 12,
     paddingTop: 12,
   },
-  packageMetaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  packageMetaBadgeText: {
-    ...T.microStrong,
-    textTransform: 'uppercase',
-  },
   packageSectionHeader: {
     ...T.microStrong,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: 8,
     marginBottom: 4,
     opacity: 0.7,

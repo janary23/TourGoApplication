@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { type as T } from '../ui/tokens';
+import { PhotoWithFallback } from '../ui/primitives';
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
 // logs a warning and silently falls back to the JS driver. Declaring the driver
@@ -26,10 +27,9 @@ export default function OtherTripCard({
 }: OtherTripCardProps) {
   const { isDark } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const imageUrl = trip?.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
   const members: any[] = Array.isArray(trip?.members) ? trip.members : (Array.isArray(trip?.trip_members) ? trip.trip_members : []);
-  const destination = trip?.destination || 'DESTINATION';
-  const title = trip?.title || 'Untitled Trip';
+  const destination = trip?.destination || 'Destination TBD';
+  const title = trip?.title || 'Untitled trip';
   const startDate = trip?.startDate || trip?.start_date || new Date().toISOString();
   const endDate = trip?.endDate || trip?.end_date || new Date().toISOString();
 
@@ -69,13 +69,13 @@ export default function OtherTripCard({
         ]}
       >
         {/* Destination Photo */}
-        <Image source={{ uri: imageUrl }} style={[styles.tripPhoto, { backgroundColor: colors.surface }]} />
+        <PhotoWithFallback uri={trip?.image} placeName={destination} style={styles.tripPhoto} />
 
         {/* Information Layout */}
         <View style={styles.tripDetails}>
           <View style={styles.topInfo}>
             <Text style={[styles.tripDestinationText, { color: colors.brand }]}>
-              {destination.toUpperCase()}
+              {destination}
             </Text>
             <Text style={[styles.tripTitleText, { color: colors.text }]} numberOfLines={2}>
               {title}

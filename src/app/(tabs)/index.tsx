@@ -1676,7 +1676,7 @@ export default function HomeScreen() {
 
             <View style={{ marginBottom: 24 }}>
               <Text style={{ ...T.label, color: colors.textMuted, marginBottom: 10 }}>Try these examples</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'flex-start' }}>
                 {[
                   'nature spots in Pampanga by car',
                   'free historic churches in Manila',
@@ -1752,7 +1752,11 @@ const styles = StyleSheet.create({
   },
   searchInputText: { flex: 1, ...T.body, height: '100%', padding: 0 },
   categoryChipsContainer: { paddingVertical: 6 },
-  categoryChipsScroll: { paddingHorizontal: 20, gap: 8 },
+  // alignItems: 'flex-start' stops the row's flex children (Chip, no fixed
+  // height) from stretching to whatever cross-axis height the ScrollView
+  // ends up with — the "empty tall tile" bug found in trip/create.tsx's
+  // destination chips came from exactly this default.
+  categoryChipsScroll: { paddingHorizontal: 20, gap: 8, alignItems: 'flex-start' },
   scrollContent: { paddingBottom: 110 },
 
   quickPlannerCard: { marginHorizontal: space.xl, marginBottom: space.xl, borderRadius: radius.xl, overflow: 'hidden' },
@@ -1896,7 +1900,7 @@ const styles = StyleSheet.create({
   weatherTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   weatherPillBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   weatherPillText: { ...T.microStrong },
-  weatherScrollContainer: { paddingHorizontal: 20, gap: 12, paddingBottom: 4 },
+  weatherScrollContainer: { paddingHorizontal: 20, gap: 12, paddingBottom: 4, alignItems: 'flex-start' },
   weatherCard: { width: 160, height: 110, borderRadius: 20, overflow: 'hidden', position: 'relative', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.02, shadowRadius: 6, elevation: 1 },
   weatherCardImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   weatherCardGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },

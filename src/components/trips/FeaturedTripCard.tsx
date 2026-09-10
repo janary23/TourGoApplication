@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, ImageBackground, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,10 +29,11 @@ export default function FeaturedTripCard({
 }: FeaturedTripCardProps) {
   const { isDark } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const imageUrl = trip?.image && trip.image.trim() !== '' ? trip.image : 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1000';
+  const [imageFailed, setImageFailed] = useState(false);
+  const hasPhoto = !!(trip?.image && trip.image.trim() !== '') && !imageFailed;
   const members: any[] = Array.isArray(trip?.members) ? trip.members : (Array.isArray(trip?.trip_members) ? trip.trip_members : []);
-  const destination = trip?.destination || 'DESTINATION';
-  const title = trip?.title || 'Untitled Trip';
+  const destination = trip?.destination || 'Destination TBD';
+  const title = trip?.title || 'Untitled trip';
   const startDate = trip?.startDate || trip?.start_date || new Date().toISOString();
   const endDate = trip?.endDate || trip?.end_date || new Date().toISOString();
 
@@ -54,6 +55,110 @@ export default function FeaturedTripCard({
     }).start();
   };
 
+  // Shared between the real-photo and no-photo states — only the background
+  // underneath this changes, so the card reads the same either way.
+  const content = (
+    <LinearGradient
+      colors={hasPhoto ? ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.62)'] : ['transparent', 'transparent']}
+      style={styles.gradientOverlay}
+    >
+      {/* Top Row: Countdown Badge & Relationship Badge */}
+      <View style={styles.topRow}>
+        {countdown ? (
+          <View style={[styles.countdownBadge, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+            <Text style={styles.countdownBadgeText}>{countdown}</Text>
+          </View>
+        ) : (
+          <View />
+        )}
+        <View style={[styles.roleBadge, { backgroundColor: isOrganizer ? 'rgba(56, 189, 248, 0.4)' : 'rgba(0,0,0,0.4)' }]}>
+          <Text style={styles.roleBadgeText}>{isOrganizer ? 'Organizer' : 'Member'}</Text>
+        </View>
+      </View>
+
+      {/* Content sits directly on the gradient's darkened band — no separate
+          floating "glass" panel (that was the Hard Rule's glassmorphism-on-photo
+          pattern). */}
+      <View style={styles.bottomContent}>
+        <Text style={[styles.tripDestinationText, { color: hasPhoto ? '#FFFFFF' : colors.brand, opacity: hasPhoto ? 0.85 : 1 }]}>
+          {destination}
+        </Text>
+        <Text style={[styles.tripTitleText, { color: hasPhoto ? '#FFFFFF' : colors.text }]} numberOfLines={2}>{title}</Text>
+
+        {/* Stats and Avatars Stack */}
+        <View style={styles.metaRow}>
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Ionicons name="calendar-outline" size={11} color={hasPhoto ? 'rgba(255,255,255,0.85)' : colors.textSecondary} />
+              <Text style={[styles.statText, { color: hasPhoto ? 'rgba(255,255,255,0.9)' : colors.textSecondary }]}>
+                {new Date(startDate).toLocaleDateString('default', { month: 'short', day: 'numeric' })}
+              </Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="time-outline" size={11} color={hasPhoto ? 'rgba(255,255,255,0.85)' : colors.textSecondary} />
+              <Text style={[styles.statText, { color: hasPhoto ? 'rgba(255,255,255,0.9)' : colors.textSecondary }]}>
+                {(() => {
+                  const start = new Date(startDate);
+                  const end = new Date(endDate);
+                  const diffTime = Math.abs(end.getTime() - start.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                  return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+                })()}
+              </Text>
+            </View>
+          </View>
+
+          {/* Member Pile */}
+          <View style={styles.membersRow}>
+            <View style={styles.avatarPile}>
+              {members.slice(0, 3).map((member: any, index: number) => {
+                const avatarUrl = member.avatar_url || null;
+                const memberName = member.name || 'Member';
+                return (
+                  <View
+                    key={member.id || index}
+                    style={[
+                      styles.avatarCircle,
+                      {
+                        marginLeft: index > 0 ? -8 : 0,
+                        zIndex: 10 - index,
+                        borderColor: hasPhoto ? 'rgba(0,0,0,0.6)' : colors.background,
+                      }
+                    ]}
+                  >
+                    {avatarUrl ? (
+                      <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <View style={[styles.avatarFallback, { backgroundColor: colors.brand }]}>
+                        <Text style={styles.avatarFallbackText}>
+                          {memberName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+            {members.length > 3 && (
+              <Text style={[styles.membersCountText, { color: hasPhoto ? '#FFFFFF' : colors.textSecondary }]}>
+                +{members.length - 3}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View style={[styles.cardDivider, { backgroundColor: hasPhoto ? 'rgba(255,255,255,0.15)' : colors.divider }]} />
+
+        <View style={styles.enterWorkspaceIndicatorRow}>
+          <Text style={[styles.enterWorkspaceText, { color: hasPhoto ? 'rgba(255,255,255,0.95)' : colors.textSecondary }]}>
+            View trip details
+          </Text>
+          <Ionicons name="chevron-forward" size={13} color={hasPhoto ? '#FFFFFF' : colors.textSecondary} style={{ marginLeft: 3 }} />
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
   return (
     <View style={styles.featuredSectionContainer}>
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -71,130 +176,24 @@ export default function FeaturedTripCard({
             }
           ]}
         >
-          <ImageBackground source={{ uri: imageUrl }} style={styles.featuredTripPhoto} imageStyle={{ borderRadius: 24 }}>
-            <LinearGradient
-              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.45)']}
-              style={styles.gradientOverlay}
+          {hasPhoto ? (
+            <ImageBackground
+              source={{ uri: trip.image }}
+              style={styles.featuredTripPhoto}
+              imageStyle={{ borderRadius: 24 }}
+              onError={() => setImageFailed(true)}
             >
-              {/* Top Row: Countdown Badge & Relationship Badge */}
-              <View style={styles.topRow}>
-                {countdown ? (
-                  <View
-                    style={[
-                      styles.countdownBadge,
-                      {
-                        backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                        borderColor: 'rgba(255, 255, 255, 0.25)',
-                        borderWidth: StyleSheet.hairlineWidth,
-                      }
-                    ]}
-                  >
-                    <Text style={styles.countdownBadgeText}>{countdown}</Text>
-                  </View>
-                ) : (
-                  <View />
-                )}
-                <View
-                  style={[
-                    styles.roleBadge,
-                    {
-                      backgroundColor: isOrganizer ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255, 255, 255, 0.25)',
-                      borderColor: 'rgba(255, 255, 255, 0.25)',
-                      borderWidth: StyleSheet.hairlineWidth,
-                    }
-                  ]}
-                >
-                  <Text style={styles.roleBadgeText}>{isOrganizer ? 'Organizer' : 'Member'}</Text>
-                </View>
-              </View>
-
-              {/* Floating Glass-style Bottom Content Panel */}
-              <View 
-                style={[
-                  styles.bottomGlassOverlay, 
-                  { 
-                    backgroundColor: isDark ? 'rgba(20, 20, 25, 0.82)' : 'rgba(15, 23, 42, 0.76)',
-                    borderColor: 'rgba(255, 255, 255, 0.15)',
-                  }
-                ]}
-              >
-                <Text style={[styles.tripDestinationText, { color: colors.brand }]}>{destination.toUpperCase()}</Text>
-                <Text style={styles.tripTitleText} numberOfLines={2}>{title}</Text>
-
-                {/* Stats and Avatars Stack */}
-                <View style={styles.metaRow}>
-                  <View style={styles.statsContainer}>
-                    <View style={styles.statItem}>
-                      <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.85)" />
-                      <Text style={styles.statText}>
-                        {new Date(startDate).toLocaleDateString('default', { month: 'short', day: 'numeric' })}
-                      </Text>
-                    </View>
-                    <View style={styles.statDot} />
-                    <View style={styles.statItem}>
-                      <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.85)" />
-                      <Text style={styles.statText}>
-                        {(() => {
-                          const start = new Date(startDate);
-                          const end = new Date(endDate);
-                          const diffTime = Math.abs(end.getTime() - start.getTime());
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                          return `${diffDays} days`;
-                        })()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Member Pile */}
-                  <View style={styles.membersRow}>
-                    <View style={styles.avatarPile}>
-                      {members.slice(0, 3).map((member: any, index: number) => {
-                        const avatarUrl = member.avatar_url || null;
-                        const memberName = member.name || 'Member';
-                        return (
-                          <View
-                            key={member.id || index}
-                            style={[
-                              styles.avatarCircle,
-                              {
-                                marginLeft: index > 0 ? -8 : 0,
-                                zIndex: 10 - index,
-                                borderColor: 'rgba(0,0,0,0.6)',
-                              }
-                            ]}
-                          >
-                            {avatarUrl ? (
-                              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                            ) : (
-                              <View style={[styles.avatarFallback, { backgroundColor: colors.brand }]}>
-                                <Text style={styles.avatarFallbackText}>
-                                  {memberName.charAt(0).toUpperCase()}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                    {members.length > 3 && (
-                      <Text style={styles.membersCountText}>
-                        +{members.length - 3}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                
-                {/* Divider Line inside the card */}
-                <View style={styles.cardDivider} />
-
-                {/* Visual "Explore Workspace Room" indicator link */}
-                <View style={styles.enterWorkspaceIndicatorRow}>
-                  <Text style={styles.enterWorkspaceText}>Explore Workspace Room</Text>
-                  <Ionicons name="arrow-forward" size={11} color="#FFFFFF" style={{ marginLeft: 3 }} />
-                </View>
-              </View>
-            </LinearGradient>
-          </ImageBackground>
+              {content}
+            </ImageBackground>
+          ) : (
+            // Designed fallback — a brand-tinted tile with the destination
+            // name — instead of the one fixed stock photo every trip with no
+            // (or a broken) cover image used to share regardless of place.
+            <View style={[styles.featuredTripPhoto, styles.photoFallback, { backgroundColor: colors.brandLight }]}>
+              <Ionicons name="map-outline" size={40} color={colors.brand} style={{ opacity: 0.4, position: 'absolute', top: 24 }} />
+              {content}
+            </View>
+          )}
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -219,6 +218,9 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'flex-end',
   },
+  photoFallback: {
+    justifyContent: 'flex-end',
+  },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
     padding: 12,
@@ -241,7 +243,6 @@ const styles = StyleSheet.create({
   countdownBadgeText: {
     color: '#FFFFFF',
     ...T.microStrong,
-    letterSpacing: 0.8,
   },
   roleBadge: {
     paddingHorizontal: 10,
@@ -251,31 +252,19 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     color: '#FFFFFF',
     ...T.microStrong,
-    letterSpacing: 0.5,
   },
-  bottomGlassOverlay: {
+  bottomContent: {
     width: '100%',
-    borderRadius: 20,
     padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
   },
   tripDestinationText: {
-    ...T.microStrong,
-    letterSpacing: 1.5,
+    ...T.label,
     marginBottom: 4,
   },
   tripTitleText: {
     ...T.title,
-    color: '#FFFFFF',
     lineHeight: 24,
     marginBottom: 10,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   metaRow: {
     flexDirection: 'row',
@@ -286,7 +275,7 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   statItem: {
     flexDirection: 'row',
@@ -294,14 +283,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statText: {
-    color: 'rgba(255,255,255,0.9)',
     ...T.caption,
-  },
-  statDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.4)',
   },
   membersRow: {
     flexDirection: 'row',
@@ -334,11 +316,9 @@ const styles = StyleSheet.create({
   },
   membersCountText: {
     ...T.overline,
-    color: '#FFFFFF',
   },
   cardDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     marginVertical: 10,
   },
   enterWorkspaceIndicatorRow: {
@@ -347,8 +327,6 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   enterWorkspaceText: {
-    color: 'rgba(255, 255, 255, 0.95)',
-    ...T.overline,
-    letterSpacing: 0.2,
+    ...T.emphasis,
   },
 });

@@ -54,9 +54,9 @@ const getCountdownText = (startDateStr: string) => {
   const start = startOfDay(new Date(startDateStr));
   const diff = diffDays(today, start);
   if (diff < 0) return null;
-  if (diff === 0) return 'STARTS TODAY';
-  if (diff === 1) return '1 DAY TO GO';
-  return `${diff} DAYS TO GO`;
+  if (diff === 0) return "Today's the day";
+  if (diff === 1) return '1 day to go';
+  return `${diff} days to go`;
 };
 
 const formatTripDate = (startDateStr: string, endDateStr: string) => {
@@ -268,7 +268,7 @@ const buildTravelNote = (forecast: TripForecast): string | null => {
   if (forecast.status !== 'available' || forecast.days.length === 0) return null;
   const rainyDays = forecast.days.filter((d) => d.isRainy && !d.outsideTripRange);
   if (rainyDays.length === 0) {
-    return 'Conditions look dry and settled through the week — a good stretch for outdoor plans.';
+    return 'Conditions look dry and settled through the week, a good stretch for outdoor plans.';
   }
   if (rainyDays.length === 1) {
     const d = rainyDays[0];
@@ -572,14 +572,14 @@ function DestinationSelector({ destinations, selected, onSelect, colors, isDark 
                 styles.destPill,
                 active
                   ? { backgroundColor: colors.brand }
-                  : { backgroundColor: isDark ? '#1C1C1E' : '#EEF2F7', borderColor: colors.divider, borderWidth: StyleSheet.hairlineWidth },
+                  : { backgroundColor: colors.surface, borderColor: colors.divider, borderWidth: StyleSheet.hairlineWidth },
               ]}
             >
               <Ionicons name="location" size={12} color={active ? '#FFFFFF' : colors.textMuted} />
               <Text
                 style={[
                   styles.destPillText,
-                  { color: active ? '#FFFFFF' : colors.textSecondary, fontFamily: active ? 'Poppins-SemiBold' : 'Poppins-Medium' },
+                  { color: active ? '#FFFFFF' : colors.textSecondary, fontFamily: active ? 'WorkSans-SemiBold' : 'WorkSans-Medium' },
                 ]}
                 numberOfLines={1}
               >
@@ -626,8 +626,8 @@ function ForecastBody({
       {/* HEADER — the trip connection: what + where + when */}
       <FadeInUp delay={0} style={{ alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
-          <Text style={[styles.v2Eyebrow, { color: colors.textMuted }]}>7-DAY LIVE METEOROLOGICAL FORECAST</Text>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success }} />
+          <Text style={[styles.v2Eyebrow, { color: colors.textMuted }]}>7-day forecast</Text>
         </View>
       </FadeInUp>
       <FadeInUp delay={80} style={{ alignItems: 'center', marginTop: 12 }}>
@@ -648,7 +648,7 @@ function ForecastBody({
         <FadeInUp delay={230} style={styles.v2TodayBlock}>
           <View style={styles.v2TodayHead}>
             <Text style={[styles.v2TodayLabel, { color: colors.textMuted }]}>
-              {todayDay.isToday ? 'TODAY' : todayDay.weekday.toUpperCase()}
+              {todayDay.isToday ? 'Today' : todayDay.weekday}
             </Text>
             <Text style={[styles.v2TodayDate, { color: colors.textSecondary }]}>
               {todayDay.weekday}, {todayDay.dateLabel}
@@ -686,7 +686,7 @@ function ForecastBody({
       )}
 
       <FadeInUp delay={310}>
-        <SectionLabel label="THE NEXT SEVEN DAYS" colors={colors} marginTop={10} />
+        <SectionLabel label="Next 7 days" colors={colors} marginTop={10} />
       </FadeInUp>
 
       <View style={styles.v2TimelineWrap}>
@@ -1004,12 +1004,12 @@ export default function TripsScreen() {
             style={[styles.titleContainer, { opacity: largeTitleOpacity, transform: [{ translateY: largeTitleTranslateY }, { scale: largeTitleScale }] }]}
           >
             <Text style={[styles.pageTitle, { color: colors.text }]}>Trips</Text>
-            <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>Plan, explore, and recall your journeys.</Text>
+            <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>Every trip you're planning or joining, all here.</Text>
           </Animated.View>
 
           {trips.length > 0 ? (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>SEE YOUR SCHEDULE HERE</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>Your schedule</Text>
 
               <View style={styles.widgetsRow}>
                 <View style={styles.halfWidgetColumn}>
@@ -1027,13 +1027,13 @@ export default function TripsScreen() {
                           activeScale={0.96}
                         >
                           <View style={styles.weatherWidgetHeader}>
-                            <Text style={[styles.weatherWidgetLabel, { color: colors.textMuted }]}>WEATHER & PREP</Text>
+                            <Text style={[styles.weatherWidgetLabel, { color: colors.textMuted }]}>Weather & prep</Text>
                             <Ionicons name={weather.icon} size={15} color={colors.brand} />
                           </View>
                           <View style={styles.weatherMainContent}>
                             <Text style={[styles.weatherTempText, { color: colors.text }]}>{weather.temp}</Text>
                             <Text style={[styles.weatherDestText, { color: colors.brand }]} numberOfLines={1}>
-                              {featuredTrip.destination.split(',')[0].toUpperCase()}
+                              {featuredTrip.destination.split(',')[0]}
                             </Text>
                             <Text style={[styles.weatherConditionText, { color: colors.textSecondary }]} numberOfLines={1}>{weather.condition}</Text>
                           </View>
@@ -1050,7 +1050,7 @@ export default function TripsScreen() {
                       activeScale={0.96}
                     >
                       <Ionicons name="add-circle-outline" size={24} color={colors.brand} />
-                      <Text style={[styles.weatherWidgetLabel, { color: colors.textSecondary }]}>PLAN A TRIP</Text>
+                      <Text style={[styles.weatherWidgetLabel, { color: colors.textSecondary }]}>Plan a trip</Text>
                       <Text style={{ ...T.micro, color: colors.textMuted, textAlign: 'center' }}>Where to next?</Text>
                     </InteractiveButton>
                   )}
@@ -1096,10 +1096,10 @@ export default function TripsScreen() {
                 />
                 {(['all', 'organizer', 'member'] as const).map((tab) => {
                   const isSelected = activeTab === tab;
-                  const label = tab === 'all' ? 'All Journeys' : tab === 'organizer' ? 'Hosted' : 'Joined';
+                  const label = tab === 'all' ? 'All trips' : tab === 'organizer' ? 'Hosted' : 'Joined';
                   return (
                     <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} activeOpacity={1} style={styles.segmentedTab}>
-                      <Text style={[styles.segmentedTabText, { color: isSelected ? colors.text : colors.textSecondary, fontFamily: isSelected ? 'Poppins-Bold' : 'Poppins-Medium' }]}>
+                      <Text style={[styles.segmentedTabText, { color: isSelected ? colors.text : colors.textSecondary, fontFamily: isSelected ? 'Sora-SemiBold' : 'WorkSans-Medium' }]}>
                         {label}
                       </Text>
                     </TouchableOpacity>
@@ -1109,7 +1109,7 @@ export default function TripsScreen() {
 
               {featuredTrip && (
                 <View style={{ marginBottom: 22 }}>
-                  <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>FEATURED JOURNEY</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>Featured trip</Text>
                   <FeaturedTripCard
                     trip={featuredTrip}
                     colors={colors}
@@ -1123,7 +1123,7 @@ export default function TripsScreen() {
 
               {otherUpcomingTrips.length > 0 && (
                 <View style={{ marginBottom: 22 }}>
-                  <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>UPCOMING JOURNEYS</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 12 }]}>Upcoming trips</Text>
                   {otherUpcomingTrips.map((item) => (
                     <OtherTripCard key={item.id} trip={item} colors={colors} isOrganizer={item.role === 'organizer'} formatTripDate={formatTripDate} router={router} />
                   ))}
@@ -1181,11 +1181,11 @@ export default function TripsScreen() {
           <View style={styles.modalOverlay}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setIsWeatherModalVisible(false)} />
             <View style={[styles.modalContentCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <View style={[styles.notchHandle, { backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }]} />
+              <View style={[styles.notchHandle, { backgroundColor: colors.cardBorder }]} />
 
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }} />
-                <TouchableOpacity onPress={() => setIsWeatherModalVisible(false)} style={[styles.modalCloseButton, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]}>
+                <TouchableOpacity onPress={() => setIsWeatherModalVisible(false)} style={[styles.modalCloseButton, { backgroundColor: colors.surface }]}>
                   <Ionicons name="close" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
   segmentedTab: { flex: 1, height: '100%', justifyContent: 'center', alignItems: 'center', zIndex: 1 },
   segmentedTabText: { fontSize: 12 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  sectionTitle: { ...T.overline, textTransform: 'uppercase', letterSpacing: 1.2 },
+  sectionTitle: { ...T.overline },
   albumBannerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1318,7 +1318,7 @@ const styles = StyleSheet.create({
   },
   widgetsRow: { flexDirection: 'row', gap: 12, marginBottom: 24, width: '100%' },
   halfWidgetColumn: { flex: 1 },
-  halfWidgetCard: { flex: 1, borderRadius: radius.lg, paddingVertical: space.lg - 2, paddingHorizontal: space.lg - 2, justifyContent: 'space-between', height: 122 },
+  halfWidgetCard: { flex: 1, borderRadius: radius.lg, paddingVertical: space.lg, paddingHorizontal: space.lg - 2, justifyContent: 'space-between', gap: space.xs, height: 132 },
   weatherWidgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   weatherWidgetLabel: { ...T.microStrong, letterSpacing: 0.8 },
   weatherMainContent: { flex: 1, justifyContent: 'center' },
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
   // Multi-destination selector
   destSelectorWrap: { width: '100%' },
   destSelectorScroll: { flexGrow: 0 },
-  destSelectorContent: { gap: 10, paddingVertical: 2, paddingHorizontal: 2 },
+  destSelectorContent: { gap: 10, paddingVertical: 2, paddingHorizontal: 2, alignItems: 'flex-start' },
   destPill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
@@ -1421,79 +1421,4 @@ const styles = StyleSheet.create({
   v2StateIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   v2StateTitle: { ...T.headline, fontWeight: '700' },
   v2StateBody: { ...T.subhead, textAlign: 'center', lineHeight: 19, maxWidth: 280 },
-
-  // ---- Debug delete styles ----
-  debugBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  debugTripRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  debugTripTitle: { ...T.emphasis, fontWeight: '600' },
-  debugTripMeta: { ...T.caption, marginTop: 2 },
-  debugDeleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    backgroundColor: '#FEE2E2',
-  },
-
-  // ---- Delete confirmation modal ----
-  deleteModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  deleteModalCard: {
-    width: '100%',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  deleteModalIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  deleteModalTitle: { ...T.title, fontWeight: '700', marginBottom: 8 },
-  deleteModalBody: { ...T.subhead, textAlign: 'center', lineHeight: 20, marginBottom: 22 },
-  deleteModalActions: { flexDirection: 'row', gap: 10, width: '100%' },
-  deleteModalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteModalBtnText: { ...T.bodyStrong, fontWeight: '700' },
 });
