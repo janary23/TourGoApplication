@@ -2,11 +2,10 @@
 ## FINAL PROJECT DOCUMENTATION
 
 ### PROJECT TITLE:
-# **TourGo – A Collaborative Group Travel Planning and Real-Time Safety Coordination Platform**
+# **TourGo – A Collaborative Group Travel Planning, Destination Discovery, and Itinerary Coordination Platform**
 
 **Prepared by:** Harry Sevilla  
 **Subject:** Mobile Application Development (CTELEC4L)  
-**Section:** ITE 231  
 **Submitted to:** Prof. Paul John D. Cabance  
 **Date Submitted:** October 2026  
 
@@ -41,189 +40,283 @@
 ## CHAPTER 1 – PROJECT OVERVIEW
 
 ### Introduction
-The project entitled **"TourGo – A Collaborative Group Travel Planning and Real-Time Safety Coordination Platform"** is a cross-platform mobile application developed to resolve the disorganization, safety uncertainties, and logistics headaches commonly encountered by Filipino travel groups and *barkadas*. In traditional group trips, coordination is scattered across disjointed platforms—chat apps where decisions are buried, messy spreadsheets for expense splitting, and personal navigation tools. This fragmented workflow often causes itinerary disagreements, awkward bill collection, and genuine safety concerns when members drift apart in unfamiliar travel destinations.
-
-TourGo integrates every phase of group travel into a unified, responsive mobile ecosystem. It features an intelligent day-by-day itinerary builder supported by Google Gemini AI, collaborative group polls with real-time tallies, an itemized expense ledger with automated split calculations, and an interactive Guardian Mode safety system. Guardian Mode provides organizers with configurable geofenced safe-zone perimeters (measured in meters) and real-time live member radar tracking. Furthermore, TourGo features native high-priority push notifications and in-app heads-up banners on real physical devices, ensuring that members receive instant updates whenever itineraries change or group activities occur. When the journey ends, TourGo converts the experience into an interactive community feed post and a Facebook-style expandable photo scrapbook.
+The project entitled **"TourGo – A Collaborative Group Travel Planning, Destination Discovery, and Itinerary Coordination Platform"** is a full-stack cross-platform mobile application developed for groups of friends, families, and travel companions to collaboratively plan, organize, and coordinate group journeys. It unites Philippine destination discovery, trip hosting and joining via unique alphanumeric invite codes, day-by-day collaborative itinerary planning, Google Gemini AI-powered day schedules, interactive group decision polling, real-time group chat, shared expense splitting and balance ledgers, and branded mobile push notifications into a single, cohesive platform. By consolidating these capabilities, TourGo eliminates the chaos of juggling fragmented chat threads, spreadsheets, navigation maps, and budgeting tools.
 
 ### Project Objectives
 
 #### General Objective
-To design, develop, test, and implement an all-in-one collaborative mobile application and real-time safety coordination platform that empowers Filipino travel groups and barkadas to seamlessly plan itineraries, track shared finances, maintain live group safety, and commemorate their travel journeys within a synchronized mobile experience.
+To develop a collaborative, real-time mobile travel application that streamlines group trip planning, interactive decision-making, and financial coordination from initial discovery to active travel.
 
 #### Specific Objectives
-1. **Streamlined Group Access**: To implement an authentication and trip hosting system utilizing unique 6-character invite codes and Supabase role-based security (Organizer vs. Member).
-2. **Collaborative Itinerary Builder**: To develop a day-by-day itinerary creator with time slot tagging, sequential accuracy-checked route mapping, free keyless landmark discovery, and Google Gemini AI day-plan generation.
-3. **Guardian Safety Geofencing**: To build an interactive Guardian Mode safety radar featuring organizer-configurable geofenced safe zones (in meters) and automated perimeter-drift alerts.
-4. **Real-Device Push Notifications**: To configure native Android high-importance notification channels and Supabase Realtime listeners that trigger instant heads-up notification banners on physical mobile devices.
-5. **Transparent Financial Coordination**: To establish an itemized shared expense ledger with automated split calculation, debtor/creditor balance visibility, and payment settlement tracking.
-6. **Logistics & Decision Polling**: To provide organizer-run destination/activity polls with live vote tallies, shared trip document repositories, and categorized group/personal packing checklists.
-7. **Community & Scrapbook Memories**: To develop a social community feed and an auto-generated visual scrapbook with full-screen Facebook-style photo lightbox expansion.
+1. **Frictionless Trip Access**: To enable frictionless trip creation and joining using 6-character alphanumeric join codes with responsive native input controls.
+2. **Interactive Destination Discovery**: To provide an interactive destination exploration engine with Philippine tourist spots, province guides, weather forecasts, and travel estimates.
+3. **Collaborative Day-by-Day Itinerary & AI**: To deliver collaborative day-by-day itinerary management with chronological activity scheduling and Google Gemini AI day-plan generation.
+4. **Interactive Group Polls**: To streamline group consensus through interactive group polls with synchronized real-time vote tallies.
+5. **Shared Financial Ledger**: To provide a shared financial ledger that calculates equal and custom expense splits, tracking payer balances and debt settlements.
+6. **Real-Time Group Coordination & Push Notifications**: To facilitate real-time group communication through Supabase Realtime chat and branded mobile push notifications displaying the official TourGo app icon.
 
 ### Scope of the Project
-The application provides the following core features:
-- **User Authentication & Profile Onboarding**: Email/password authentication via Supabase Auth, personalized traveler preferences onboarding, avatar selection, and dark/light theme switching.
-- **Trip Hosting & Joining**: One-tap trip creation generating a unique 6-character join code, participant role assignment, and multi-trip switching.
-- **Day-by-Day Itinerary & AI Planner**: Structured scheduling with transport/food/activity tags, free keyless POI discovery (Wikipedia, OpenStreetMap, Photon), and Google Gemini AI itinerary generation.
-- **Guardian Safety Radar & Geofencing**: Organizer-configurable safe zone radius (meters) rendered as a real-radius perimeter circle on interactive Leaflet maps with live member location tracking and perimeter-drift warnings.
-- **Real-Device Push Notifications**: Native notification permissions, Expo push token storage in Supabase, Android high-priority channel (`trip-updates`), and in-app drop-down toast banners displaying the TourGo logo.
-- **Group Logistics (Polls & Checklists)**: Destination and activity polling with live vote counters, assignable group tasks, and private personal packing checklists.
-- **Shared Expense Ledger**: Itemized travel expenses, split calculation (solo vs. equally shared), and payment settlement logging.
-- **Community Feed & Media Lightbox**: Unified single-card itinerary posts, multi-photo galleries with pinch-to-zoom Facebook-style lightbox expansion, and post-trip scrapbook generation.
+The application encompasses the following core functional modules:
+- **Authentication and Profiles**: Secure email/password login and registration via Supabase Auth, personalized traveler preferences (budget, travel style, pacing), and light/dark theme support.
+- **Explore & Destination Discovery**: Interactive Philippine map and province directory, curated tourist spots, free places, weather forecasts, category filters, and travel cost/time estimations.
+- **Trip Hosting and Enrollment**: Create trips with destination, travel dates, and cover photos; auto-generate 6-character alphanumeric join codes; responsive join screen with native tap-to-focus keyboard.
+- **Collaborative Day-by-Day Itinerary**: Day-by-day activity timelines with timestamps, notes, and activity tags; one-tap Google Gemini AI day itinerary generator tailored to user preferences.
+- **Real-Time Group Communication**: Instant group messaging powered by Supabase Realtime WebSockets, pinned organizer announcements, and group packing checklists.
+- **Interactive Decision-Making Polls**: Create and vote on multiple-choice group polls (places, dates, activities) with live vote counters and organizer management.
+- **Shared Expense Ledger & Bill Splitting**: Log group expenses, assign payers, split costs equally or custom per member, and view real-time net settlement balances.
+- **Real-Device Push & In-App Activity Notifications**: Branded native push notifications and in-app toast banners with the official TourGo icon and `#028BEB` theme.
+- **Community Travel Feed**: Public travel feed to share itineraries, travel stories, photos, like counters, comments, and travel inspiration.
+- **Organizer Controls & Cascade Deletion**: Comprehensive trip management allowing organizers to edit trip details, manage members, and cleanly delete trips with foreign key cascade cleanup.
 
 ### Limitations
-- **Network Connectivity Requirement**: The mobile app requires an active internet connection to synchronize realtime database changes, chat messages, and push notifications with Supabase.
-- **Hardware Location Permission**: Guardian Mode live tracking requires GPS hardware and explicit foreground/background user permissions on the traveler's mobile device.
-- **Third-Party API Free Tier Limits**: AI itinerary generation and free geocoding services depend on Google Gemini and OpenStreetMap public server quotas.
-- **Coordination-Only Financial Ledger**: The shared expense module calculates debts and verifies payment submissions, but does not process monetary transactions or integrate fiat banking gateways.
+- **Internet Connectivity Requirement**: The mobile application requires an active internet connection to synchronize realtime database changes, chat messages, and push notifications with Supabase.
+- **Third-Party API Limits**: AI itinerary generation and free geocoding services depend on Google Gemini and OpenStreetMap public server quotas.
+- **Coordination-Only Financial Ledger**: The shared expense module calculates debts and verifies payment submissions, but does not process direct monetary transactions or integrate fiat banking gateways.
+- **Estimates for Reference Only**: Weather forecasts and travel estimates are approximate calculations based on open-source public providers.
 
 ---
 
 ## CHAPTER 2 – SYSTEM ANALYSIS AND DESIGN
 
 ### System Description
-TourGo provides a structured end-to-end travel experience. A user registers and customizes their travel preferences during onboarding. On the main dashboard, the user is greeted by an animated soaring Philippine Eagle mascot that guides their travel journey. The user can either host a trip—generating a 6-character invite code—or join an existing trip by entering a code provided by their barkada organizer.
+TourGo provides a comprehensive, modern mobile solution for group travel planning and coordination. Users authenticate via email and password, customize their travel style and preferences, and access an intuitive home dashboard. A user can either host a new trip—specifying destination and travel dates to generate a unique 6-character join code—or join an active trip using an organizer's code.
 
-Once inside the trip workspace, members collaborate across dedicated tabs. Organizers create polls to decide destinations, while members build a synchronized day-by-day itinerary. Travelers can ask the integrated Google Gemini AI engine to synthesize a custom schedule tailored to their group size and interests. During active travel, the organizer enables Guardian Mode on an interactive Leaflet map, establishing a geofenced safe-zone circle around the base camp. If a member wanders outside this perimeter, or whenever someone adds an itinerary stop, logs an expense, or posts a message, the system fires native push notifications directly to members' devices. At trip completion, the journey is archived into a scrapbook and shared to the community feed.
+Inside the trip hub, members collaboratively curate a day-by-day itinerary, generate smart multi-stop itineraries with Google Gemini AI, vote on key group decisions in real-time polls, chat via live messaging, and manage packing lists. While traveling, members log shared expenses to maintain an automated balance sheet showing who owes whom. Activity updates, itinerary changes, and poll additions trigger instant push notifications and in-app toast banners featuring the TourGo app icon. After trips, travelers can share itineraries and stories to the public Community Feed. All data is securely persisted in Supabase (PostgreSQL, Auth, Storage, and Realtime).
 
 ### System Flow
-**Start → Login / Registration → Mascot Dashboard → Host Trip (6-Char Code) / Join Trip → Collaborative Planning (Itinerary, AI Planner, Polls, Checklists) → Active Travel & Guardian Safety (Geofenced Radar, Push Notifications, Group Chat) → Post-Trip Scrapbook & Community Feed → End**
+
+```
+Start → Login (Email/Password) → Explore / Host / Join Trip (Join Code) → Collaborative Itinerary & AI Day Plan → Group Polls & Live Chat → Expense Logging & Bill Splitting → Push Alerts & Community Feed → End
+```
+
+**Detailed Flow**: The user registers or signs in using their email and password; their profile and travel preferences are loaded. The user can explore Philippine destinations or choose to host a new trip (specifying title, destination, dates, and cover photo to receive an auto-generated 6-character join code) or join an existing trip by entering a valid code. Group members collaboratively add day-by-day itinerary stops or invoke Google Gemini AI to synthesize a customized day schedule. Members vote on group activities or dates through synchronized real-time polls and communicate in the live group chat. During the trip, members log shared expenses, with the system calculating equal or custom splits and tracking who owes whom. Trip updates trigger native device push notifications and in-app toast banners displaying the TourGo app icon. At trip completion, travelers share their stories and photos to the public community feed.
 
 ### Use Case Diagram
 
 #### Actors:
-- **Trip Organizer (Host)**: Creates trips, configures geofenced radius, manages member roles, publishes announcements, creates polls, and finalizes itineraries.
-- **Trip Member (Barkada)**: Joins trips via code, votes in polls, checks off checklist items, logs shared expenses, shares live GPS location, and comments on community posts.
+- **User (Traveler / Member)**: Registered user who can explore spots, host or join trips, vote on polls, build itineraries, chat, log expenses, and post to the community feed.
+- **Organizer (Trip Host)**: The creator of a trip who gains administrative privileges such as editing trip metadata, pinning announcements, and performing cascade trip deletion.
 
 | Use Case ID | Title | Functional Description |
 |:---|:---|:---|
-| **UC-01** | Authenticate User | User registers and signs in via Supabase Auth with persistent session storage. |
-| **UC-02** | Host / Join Trip | Organizer creates a trip with 6-char code; travelers enter code to join group. |
-| **UC-03** | Build Itinerary | Members collaborate on day-by-day activities with time slots and POI coordinates. |
-| **UC-04** | AI Day-Plan Assistant | Travelers request automated itinerary suggestions powered by Google Gemini. |
-| **UC-05** | Guardian Safety Mode | Organizer sets geofenced radius in meters; system tracks members and alerts on perimeter drift. |
-| **UC-06** | Real-Time Push Alerts | Triggers heads-up native notifications and in-app toast banners on trip updates. |
-| **UC-07** | Decision Polling | Organizers launch polls; members submit votes with live synchronized tallies. |
-| **UC-08** | Shared Expense Splitting | Users record expenses; system computes per-member splits and tracks settlement status. |
-| **UC-09** | Community Feed & Lightbox | Users publish trip recaps as unified cards and view photos in Facebook-style lightbox. |
+| **UC-01** | Authenticate User | Register and sign in via Supabase Auth with persistent session storage. |
+| **UC-02** | Destination Discovery | Search Philippine provinces, tourist spots, free places, and weather forecasts. |
+| **UC-03** | Host / Join Trip | Create a trip with an auto-generated 6-character join code or join using an active code. |
+| **UC-04** | Collaborative Itinerary | Add/edit day stops with chronological times, coordinates, activity tags, and notes. |
+| **UC-05** | Google Gemini AI Planner | Generate customized multi-stop day itineraries based on user travel preferences. |
+| **UC-06** | Interactive Group Polls | Create multiple-choice polls and vote with real-time synchronized live tallies. |
+| **UC-07** | Real-Time Group Chat | Send and receive instant messages via Supabase Realtime WebSockets. |
+| **UC-08** | Group Packing Checklist | Assign and check off collaborative travel items and packing lists. |
+| **UC-09** | Shared Expenses & Splitting | Record shared expenses, calculate equal/custom splits, and view debt balances. |
+| **UC-10** | Push & In-App Notifications | Receive real-device push notifications and in-app toast banners with the TourGo icon. |
+| **UC-11** | Community Travel Feed | Browse public travel stories, view photo reels, like posts, and post trip recaps. |
+| **UC-12** | Organizer Trip Management | Update trip details, manage members, and cleanly delete trips with cascade cleanup. |
 
 ### Database Design
 
-#### ERD Overview
-The database architecture is designed in Supabase (PostgreSQL 15). A `profile` can organize or join multiple `trips` through `trip_members`. Each trip has child relations for `itinerary_items`, `polls`, `expenses`, `checklist_items`, and `chat_messages`. The `community_posts` table connects finished itineraries with public community feeds.
+The application uses Supabase (PostgreSQL) for cloud data storage, authentication, and file storage.
 
 #### Table: `profiles`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | User identifier linked directly to Supabase `auth.users(id)` |
-| `full_name` | Text | Full display name of the traveler |
-| `avatar_url` | Text | Public storage URL for user profile picture |
-| `email` | Text | User email address used for login and notifications |
-| `push_token` | Text | Registered Expo Push Token for real-device system notifications |
-| `preferences` | JSONB | User travel preferences (pace, budget, interests) |
-| `created_at` | Timestamptz | Account creation timestamp |
+| `id` | UUID (PK) | User ID (linked to Supabase Auth) |
+| `email` | Text | Registered email address |
+| `full_name` | Text | Display name of the user |
+| `avatar_url` | Text | Profile picture / avatar URL |
+| `travel_preferences` | JSONB | Traveler preferences (budget, style, pace, dietary) |
 
 #### Table: `trips`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique trip identifier |
-| `title` | Text | Descriptive title of the trip (e.g., 'El Nido Barkada Getaway') |
-| `destination` | Text | Primary destination name or municipality |
-| `invite_code` | Text (Unique) | 6-character alphanumeric code for group joining |
-| `start_date` | Date | Trip starting date |
-| `end_date` | Date | Trip ending date |
-| `cover_image` | Text | Cover photo URL for trip header and scrapbook |
-| `guardian_radius` | Integer | Configurable geofence radius in meters (e.g., 500m, 1000m) |
-| `dest_lat / dest_lng` | Numeric | Geographic coordinates of the trip destination base camp |
-| `created_by` | UUID (FK) | Host user ID referencing `profiles.id` |
+| `id` | UUID (PK) | Unique trip ID |
+| `title` | Text | Trip title / name |
+| `destination` | Text | Target destination name / province |
+| `start_date` / `end_date` | Date | Trip schedule date range |
+| `code` | Text (Unique) | 6-character alphanumeric join code |
+| `image_url` | Text | Cover image URL |
+| `created_by` | UUID (FK) | Organizer user ID (`profiles.id`) |
 
 #### Table: `trip_members`
 | Field | Type | Description |
 |:---|:---|:---|
 | `id` | UUID (PK) | Unique membership record ID |
-| `trip_id` | UUID (FK) | Trip joined referencing `trips.id` |
-| `user_id` | UUID (FK) | Member user ID referencing `profiles.id` |
-| `role` | Text | Role designation ('organizer' or 'member') |
-| `last_lat / last_lng` | Numeric | Live GPS coordinates shared for Guardian Radar |
-| `last_location_time` | Timestamptz | Timestamp of most recent location update |
-| `joined_at` | Timestamptz | Timestamp when the user joined the trip |
+| `trip_id` | UUID (FK) | Trip joined (`trips.id`) |
+| `user_id` | UUID (FK) | Member user ID (`profiles.id`) |
+| `role` | Text | `organizer` / `member` |
+| `joined_at` | Timestamp | Date and time joined |
+| `status` | Text | `active` / `archived` |
 
-#### Table: `trip_poll_options`
+#### Table: `polls`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique poll option ID |
-| `trip_id` | UUID (FK) | Trip being polled referencing `trips.id` |
-| `type` | Text | Poll category ('destination', 'date', or 'activity') |
-| `title` | Text | Proposed option title or description |
-| `created_by` | UUID (FK) | Member who proposed the option referencing `profiles.id` |
+| `id` | UUID (PK) | Unique poll ID |
+| `trip_id` | UUID (FK) | Trip of the poll (`trips.id`) |
+| `question` | Text | Poll question or topic |
+| `is_closed` | Boolean | Active or closed status |
+| `created_by` | UUID (FK) | Member who created the poll |
+| `created_at` | Timestamp | Creation timestamp |
 
-#### Table: `trip_poll_votes`
+#### Table: `poll_votes`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique vote record ID |
-| `option_id` | UUID (FK) | Voted option referencing `trip_poll_options.id` |
-| `user_id` | UUID (FK) | Member who cast the vote referencing `profiles.id` |
-| `created_at` | Timestamptz | Timestamp when the vote was submitted |
+| `id` | UUID (PK) | Unique vote ID |
+| `poll_id` | UUID (FK) | Associated poll (`polls.id`) |
+| `user_id` | UUID (FK) | Member who voted (`profiles.id`) |
 
 #### Table: `itinerary_items`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique itinerary stop identifier |
-| `trip_id` | UUID (FK) | Associated trip referencing `trips.id` |
-| `day_number` | Integer | Trip itinerary day (e.g., Day 1, Day 2) |
-| `title` | Text | Name of the attraction, stop, or activity |
-| `time` | Text | Scheduled time (e.g., '09:00 AM') |
-| `tag` | Text | Activity category (TRANSPORT, ACTIVITY, FOOD, MEETUP) |
-| `latitude / longitude`| Numeric | Verified geographic coordinates of the stop |
-| `cost` | Numeric | Estimated budget allocation for the activity |
-| `created_by` | UUID (FK) | Member who logged the stop referencing `profiles.id` |
+| `id` | UUID (PK) | Unique itinerary item ID |
+| `trip_id` | UUID (FK) | Trip of the item (`trips.id`) |
+| `day_number` | Integer | Scheduled day number of the trip |
+| `title` | Text | Activity or stop name |
+| `time` | Text | Scheduled time (e.g., 09:00 AM) |
+| `category` | Text | `ACTIVITY` / `FOOD` / `TRANSPORT` / `SIGHTSEEING` |
+| `location` | Text | Location name or coordinate string |
+| `notes` | Text | Reminders, tips, or activity notes |
 
 #### Table: `expenses`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique expense transaction identifier |
-| `trip_id` | UUID (FK) | Associated trip referencing `trips.id` |
-| `payer_id` | UUID (FK) | User who paid the bill referencing `profiles.id` |
-| `title` | Text | Expense title (e.g., 'Van Rental', 'Seafood Dinner') |
-| `amount` | Numeric | Total monetary amount paid in PHP |
-| `category` | Text | Expense category (Food, Transport, Lodging, Activity) |
-| `split_mode` | Text | Split mode ('equal', 'custom', or 'solo') |
-| `created_at` | Timestamptz | Timestamp when expense was recorded |
+| `id` | UUID (PK) | Unique expense ID |
+| `trip_id` | UUID (FK) | Trip of the expense (`trips.id`) |
+| `paid_by` | UUID (FK) | Member who paid (`profiles.id`) |
+| `title` | Text | Expense title / description |
+| `amount` | Numeric | Total expense amount |
+| `currency` | Text | Currency code (`PHP`, `USD`, etc.) |
+| `category` | Text | Food, Accommodation, Transport, Activities, Misc |
+| `split_type` | Text | `equal` / `custom` |
 
-#### Table: `expense_settlements`
+#### Table: `expense_splits`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique settlement transaction ID |
-| `trip_id` | UUID (FK) | Associated trip referencing `trips.id` |
-| `debtor_id` | UUID (FK) | Member who owed and paid referencing `profiles.id` |
-| `creditor_id` | UUID (FK) | Member who received the payment referencing `profiles.id` |
-| `amount` | Numeric | Settled amount in PHP |
-| `proof_url` | Text | URL of payment proof receipt screenshot |
-| `status` | Text | Settlement status ('pending', 'verified', 'rejected') |
+| `id` | UUID (PK) | Unique split ID |
+| `expense_id` | UUID (FK) | Associated expense (`expenses.id`) |
+| `user_id` | UUID (FK) | Member sharing the expense (`profiles.id`) |
+| `amount_owed` | Numeric | Calculated amount owed |
+| `is_paid` | Boolean | Settlement confirmation status |
+| `settled_at` | Timestamp | Settlement timestamp |
 
-#### Table: `community_posts` (Trip Recaps)
+#### Table: `community_posts`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique community post / recap identifier |
-| `trip_id` | UUID (FK) | Optional referenced trip for itinerary posts referencing `trips.id` |
-| `author_id` | UUID (FK) | Author user ID referencing `profiles.id` |
-| `author_name` | Text | Display name of the author |
+| `id` | UUID (PK) | Unique post ID |
+| `user_id` | UUID (FK) | Author of the post (`profiles.id`) |
+| `title` / `content` | Text | Post title and travel narrative |
 | `destination` | Text | Featured destination name |
-| `caption` | Text | Post caption and travel tips |
-| `media_urls` | JSONB | Array of photo and video URLs |
-| `itinerary_data` | JSONB | Day-by-day stops for 1-click adoption by other travelers |
-| `likes_count` | Integer | Total like engagement count |
-| `created_at` | Timestamptz | Post publication timestamp |
+| `image_urls` | Text[] | Array of uploaded photo links |
+| `likes_count` | Integer | Engagement like counter |
+
+---
 
 ### User Interface Design
-- **Figure 1. Authentication & Walkthrough Onboarding**: Features email/password authentication, password recovery, and an illustrated step-by-step feature walkthrough.
-- **Figure 2. Home Dashboard & Animated Eagle Mascot**: Displays upcoming trips, quick actions, and an animated Philippine Eagle mascot that gracefully enters and soars across the dashboard.
-- **Figure 3. Trip Creation & 6-Character Join Code**: Enables hosts to set destinations and dates while generating shareable 6-character join codes.
-- **Figure 4. Day-by-Day Itinerary Builder & AI Assistant**: Shows chronological day plans with categorized badges and an interactive Google Gemini AI day-plan generator.
-- **Figure 5. Guardian Safety Mode & Geofenced Radar Map**: Interactive Leaflet map showing the trip destination, live member pins, and a semi-transparent geofence perimeter circle.
-- **Figure 6. Group Collaboration (Polls, Announcements & Chat)**: Synchronized decision polls with real-time percentage bars, pinned announcements, and live group messaging.
-- **Figure 7. Shared Expense Ledger & Cost Splitting**: Itemized ledger displaying total spend, individual contributions, and an automated settle-up breakdown.
-- **Figure 8. Real-Device Push Notifications & In-App Toast**: Android high-priority heads-up banners with the TourGo app icon and an animated top drop-down banner.
-- **Figure 9. Community Feed & Facebook-Style Media Lightbox**: Unified single-card itinerary posts with expandable photo strips and full-screen pinch-to-zoom media lightbox modal.
+
+The application features an intuitive, modern user interface with light and dark themes. The core screens, shown with placeholder frames below, include:
+- **Trip Planning and Member Hub** – host/join trip, 6-character join code, member roster, organizer controls, and cascade trip deletion
+- **Interactive Destination Discovery** – Philippine map, tourist spots, free places, weather forecasts, and category filters
+- **AI-Powered Itinerary Assistant** – Google Gemini AI integration generating smart multi-stop day schedules
+- **Day-by-Day Collaborative Itinerary** – chronological timelines, stop times, location coordinates, notes, and checklist
+- **Real-Time Group Chat & Voting Polls** – live group chat messaging and interactive multi-option decision polls
+- **Shared Trip Expenses & Bill Splitting** – itemized expense ledger, equal/custom split breakdowns, and settle-up balances
+- **Community Travel Feed & Traveler Profile** – public travel feed, stories, photos, like counters, and traveler preference profile
+
+---
+
+#### Figure 1: Trip Planning and Member Hub
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│          Figure 1: Trip Planning and Member Hub        │
+│    (Trip Creation, 6-Character Join Code & Members)    │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 1. Trip Planning and Member Hub*
+
+---
+
+#### Figure 2: Interactive Destination Discovery & Explore Page
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│ Figure 2: Interactive Destination Discovery & Explore  │
+│   (Philippine Map, Top Tourist Spots & Weather Filter) │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 2. Interactive Destination Discovery & Explore Page*
+
+---
+
+#### Figure 3: AI-Powered Itinerary Planning (Google Gemini AI)
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│ Figure 3: AI-Powered Itinerary Planning (Gemini AI)    │
+│    (Smart Day-Plan Generator Customized to Style)      │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 3. AI-Powered Itinerary Planning (Google Gemini AI)*
+
+---
+
+#### Figure 4: Day-by-Day Collaborative Itinerary
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│       Figure 4: Collaborative Day-by-Day Itinerary     │
+│    (Chronological Timeline, Stop Coordinates & Tasks)  │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 4. Day-by-Day Collaborative Itinerary*
+
+---
+
+#### Figure 5: Real-Time Group Chat & Voting Polls Hub
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│    Figure 5: Real-Time Group Chat & Voting Polls Hub   │
+│     (Live Group Messages & Synchronized Tallies)       │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 5. Real-Time Group Chat & Voting Polls Hub*
+
+---
+
+#### Figure 6: Shared Trip Expenses & Bill Splitting
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│      Figure 6: Shared Trip Expenses & Bill Splitting   │
+│   (Itemized Expense Ledger, Splits & Settle Balances)  │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 6. Shared Trip Expenses & Bill Splitting*
+
+---
+
+#### Figure 7: Community Travel Feed & Traveler Profile
+```
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│               [ SCREENSHOT PLACEHOLDER ]               │
+│ Figure 7: Community Travel Feed & Traveler Profile     │
+│     (Public Travel Stories, Photos & User Profile)     │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+*Figure 7. Community Travel Feed & Traveler Profile*
 
 ---
 
@@ -231,95 +324,115 @@ The database architecture is designed in Supabase (PostgreSQL 15). A `profile` c
 
 ### Tools and Technologies Used
 
-#### Software Technologies
-- **Antigravity IDE**: Advanced AI-powered agentic coding IDE utilized for continuous pair programming, architectural design, automated testing, and git version control.
-- **React Native & Expo SDK 52**: High-performance cross-platform mobile development framework delivering native 60fps animations and direct hardware access.
-- **TypeScript**: Strictly-typed superset of JavaScript providing robust type safety, compile-time error checking, and clear data models across all services.
-- **Supabase Backend-as-a-Service**: PostgreSQL 15 relational database, Supabase Auth for session tokens, Storage buckets for photos, and WebSocket Realtime subscriptions.
-- **Expo Notifications**: Native push notification framework handling permission requests, device tokens, Android notification channels, and immediate heads-up alerts.
-- **Leaflet.js & OpenStreetMap / Esri**: Interactive mapping engine loaded inside React Native WebView, rendering real-radius geofence circles, member pins, and multi-layer basemaps.
-- **Google Gemini Generative AI API**: AI travel model synthesizing personalized multi-day itineraries based on traveler preferences.
+#### Software
+- **Antigravity IDE**: AI-assisted agentic code editor used for full-stack mobile development and git workflow.
+- **Android Studio**: Android virtual devices (AVD) and native Android build tooling.
+- **React Native (Expo SDK 52)**: Core cross-platform mobile development framework delivering native performance.
+- **Supabase**: Cloud backend platform providing PostgreSQL database, Auth, Storage, and Realtime WebSockets.
+- **External APIs & Services**: Google Gemini AI API, OpenStreetMap / Photon geocoding, and Expo Push Notifications API.
 
-#### Hardware Requirements
-- **Development Workstation**: Windows 11 PC equipped with multi-core processor, 16GB RAM, and Node.js LTS environment.
-- **Physical Mobile Testing Devices**: Android 14/15 smartphones and iOS devices used to validate real-device push notifications, GPS background permissions, and native camera image capture.
+#### Hardware
+- **Development PC/Workstation**: Multi-core development machine running Node.js, TypeScript, and Expo CLI.
+- **Physical Android & iPhone Devices**: Tested on real smartphones for native push notifications, soft keyboard behavior, and touch responsiveness.
 
 ### Development Process
-The development of TourGo followed an iterative Agile development methodology divided into four structured phases:
-1. **Phase 1: Requirements Gathering & User Research**: Analyzed real-world group travel pain points among Filipino barkadas—unresolved voting disputes, lost companions in remote travel spots, and awkward manual bill collection.
-2. **Phase 2: Architectural & Schema Design**: Designed the normalized Supabase database schema, Row-Level Security policies, and visual component hierarchy.
-3. **Phase 3: Core Implementation & Feature Sprints**: Constructed the core modules in React Native/Expo: authentication, join codes, itinerary builder, Guardian geofencing, expense ledger, and real-device push notification listeners.
-4. **Phase 4: Hardware Testing & Optimization**: Executed real-device physical testing on Android and iOS hardware to confirm push notification channel reliability, heads-up banner display, smooth mascot flight animations, and photo lightbox touch gestures.
+
+#### Requirements Gathering
+System requirements were identified by analyzing common challenges in group travel coordination, such as fragmented chat threads, disorganized schedules, bill-splitting disputes, and difficult consensus-gathering. Functional and non-functional requirements were established accordingly.
+
+#### Design
+The system flow, use case architecture, database schema, and mobile UI were designed first. Design priorities included seamless tab-based navigation, clean light and dark themes, fast real-time synchronization, and intuitive controls suited for mobile touchscreens.
+
+#### Development
+The application was built using React Native (Expo SDK 52) with TypeScript and Supabase as the backend. Core modules implemented include authentication, trip hosting and code joining, day-by-day itinerary management, Google Gemini AI day-plan generation, real-time group chat, multi-option decision polls, expense ledger and bill splitting, branded real-device push notifications, and a community travel feed.
+
+#### Testing
+The application underwent comprehensive functional testing on physical Android and iOS mobile devices. Test scenarios and test cases were prepared and executed for all core modules (authentication, trip management, AI planning, chat, polls, expense ledger, and push notifications) to ensure robust performance.
 
 ---
 
 ## CHAPTER 4 – RESULTS AND TESTING
 
 ### System Features
-- **Feature 1: User Onboarding & Animated Eagle Mascot**: Allows users to register securely, customize travel preferences, and view an animated Philippine Eagle soaring gracefully on the home dashboard.
-- **Feature 2: Trip Hosting & 6-Character Join Code**: Enables organizers to create trips and generate instant 6-character invite codes for seamless member onboarding.
-- **Feature 3: Collaborative Itinerary & AI Generator**: Supports day-by-day activity planning with time badges, free keyless POI discovery, and Google Gemini AI itinerary generation.
-- **Feature 4: Guardian Safety Geofenced Radar**: Provides live GPS member location tracking on an interactive Leaflet map within a configurable geofenced safe-zone circle.
-- **Feature 5: Real-Device Push Notifications**: Triggers native heads-up banners with the TourGo app icon and an animated in-app drop-down toast whenever trip updates occur.
-- **Feature 6: Decision Polling & Packing Checklists**: Allows organizers to launch polls with real-time vote percentage bars and track shared group tasks alongside private personal checklists.
-- **Feature 7: Shared Expenses & Automated Settle-Up**: Records travel bills, calculates per-person debt obligations, and tracks payment settlement verification between debtors and creditors.
-- **Feature 8: Community Feed & Media Lightbox**: Publishes trips as unified itinerary cards with expandable photo thumbnails and full-screen Facebook-style lightbox viewing.
+
+#### Feature 1: Trip Hosting, Joining, and Management
+Allows a user to host a new trip with destination, travel dates, and cover photo, generating an automatic 6-character alphanumeric join code. Other travelers can join instantly via the Join Trip screen featuring responsive tap-to-focus text input. Organizers have administrative controls including editing details and cascade trip deletion.
+
+#### Feature 2: Interactive Philippine Destination Discovery
+Provides an interactive explore hub featuring curated Philippine tourist destinations, province directories, free places, real-time weather forecasts, category filters, and travel cost/time estimations.
+
+#### Feature 3: Day-by-Day Collaborative Itinerary and AI Planner
+Enables members to build chronological daily itineraries with timestamps, location coordinates, notes, and activity tags. Includes one-tap Google Gemini AI integration to automatically synthesize comprehensive multi-stop day plans tailored to user preferences.
+
+#### Feature 4: Real-Time Group Chat, Polls, and Coordination
+Facilitates real-time group collaboration through instant messaging powered by Supabase Realtime WebSockets, interactive multi-option decision polls with live vote tallies, pinned organizer announcements, and shared packing checklists.
+
+#### Feature 5: Shared Expenses and Bill Splitting
+Maintains an itemized expense ledger recording group purchases, assigning payers, calculating equal or custom splits among members, and tracking net debt balances for transparent settlement.
+
+#### Feature 6: Branded Push Notifications and Community Travel Feed
+Delivers native push notifications and in-app toast banners branded with the official TourGo icon and `#028BEB` theme for real-time trip alerts. Includes a community travel feed where travelers can publish stories, photos, and like posts.
+
+---
 
 ### Functional Testing
+
+The following test scenarios and test cases were executed for the core features of the application (Authentication, Trip Creation & Joining, Collaborative Itinerary, Google Gemini AI Planner, Group Polls, Real-Time Chat, Shared Expenses, and Push Notifications):
 
 #### Test Scenarios
 | Scenario ID | Description |
 |:---|:---|
-| **TS-AUTH-01** | Verify that a traveler can register and sign in with valid credentials, persisting authentication tokens across app restarts. |
-| **TS-TRIP-01** | Verify that an organizer can create a trip and obtain an auto-generated unique 6-character join code. |
-| **TS-TRIP-02** | Verify that a traveler can join an existing trip by entering a valid 6-character code and be assigned the 'member' role. |
-| **TS-ITIN-01** | Verify that a member can add, edit, and reorder an itinerary stop under a specific trip day. |
-| **TS-AI-01** | Verify that the Google Gemini AI assistant synthesizes a valid multi-stop day itinerary based on user prompts. |
-| **TS-GUARD-01** | Verify that Guardian Mode renders an accurate circular geofence polygon matching the configured radius in meters. |
-| **TS-GUARD-02** | Verify that the system detects when a member's GPS coordinates drift outside the geofenced perimeter. |
-| **TS-NOTIF-01** | Verify that adding an itinerary stop or activity triggers a native heads-up push notification banner with the TourGo icon on real devices. |
-| **TS-EXP-01** | Verify that logging an expense automatically divides costs and updates debtor/creditor balances. |
-| **TS-COMM-01** | Verify that tapping an itinerary photo in the community feed opens the full-screen Facebook-style lightbox modal. |
+| **TS-AUTH-01** | Verify that a registered user can log in using valid email credentials and access the TourGo dashboard. |
+| **TS-TRIP-01** | Verify that a user can create/host a new trip with title, destination, dates, and receive an auto-generated alphanumeric join code. |
+| **TS-TRIP-02** | Verify that a user can join an existing trip by entering a code in the Join Trip screen with responsive soft keyboard focus. |
+| **TS-TRIP-03** | Verify that an organizer can delete a trip with native confirmation prompt and cascading child record cleanup. |
+| **TS-EXPL-01** | Verify that a user can browse Philippine destinations, view weather forecasts, and filter by travel categories. |
+| **TS-ITIN-01** | Verify that a trip member can add a day-by-day itinerary stop with activity time, location details, and notes. |
+| **TS-AI-01** | Verify that a user can generate a personalized multi-stop day itinerary using the integrated Google Gemini AI travel planner. |
+| **TS-POLL-01** | Verify that members can create and vote on group decision polls with synchronized live vote tallies. |
+| **TS-CHAT-01** | Verify that group members can send and receive real-time messages within the group chat hub. |
+| **TS-EXP-01** | Verify that a member can log an expense with amount, category, and split breakdown among group members. |
+| **TS-NOTIF-01** | Verify that real-device push notifications and in-app toast banners trigger with the official TourGo icon upon trip updates. |
 
-#### Test Cases Execution Matrix
-| Test Case ID | Test Case Title | Expected & Actual Result | Status |
-|:---|:---|:---|:---:|
-| **TC-01** | User Login With Valid Credentials | User access granted; navigated to Home dashboard with eagle mascot | **Passed** |
-| **TC-02** | Create Trip With Destination & Dates | Trip record created with unique 6-character join code | **Passed** |
-| **TC-03** | Join Trip Using 6-Character Code | User added to trip member list with role 'member' | **Passed** |
-| **TC-04** | Add Itinerary Stop (Day 1, 09:00 AM) | Stop saved to database and rendered chronologically in day schedule | **Passed** |
-| **TC-05** | Generate AI Day-Plan (Gemini) | Structured multi-stop day plan generated and populated into itinerary | **Passed** |
-| **TC-06** | Set Guardian Radius (500 Meters) | Interactive map displays 500m geofence circle centered on destination | **Passed** |
-| **TC-07** | Simulate Member Outside Geofence | System detects perimeter breach and flags member as outside safe zone | **Passed** |
-| **TC-08** | Trigger Trip Activity Push Notification | Native heads-up banner with TourGo logo appears on physical device | **Passed** |
-| **TC-09** | Submit Vote on Group Poll | Vote recorded and progress bar updates in real time for all members | **Passed** |
-| **TC-10** | Log ₱5,000 Group Van Expense | Calculates equal splits (₱1,000/person for 5 members) in ledger | **Passed** |
-| **TC-11** | Tap Itinerary Photo in Community Feed | Full-screen media lightbox modal opens with swipe and zoom gestures | **Passed** |
+#### Test Cases
+| Test Case | Expected Result | Status |
+|:---|:---|:---|
+| Login With Email & Password | User Authenticated & Dashboard Loaded | **Passed** |
+| Host / Create New Trip | Trip Created with Alphanumeric Join Code | **Passed** |
+| Join Trip via Alphanumeric Code | Member Enrolled in Trip & Redirected | **Passed** |
+| Organizer Delete Trip | Trip Removed with Cascade Foreign Key Cleanup | **Passed** |
+| Browse Philippine Destinations | Spots, Weather & Route Estimates Displayed | **Passed** |
+| Add Day-by-Day Itinerary Stop | Stop Saved Under Target Day with Coordinates | **Passed** |
+| Google Gemini AI Day Plan | Smart Multi-Stop Itinerary Generated | **Passed** |
+| Create & Vote on Group Poll | Poll Active with Synchronized Live Counts | **Passed** |
+| Send Real-Time Chat Message | Message Broadcast via Supabase Realtime | **Passed** |
+| Log Expense & Split Bill | Expense Saved and Member Balances Calculated | **Passed** |
+| Receive Activity Push Notification | Push Banner Displays TourGo App Icon & Title | **Passed** |
+
+---
 
 ### Evaluation
 
-#### System Strengths
-- **All-in-One Travel Ecosystem**: Eliminates the need for multiple disparate apps by unifying planning, budgeting, polling, safety, and community sharing into a single client.
-- **Integrated Guardian Safety Geofencing**: Protects travelers in unfamiliar destinations through real-time geofenced perimeter circles and outside-zone drift monitoring.
-- **Zero Location API Overhead**: Employs open-source and keyless providers (OpenStreetMap, Photon, Leaflet, Wikipedia), eliminating recurring map tile and geocoding licensing costs.
-- **Native Hardware Optimization**: Engineered with native Android high-priority notification channels, smooth eagle mascot animations, and hardware-accelerated photo lightboxes.
+#### Strengths
+- **All-in-One Travel Ecosystem**: Unifies trip hosting, destination exploration, AI day planning, real-time chat, polls, expense splitting, and community feed into a single cohesive mobile application.
+- **Real-Time Synchronization**: Instant data delivery powered by Supabase WebSockets for chat, votes, and itinerary updates.
+- **Transparent Expense Management**: Automated calculations remove awkward financial conversations by showing itemized shares and net debt balances.
+- **AI-Powered Planning**: Integration with Google Gemini AI provides fast, tailored multi-stop itineraries suited to traveler preferences.
 
-#### System Limitations
-- **Connectivity Dependency**: Realtime database updates and live location sharing require continuous cellular or Wi-Fi data connectivity.
-- **Non-Transactional Ledger**: The shared expense system computes and manages balances transparently but requires members to complete peer-to-peer payments outside the app.
+#### Weaknesses & Limitations
+- **Internet Dependency**: Active network connectivity is required for real-time cloud data synchronization and push notification triggers.
+- **API Quota Restrictions**: Google Gemini AI and OpenStreetMap public servers have usage limits.
+- **Non-Financial Settlement**: The app manages debt ledgers and records settlements, but does not execute fiat banking transactions.
 
 ---
 
 ## CHAPTER 5 – CONCLUSION AND RECOMMENDATIONS
 
 ### Conclusion
-The TourGo project successfully fulfilled all requirements set forth for the Advance Mobile Application Development (CTELEC4L) final examination. The mobile application delivers a complete, cohesive, and production-ready platform tailored to the unique social dynamics of Filipino travel groups and barkadas.
-
-Every critical subsystem—including secure authentication, trip hosting with 6-character join codes, day-by-day itinerary management with Google Gemini AI integration, Guardian Mode geofencing with perimeter-drift detection, real-device push notifications with branded icons, itemized expense splitting, and a rich community photo feed—was rigorously developed, tested, and verified on physical hardware. Through this project, advanced principles in mobile systems engineering, reactive UI design, cloud relational schema design, WebSocket realtime state management, and native hardware integration were successfully demonstrated.
+The project successfully developed TourGo, a robust and collaborative mobile travel platform that provides groups with an all-in-one environment to plan, coordinate, and enjoy trips together. Core features were fully implemented and validated on physical devices: trip hosting and code joining, destination discovery, collaborative day-by-day itineraries, Google Gemini AI day-plan assistance, real-time group chat, interactive voting polls, shared expense splitting, branded mobile push notifications, and community travel sharing. The project demonstrated the effective integration of cross-platform mobile development, cloud backend synchronization, and artificial intelligence into a cohesive travel utility.
 
 ### Recommendations
-To further enhance TourGo for commercial deployment, the following future extensions are recommended:
-1. **Offline Itinerary Caching & Sync**: Implement an offline-first SQLite cache so travelers in remote Philippine islands with no cellular reception can still review their itinerary schedules.
-2. **Peer-to-Peer Bluetooth Mesh Radar**: Incorporate offline Bluetooth Low Energy (BLE) peer discovery to enable Guardian member tracking even when mobile data is unavailable during mountain hikes.
-3. **Direct E-Wallet Payment Gateway**: Integrate GCash and Maya QR Ph payment APIs to enable one-tap automated debt settlement directly within the shared expense ledger.
-4. **Multilingual Local Language Support**: Provide localized interfaces in Tagalog, Cebuano, and Ilocano to expand accessibility across diverse Philippine regional travel communities.
+1. **Offline-First Synchronization**: Implement offline local data caching with automatic background synchronization when reconnecting to the internet.
+2. **Biometric Authentication**: Incorporate Fingerprint and Face ID authentication for faster and more secure mobile sign-in.
+3. **Transport Booking Integration**: Integrate direct Philippine airline and bus transport APIs for automated ticket and booking imports, plus exportable PDF itinerary summaries.
+4. **Social Sharing**: Add exportable summary stories and Instagram Story sharing for completed trip memories.
