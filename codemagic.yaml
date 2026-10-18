@@ -26,9 +26,9 @@ workflows:
       - name: Install CocoaPods
         script: |
           cd ios && pod install
-      - name: Build unsigned iOS app
+      - name: Build and package unsigned iOS IPA
         script: |
-          WORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
           if [ -z "$WORKSPACE" ]; then
             echo "Error: No .xcworkspace found in ios directory"
             exit 1
@@ -52,18 +52,27 @@ workflows:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
-      - name: Package unsigned IPA
-        script: |
-          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" -maxdepth 1 | head -n 1)
+
+          echo "Locating compiled .app bundle..."
+          APP_PATH=$(find . -name "*.app" | grep "Release-iphoneos" | grep -v "/Pods" | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "Error: No .app file found in build products"
+            APP_PATH=$(find . -name "*.app" | grep -v "/Pods" | head -n 1)
+          fi
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Could not locate .app file. Listing files in build directory:"
+            find build 2>/dev/null | head -n 50
             exit 1
           fi
-          echo "Packaging application from: $APP_PATH"
+
+          echo "Found application bundle at: $APP_PATH"
+          rm -rf Payload app-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -qr app-unsigned.ipa Payload
           rm -rf Payload
-          echo "Generated app-unsigned.ipa successfully!"
+
+          ls -lh app-unsigned.ipa
+          echo "Successfully created app-unsigned.ipa!"
     artifacts:
       - app-unsigned.ipa
