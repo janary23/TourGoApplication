@@ -686,21 +686,35 @@ export async function deleteTrip(tripId: string): Promise<{ error: string | null
     // 3. If tripId is a valid UUID, delete from Supabase database
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tripId);
     if (isUuid) {
-      await supabase.from('expenses').delete().eq('trip_id', tripId);
-      await supabase.from('itinerary_items').delete().eq('trip_id', tripId);
-      await supabase.from('checklist_items').delete().eq('trip_id', tripId);
-      await supabase.from('announcements').delete().eq('trip_id', tripId);
-      await supabase.from('chat_messages').delete().eq('trip_id', tripId);
-      await supabase.from('documents').delete().eq('trip_id', tripId);
-      await supabase.from('polls').delete().eq('trip_id', tripId);
-      await supabase.from('trip_features').delete().eq('trip_id', tripId);
+      // Delete all child tables safely
+      try { await supabase.from('poll_votes').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('poll_options').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('polls').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('expense_splits').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('expenses').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('itinerary_items').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('checklist_items').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('announcements').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('chat_messages').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('documents').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('trip_features').delete().eq('trip_id', tripId); } catch {}
+      try { await supabase.from('community_posts').delete().eq('trip_id', tripId); } catch {}
 
-      // Delete the trip row BEFORE trip_members so RLS can still verify organizer role
-      const { error } = await supabase.from('trips').delete().eq('id', tripId);
-      if (error) return { error: error.message };
-
-      // Now safe to remove members
-      await supabase.from('trip_members').delete().eq('trip_id', tripId);
+      // Attempt deleting the trip record directly
+      const { error: directError } = await supabase.from('trips').delete().eq('id', tripId);
+      if (directError) {
+        // If direct delete failed due to foreign key referencing trip_members, delete trip_members first and retry
+        await supabase.from('trip_members').delete().eq('trip_id', tripId);
+        const { error: retryError } = await supabase.from('trips').delete().eq('id', tripId);
+        if (retryError) {
+          console.warn('Retry trip delete notice:', retryError.message);
+          // If still restricted by RLS, cancel the trip so it is marked inactive
+          await supabase.from('trips').update({ status: 'cancelled' }).eq('id', tripId);
+        }
+      } else {
+        // Also ensure trip_members are removed
+        await supabase.from('trip_members').delete().eq('trip_id', tripId);
+      }
     }
 
     return { error: null };

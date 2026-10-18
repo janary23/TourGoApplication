@@ -18,7 +18,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  View, Text, Modal, Animated, StyleSheet, Pressable, Easing, Platform,
+  View, Text, Modal, Animated, StyleSheet, Pressable, Easing, Platform, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -91,9 +91,30 @@ export function notify(message: string, tone: ToastTone = 'info') {
   _toast?.(message, tone);
 }
 
-/** Ask for confirmation from anywhere. Resolves false if unavailable. */
+/** Ask for confirmation from anywhere. Uses native Alert.alert on mobile to guarantee prompt visibility. */
 export function confirmAction(options: ConfirmOptions): Promise<boolean> {
-  return _confirm ? _confirm(options) : Promise.resolve(false);
+  if (Platform.OS !== 'web') {
+    return new Promise((resolve) => {
+      Alert.alert(
+        options.title,
+        options.message || '',
+        [
+          { text: options.cancelLabel || 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: options.confirmLabel || 'Confirm',
+            style: options.destructive ? 'destructive' : 'default',
+            onPress: () => resolve(true),
+          },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+  }
+  if (_confirm) return _confirm(options);
+  if (typeof window !== 'undefined') {
+    return Promise.resolve(window.confirm(`${options.title}\n\n${options.message || ''}`));
+  }
+  return Promise.resolve(false);
 }
 
 /** Offer a short list of actions. Resolves the chosen index, or -1. */

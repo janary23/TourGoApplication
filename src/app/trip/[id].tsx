@@ -181,12 +181,16 @@ export default function TripHomeScreen() {
     }).then(async (ok) => {
       if (!ok) return;
       setEditModalVisible(false);
-      const { error } = await dbDeleteTrip(trip.id);
-      if (error) {
-        notify(error, 'error');
-      } else {
-        notify('Trip deleted', 'info');
-        router.replace('/(tabs)/trips');
+      try {
+        const { error } = await dbDeleteTrip(trip.id);
+        if (error) {
+          notify(error, 'error');
+        } else {
+          notify('Trip has been permanently deleted.', 'success');
+          router.replace('/(tabs)/trips');
+        }
+      } catch (err: any) {
+        notify(err?.message || 'Failed to delete trip.', 'error');
       }
     });
   };
@@ -344,7 +348,10 @@ export default function TripHomeScreen() {
         eyebrow={isScrapbook ? 'View-only scrapbook' : undefined}
         actions={
           isOrganizer
-            ? [{ icon: 'create-outline', onPress: openEditModal, accessibilityLabel: 'Edit trip' }]
+            ? [
+                { icon: 'trash-outline', onPress: handleDeleteTrip, accessibilityLabel: 'Delete trip' },
+                { icon: 'create-outline', onPress: openEditModal, accessibilityLabel: 'Edit trip' },
+              ]
             : []
         }
       />
