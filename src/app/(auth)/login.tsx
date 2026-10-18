@@ -1,23 +1,17 @@
-// src/app/(auth)/login.tsx
-//
-// The first screen anyone sees. It previously ran its own visual system —
-// pill-shaped 9999-radius inputs and buttons, a hand-rolled type scale, and a
-// bespoke snackbar — none of which match the product a user lands in one tap
-// later. It now composes from the same tokens and primitives as every other
-// screen: `TextField`, `Button`, `Txt`, and the shared toast instead of a
-// second notification system.
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
+  Text,
+  TextInput,
   Image,
-  Pressable,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,13 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedback } from '../../components/ui/Feedback';
-import { Txt, TextField } from '../../components/ui/primitives';
-import { Button } from '../../components/ui/Button';
-import { space, hairline } from '../../components/ui/tokens';
 
-// react-native-web has no native animated module, so `useNativeDriver: true`
-// logs a warning and silently falls back to the JS driver. Declaring the driver
-// per platform keeps that explicit instead of relying on the fallback.
 const NATIVE_DRIVER = Platform.OS !== 'web';
 
 export default function LoginScreen() {
@@ -44,14 +32,19 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: NATIVE_DRIVER }).start();
-  }, []);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: NATIVE_DRIVER }).start();
+  }, [isSignUp]);
 
   // If already logged in, go straight to tabs
   useEffect(() => {
@@ -95,17 +88,17 @@ export default function LoginScreen() {
       if (error) {
         toast(error, 'error');
       } else {
-        toast('Welcome back!', 'success');
-        setTimeout(() => router.replace('/(tabs)'), 500);
+        toast('Login successful! Welcome back.', 'success');
+        setTimeout(() => router.replace('/(tabs)'), 400);
       }
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -113,7 +106,7 @@ export default function LoginScreen() {
         >
           <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
 
-            {/* ── Branding ── */}
+            {/* ── Branding (AniGrow Style) ── */}
             <View style={styles.brandingWrapper}>
               <View style={styles.brandingRow}>
                 <Image
@@ -121,104 +114,214 @@ export default function LoginScreen() {
                   style={[styles.logo, { tintColor: colors.brand }]}
                   resizeMode="contain"
                 />
-                <Txt variant="title" tone="accent">TourGo</Txt>
+                <Text style={[styles.brandName, { color: colors.brand }]}>TourGo</Text>
               </View>
-              <Txt variant="largeTitle" style={{ marginBottom: space.xs }}>
-                {isSignUp ? 'Create account' : 'Welcome back'}
-              </Txt>
-              <Txt variant="subhead" tone="muted">
-                {isSignUp ? 'Join TourGo and start planning trips.' : 'Log in to keep planning your trips.'}
-              </Txt>
+              <Text style={[styles.headline, { color: colors.text }]}>
+                {isSignUp ? 'Create account' : 'Welcome back!'}
+              </Text>
+              <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                {isSignUp
+                  ? 'Join TourGo and start planning memorable trips.'
+                  : 'Please login to your account to continue.'}
+              </Text>
             </View>
 
-            {/* ── Form ── */}
+            {/* ── Form (AniGrow Style) ── */}
             <View style={styles.form}>
               {isSignUp && (
-                <TextField
-                  label="Full name"
-                  icon="person-outline"
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Juan Dela Cruz"
-                  returnKeyType="next"
-                  autoCapitalize="words"
-                  style={{ marginBottom: space.lg }}
-                />
+                <View style={styles.fieldWrapper}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Full Name</Text>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: nameFocused ? colors.brand : colors.cardBorder,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="person-outline"
+                      size={20}
+                      color={nameFocused ? colors.brand : colors.textMuted}
+                    />
+                    <TextInput
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="Juan Dela Cruz"
+                      placeholderTextColor={colors.textMuted}
+                      style={[styles.textInput, { color: colors.text }]}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      onFocus={() => setNameFocused(true)}
+                      onBlur={() => setNameFocused(false)}
+                    />
+                  </View>
+                </View>
               )}
 
-              <TextField
-                label="Email address"
-                icon="mail-outline"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                returnKeyType="next"
-                style={{ marginBottom: space.lg }}
-              />
-
-              <TextField
-                label="Password"
-                icon="lock-closed-outline"
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                secure
-                autoComplete="password"
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
-              />
-
-              {!isSignUp && (
-                <Pressable
-                  onPress={() => toast("Password reset isn't available yet. Contact support for help.", 'info')}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  style={styles.forgotWrapper}
+              {/* Email Address */}
+              <View style={styles.fieldWrapper}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email Address</Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: emailFocused ? colors.brand : colors.cardBorder,
+                    },
+                  ]}
                 >
-                  <Txt variant="emphasis" tone="accent">Forgot password?</Txt>
-                </Pressable>
-              )}
+                  <Ionicons
+                    name="mail-outline"
+                    size={20}
+                    color={emailFocused ? colors.brand : colors.textMuted}
+                  />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.textInput, { color: colors.text }]}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    returnKeyType="next"
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => setEmailFocused(false)}
+                  />
+                </View>
+              </View>
 
-              <Button
-                title={isSignUp ? 'Create account' : 'Log in'}
+              {/* Password */}
+              <View style={styles.fieldWrapper}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Password</Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: passwordFocused ? colors.brand : colors.cardBorder,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color={passwordFocused ? colors.brand : colors.textMuted}
+                  />
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.textInput, { color: colors.text }]}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoComplete="password"
+                    returnKeyType="done"
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
+                    onSubmitEditing={handleSubmit}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color={colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Forgot Password Link (Login only) */}
+                {!isSignUp && (
+                  <TouchableOpacity
+                    style={styles.forgotWrapper}
+                    onPress={() => toast("Password reset isn't available yet. Contact support for assistance.", 'info')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={[styles.forgotText, { color: colors.brand }]}>
+                      Forgot Password?
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Primary Action Button (AniGrow Style) */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: colors.brand },
+                  isLoading && { opacity: 0.75 },
+                ]}
                 onPress={handleSubmit}
-                size="large"
-                loading={isLoading}
-                disabled={isGoogleLoading}
-                style={{ marginTop: space.xl }}
-              />
+                disabled={isLoading || isGoogleLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {isSignUp ? 'Create account' : 'Log In'}
+                  </Text>
+                )}
+              </TouchableOpacity>
 
               {/* Divider */}
               <View style={styles.dividerRow}>
                 <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
-                <Txt variant="caption" tone="muted">OR</Txt>
+                <Text style={[styles.dividerText, { color: colors.textMuted }]}>OR</Text>
                 <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
               </View>
 
-              {/* Continue with Google */}
-              <Button
-                title={isGoogleLoading ? 'Opening Google…' : 'Continue with Google'}
+              {/* Google Social Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[
+                  styles.socialButton,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.cardBorder,
+                  },
+                  isGoogleLoading && { opacity: 0.75 },
+                ]}
                 onPress={handleGoogleSignIn}
-                variant="outline"
-                size="large"
-                loading={isGoogleLoading}
-                disabled={isLoading}
-                icon={<Ionicons name="logo-google" size={16} color="#EA4335" />}
-              />
+                disabled={isLoading || isGoogleLoading}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={18} color="#EA4335" />
+                    <Text style={[styles.socialButtonText, { color: colors.text }]}>
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-              {/* Toggle Sign Up / Log In */}
+              {/* Bottom Auth Link Prompt */}
               <View style={styles.authLinkRow}>
-                <Txt variant="body" tone="muted">
+                <Text style={[styles.authLinkPrompt, { color: colors.textMuted }]}>
                   {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-                </Txt>
-                <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  onPress={() => { setIsSignUp(v => !v); setName(''); setEmail(''); setPassword(''); }}
+                </Text>
+                <TouchableOpacity
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  onPress={() => {
+                    setIsSignUp((v) => !v);
+                    setName('');
+                    setEmail('');
+                    setPassword('');
+                  }}
                 >
-                  <Txt variant="bodyStrong" tone="accent">{isSignUp ? 'Log in' : 'Sign up'}</Txt>
-                </Pressable>
+                  <Text style={[styles.authLinkText, { color: colors.brand }]}>
+                    {isSignUp ? 'Log In' : 'Sign Up'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </Animated.View>
@@ -229,42 +332,178 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { flexGrow: 1 },
+  safeArea: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: space.xl,
-    paddingVertical: space.xl,
+    paddingHorizontal: 28,
+    paddingVertical: 24,
     width: '100%',
-    maxWidth: 460,
+    maxWidth: 480,
     alignSelf: 'center',
   },
 
-  // Branding
-  brandingWrapper: { alignItems: 'flex-start', marginBottom: space.xxl },
-  brandingRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.xl },
-  logo: { width: 34, height: 34 },
-
-  // Form
-  form: { width: '100%' },
-  forgotWrapper: {
-    alignSelf: 'flex-end',
-    marginTop: space.sm,
+  // Branding (AniGrow Style)
+  brandingWrapper: {
+    alignItems: 'flex-start',
+    marginBottom: 32,
+  },
+  brandingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logo: {
+    width: 44,
+    height: 44,
+  },
+  brandName: {
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 44,
+    marginLeft: 12,
+    fontFamily: 'Sora-Bold',
+  },
+  headline: {
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 38,
+    fontFamily: 'Sora-Bold',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    marginTop: 8,
+    lineHeight: 22,
+    fontFamily: 'WorkSans-Regular',
   },
 
+  // Form
+  form: {
+    width: '100%',
+  },
+  fieldWrapper: {
+    marginBottom: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginLeft: 2,
+    fontFamily: 'WorkSans-SemiBold',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    height: 56,
+  },
+  textInput: {
+    flex: 1,
+    marginLeft: 12,
+    height: '100%',
+    fontSize: 15,
+    fontFamily: 'WorkSans-Regular',
+  },
+  eyeButton: {
+    padding: 6,
+  },
+
+  // Forgot Password
+  forgotWrapper: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'WorkSans-SemiBold',
+  },
+
+  // Primary Button (AniGrow Style)
+  primaryButton: {
+    width: '100%',
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    borderRadius: 14,
+    shadowColor: '#028BEB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    color: '#FFFFFF',
+    fontFamily: 'WorkSans-Bold',
+  },
+
+  // Divider
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
-    marginTop: space.xl,
-    marginBottom: space.lg,
+    gap: 12,
+    marginTop: 24,
+    marginBottom: 16,
   },
-  dividerLine: { flex: 1, height: hairline },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'WorkSans-SemiBold',
+  },
 
+  // Social Button
+  socialButton: {
+    width: '100%',
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 10,
+    fontFamily: 'WorkSans-Medium',
+  },
+
+  // Bottom auth link row
   authLinkRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: space.xxl,
+    marginTop: 28,
+    marginBottom: 16,
+  },
+  authLinkPrompt: {
+    fontSize: 14,
+    fontFamily: 'WorkSans-Regular',
+  },
+  authLinkText: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'WorkSans-Bold',
   },
 });
+

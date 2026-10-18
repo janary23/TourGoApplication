@@ -396,6 +396,8 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
     }
     stopFlapLoop();
     if (storageKey) await storageSet(storageKey, 'done');
+    await storageSet('tourgo_walkthrough_seen', 'true');
+    await storageSet('tourgo_walkthrough_completed', 'true');
     onComplete();
   };
 
@@ -466,11 +468,7 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
   };
 
   const handleSkip = async () => {
-    if (currentStep < 3) {
-      setCurrentStep(3);
-    } else {
-      await finishOnboarding();
-    }
+    await finishOnboarding();
   };
 
   // Coordinates for tab bar / top search bar spotlights
@@ -762,11 +760,29 @@ export function WalkthroughModal({ visible, colors, onComplete, storageKey }: Pr
                 ))}
               </View>
 
-              <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
-                <Text style={[styles.skipTxt, { color: currentStep < 4 ? colors.textMuted : 'rgba(255,255,255,0.7)' }]}>
-                  {currentStep < 3 ? 'Skip intro' : currentStep === 3 ? 'Skip' : 'Skip tour'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.topRightControls}>
+                <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
+                  <Text style={[styles.skipTxt, { color: currentStep < 4 ? colors.textMuted : 'rgba(255,255,255,0.7)' }]}>
+                    {currentStep < 3 ? 'Skip intro' : currentStep === 3 ? 'Skip' : 'Skip tour'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.closeIconBtn,
+                    { backgroundColor: currentStep < 4 ? colors.surface : 'rgba(255,255,255,0.2)' },
+                  ]}
+                  onPress={handleSkip}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Close tour"
+                >
+                  <Ionicons
+                    name="close"
+                    size={16}
+                    color={currentStep < 4 ? colors.text : '#FFFFFF'}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Middle Section */}
@@ -971,15 +987,31 @@ export function onboardingKeyFor(uid: string): string {
   return `${ONBOARDING_KEY}.${uid}`;
 }
 
-export async function shouldShowWalkthrough(uid: string): Promise<boolean> {
+export async function shouldShowWalkthrough(uid?: string): Promise<boolean> {
   const { storageGet } = require('../services/storage');
-  const val = await storageGet(onboardingKeyFor(uid));
-  return val !== 'done';
+  try {
+    const globalSeen = await storageGet('tourgo_walkthrough_seen');
+    const globalDone = await storageGet('tourgo_walkthrough_completed');
+    if (globalSeen === 'true' || globalSeen === 'done' || globalDone === 'true' || globalDone === 'done') {
+      return false;
+    }
+    if (!uid) return false;
+    const val = await storageGet(onboardingKeyFor(uid));
+    return val !== 'done';
+  } catch {
+    return false;
+  }
 }
 
-export async function markWalkthroughDone(uid: string): Promise<void> {
+export async function markWalkthroughDone(uid?: string): Promise<void> {
   const { storageSet } = require('../services/storage');
-  await storageSet(onboardingKeyFor(uid), 'done');
+  try {
+    await storageSet('tourgo_walkthrough_seen', 'true');
+    await storageSet('tourgo_walkthrough_completed', 'true');
+    if (uid) {
+      await storageSet(onboardingKeyFor(uid), 'done');
+    }
+  } catch {}
 }
 
 const styles = StyleSheet.create({
@@ -1009,9 +1041,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 8,
     zIndex: 100,
+  },
+  topRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  closeIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   segmentContainer: {
     flexDirection: 'row',
@@ -1019,7 +1063,7 @@ const styles = StyleSheet.create({
     gap: 4,
     flex: 1,
     justifyContent: 'center',
-    marginHorizontal: 12,
+    marginHorizontal: 10,
   },
   segmentLine: {
     height: 4,
@@ -1035,7 +1079,8 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   skipBtn: {
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   skipTxt: {
     ...T.headline,

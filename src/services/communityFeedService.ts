@@ -64,7 +64,7 @@ export interface CommunityPost {
   privacy: 'public' | 'friends';
 }
 
-const STORAGE_KEY_COMMUNITY_POSTS = 'tourgo_community_posts_v2';
+const STORAGE_KEY_COMMUNITY_POSTS = 'tourgo_community_posts_v3';
 
 // ── Realistic seed posts representing popular Philippine itineraries ───────────
 const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [
@@ -79,8 +79,8 @@ const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [
     content: 'The ultimate barkada trip itinerary for Cebu South! 🇵🇭 We did the Kawasan Falls 30ft canyon jump, swam with millions of sardines in Moalboal, and caught the sunrise at Osmeña Peak. Every single stop is timed so you don’t get stuck in traffic.\n\nTap "Adopt Itinerary" below to copy the exact schedule directly into your own trips! 🌊🎒',
     location: 'Moalboal & Badian, Cebu',
     photos: [
-      'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&auto=format&fit=crop&q=80',
     ],
     trip: {
       tripId: 'seed-cebu-trip',
@@ -88,7 +88,7 @@ const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [
       destination: 'Moalboal, Cebu',
       durationDays: 3,
       estimatedBudget: '₱6,500 / pax',
-      coverImage: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&auto=format&fit=crop&q=80',
+      coverImage: 'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800&auto=format&fit=crop&q=80',
       tags: ['Canyoneering', 'Waterfalls', 'Marine Life', 'Barkada'],
       travelersCount: 6,
       checklist: [

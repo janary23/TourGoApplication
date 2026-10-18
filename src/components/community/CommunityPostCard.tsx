@@ -34,6 +34,78 @@ interface CommunityPostCardProps {
   onViewTripDetail?: (tripId: string) => void;
 }
 
+const LOCAL_FALLBACKS: Record<string, any> = {
+  palawan: require('../../../assets/images/explore_palawan.jpg'),
+  cebu: require('../../../assets/images/explore_visayas.jpg'),
+  siargao: require('../../../assets/images/explore_siargao.jpg'),
+  batanes: require('../../../assets/images/explore_batanes.jpg'),
+  baguio: require('../../../assets/images/explore_baguio.jpg'),
+  visayas: require('../../../assets/images/explore_visayas.jpg'),
+  luzon: require('../../../assets/images/explore_luzon.jpg'),
+  mindanao: require('../../../assets/images/explore_mindanao.jpg'),
+  default: require('../../../assets/images/explore_palawan.jpg'),
+};
+
+function getFallbackForText(text?: string) {
+  const t = (text || '').toLowerCase();
+  if (t.includes('palawan') || t.includes('elnido') || t.includes('el nido') || t.includes('coron')) return LOCAL_FALLBACKS.palawan;
+  if (t.includes('siargao')) return LOCAL_FALLBACKS.siargao;
+  if (t.includes('batanes') || t.includes('basco')) return LOCAL_FALLBACKS.batanes;
+  if (t.includes('cebu') || t.includes('moalboal') || t.includes('badian') || t.includes('bohol')) return LOCAL_FALLBACKS.cebu;
+  if (t.includes('baguio') || t.includes('sagada')) return LOCAL_FALLBACKS.baguio;
+  if (t.includes('mindanao') || t.includes('davao')) return LOCAL_FALLBACKS.mindanao;
+  return LOCAL_FALLBACKS.default;
+}
+
+function SafeCommunityImage({
+  uri,
+  destination,
+  style,
+  resizeMode = 'cover',
+}: {
+  uri?: string;
+  destination?: string;
+  style?: any;
+  resizeMode?: any;
+}) {
+  const fallbackSource = getFallbackForText(destination);
+  const isInvalid = !uri || typeof uri !== 'string' || uri.trim() === '' || uri.startsWith('file://') || uri.startsWith('blob:');
+  const [hasError, setHasError] = useState(isInvalid);
+
+  const source = hasError || isInvalid ? fallbackSource : { uri };
+
+  return (
+    <Image
+      source={source}
+      style={style}
+      resizeMode={resizeMode}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
+function SafeAvatar({ uri, name, style }: { uri?: string; name: string; style?: any }) {
+  const isInvalid = !uri || typeof uri !== 'string' || uri.trim() === '' || uri.startsWith('file://') || uri.startsWith('blob:');
+  const [hasError, setHasError] = useState(isInvalid);
+
+  if (hasError || isInvalid) {
+    return (
+      <View style={[style, { backgroundColor: '#028BEB', alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 15 }}>
+          {(name || 'T').charAt(0).toUpperCase()}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function CommunityPostCard({
   post,
   currentUserId,
@@ -110,7 +182,7 @@ export default function CommunityPostCard({
       {/* ── 1. FACEBOOK POST HEADER ── */}
       <View style={styles.header}>
         <View style={styles.avatarWrap}>
-          <Image source={{ uri: post.authorAvatar }} style={styles.avatar} />
+          <SafeAvatar uri={post.authorAvatar} name={post.authorName} style={styles.avatar} />
           {post.isVerified && (
             <View style={[styles.verifiedBadge, { backgroundColor: colors.brand, borderColor: colors.card }]}>
               <Ionicons name="checkmark" size={10} color="#FFFFFF" />
@@ -172,40 +244,46 @@ export default function CommunityPostCard({
       {post.photos && post.photos.length > 0 && (
         <View style={styles.postPhotosWrap}>
           {post.photos.length === 1 ? (
-            <Image
-              source={{ uri: post.photos[0] }}
+            <SafeCommunityImage
+              uri={post.photos[0]}
+              destination={post.location || trip.destination}
               style={styles.singlePhoto}
               resizeMode="cover"
             />
           ) : post.photos.length === 2 ? (
             <View style={styles.twoPhotosRow}>
-              <Image
-                source={{ uri: post.photos[0] }}
+              <SafeCommunityImage
+                uri={post.photos[0]}
+                destination={post.location || trip.destination}
                 style={styles.halfPhoto}
                 resizeMode="cover"
               />
-              <Image
-                source={{ uri: post.photos[1] }}
+              <SafeCommunityImage
+                uri={post.photos[1]}
+                destination={post.location || trip.destination}
                 style={styles.halfPhoto}
                 resizeMode="cover"
               />
             </View>
           ) : (
             <View style={styles.multiPhotosGrid}>
-              <Image
-                source={{ uri: post.photos[0] }}
+              <SafeCommunityImage
+                uri={post.photos[0]}
+                destination={post.location || trip.destination}
                 style={styles.mainGridPhoto}
                 resizeMode="cover"
               />
               <View style={styles.sideGridCol}>
-                <Image
-                  source={{ uri: post.photos[1] }}
+                <SafeCommunityImage
+                  uri={post.photos[1]}
+                  destination={post.location || trip.destination}
                   style={styles.subGridPhoto}
                   resizeMode="cover"
                 />
                 <View style={styles.subGridPhotoWrap}>
-                  <Image
-                    source={{ uri: post.photos[2] }}
+                  <SafeCommunityImage
+                    uri={post.photos[2]}
+                    destination={post.location || trip.destination}
                     style={styles.subGridPhoto}
                     resizeMode="cover"
                   />
@@ -225,7 +303,12 @@ export default function CommunityPostCard({
       <View style={[styles.tripAttachment, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
         {/* Cover with Gradient & Badges */}
         <View style={styles.coverContainer}>
-          <Image source={{ uri: trip.coverImage }} style={styles.coverImage} resizeMode="cover" />
+          <SafeCommunityImage
+            uri={trip.coverImage}
+            destination={trip.destination || trip.title}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.85)']}
             style={StyleSheet.absoluteFillObject}

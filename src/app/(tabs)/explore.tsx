@@ -1154,29 +1154,15 @@ export default function ExploreScreen() {
                     </View>
 
                     {/* Polaroid Scrapbook Grid */}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                       {completedTripAlbums.map((trip: any) => {
                         const rawImg = trip.image || trip.image_url;
                         const isGeneric = !rawImg || rawImg.trim() === '' || rawImg.includes('photo-1469854523086') || rawImg.includes('photo-1542856391');
-                        const imageUrl = isGeneric
-                          ? getPlaceImageUrl(trip.destination || trip.title || 'Philippines')
-                          : rawImg;
+                        const defaultImg = getPlaceImageUrl(trip.destination || trip.title || 'Philippines');
+                        const imageUrl = isGeneric ? defaultImg : rawImg;
                         const cardWidth = (windowWidth - 44) / 2;
                         const buddyCount = trip.members?.length || 1;
 
-                        // This used to cram six separate pieces onto one small
-                        // tile — a role sticker, a "Memory" sticker, destination,
-                        // title, a year+buddies line, an itinerary-count line, an
-                        // "Open memory" link, and a share icon — a summary card
-                        // trying to summarize everything at once, which read as
-                        // busy rather than considered. It's the same anatomy as
-                        // the Wishlist card right above it now: one bare shadowed
-                        // photo, one plain white pill for the single fact worth
-                        // putting on the image (your role), a title, one subtitle
-                        // line. The whole tile opens the trip — a chevron/link row
-                        // saying "Open memory" was redundant with that. Share
-                        // moved to the trip's own screen instead of competing for
-                        // space on the summary tile.
                         return (
                           <TouchableOpacity
                             key={trip.id}
@@ -1185,7 +1171,11 @@ export default function ExploreScreen() {
                             style={{ width: cardWidth, marginBottom: 20 }}
                           >
                             <View style={[{ width: '100%', aspectRatio: 1.05, borderRadius: 16, position: 'relative' }, shadow(2, isDark)]}>
-                              <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 16, opacity: isDark ? 0.9 : 1 }} />
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={{ width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 16, opacity: isDark ? 0.9 : 1 }}
+                                onError={() => {}}
+                              />
 
                               <View style={[
                                 { position: 'absolute', top: 10, left: 10, backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill },

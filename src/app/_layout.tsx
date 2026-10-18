@@ -1338,8 +1338,10 @@ function RootStack() {
 
   // Show walkthrough for new users on first authenticated load (per-account)
   const uid = session?.user?.id;
+  const walkthroughCheckedRef = useRef(false);
   useEffect(() => {
-    if (isLoading || !session || !uid) return;
+    if (isLoading || !session || !uid || walkthroughCheckedRef.current) return;
+    walkthroughCheckedRef.current = true;
     (async () => {
       const shouldShow = await shouldShowWalkthrough(uid);
       if (shouldShow) setShowWalkthrough(true);
@@ -1381,7 +1383,7 @@ function RootStack() {
         colors={colors}
         storageKey={uid ? onboardingKeyFor(uid) : undefined}
         onComplete={() => {
-          if (uid) markWalkthroughDone(uid);
+          markWalkthroughDone(uid);
           setShowWalkthrough(false);
         }}
       />

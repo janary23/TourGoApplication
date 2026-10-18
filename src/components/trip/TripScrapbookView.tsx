@@ -64,6 +64,30 @@ function calculateDays(start?: string | null, end?: string | null): number {
   return Math.max(diff, 1);
 }
 
+function ScrapbookPhotoItem({ uri, defaultUri }: { uri: string; defaultUri: string }) {
+  const [src, setSrc] = useState(uri);
+  return (
+    <Image
+      source={{ uri: src }}
+      onError={() => setSrc(defaultUri)}
+      style={styles.polaroidPhoto}
+      resizeMode="cover"
+    />
+  );
+}
+
+function TimelineThumbnail({ uri, defaultUri }: { uri: string; defaultUri: string }) {
+  const [src, setSrc] = useState(uri);
+  return (
+    <Image
+      source={{ uri: src }}
+      onError={() => setSrc(defaultUri)}
+      style={styles.stopThumbnail}
+      resizeMode="cover"
+    />
+  );
+}
+
 export default function TripScrapbookView({
   trip,
   currentUserName,
@@ -210,6 +234,40 @@ export default function TripScrapbookView({
   const rawCover = trip.image || trip.image_url;
   const isGeneric = !rawCover || String(rawCover).trim() === '' || String(rawCover).includes('photo-1469854523086');
   const [heroImageUri, setHeroImageUri] = useState<string>(isGeneric ? defaultDestinationPhoto : rawCover);
+
+  interface ScrapbookPhoto {
+    id: string;
+    uri: string;
+    caption: string;
+    sub?: string;
+  }
+
+  const scrapbookPhotos = React.useMemo<ScrapbookPhoto[]>(() => {
+    if (Array.isArray(trip.photos) && trip.photos.length > 0) {
+      return trip.photos.map((p: any, i: number) => ({
+        id: `photo-${i}`,
+        uri: typeof p === 'string' ? p : p.uri || p.url,
+        caption: p.caption || `Moment #${i + 1}`,
+        sub: p.date ? formatDate(p.date) : trip.destination,
+      }));
+    }
+    if (itinerary.length > 0) {
+      return itinerary.slice(0, 8).map((stop: any, i: number) => ({
+        id: stop.id || `stop-photo-${i}`,
+        uri: getPlaceImageUrl(stop.title || stop.location || trip.destination),
+        caption: stop.title,
+        sub: `Day ${(typeof stop.dayIndex === 'number' ? stop.dayIndex : 0) + 1} · ${stop.time || 'Highlight'}`,
+      }));
+    }
+    return [
+      {
+        id: 'hero-photo',
+        uri: heroImageUri,
+        caption: trip.title,
+        sub: trip.destination || 'Philippine Adventure',
+      },
+    ];
+  }, [trip.photos, itinerary, trip.title, trip.destination, heroImageUri]);
 
   return (
     <ScrollView
@@ -386,6 +444,54 @@ export default function TripScrapbookView({
         </View>
       )}
 
+      {/* ═══ 4.5 POLAROID SCRAPBOOK MEMORIES GALLERY ═══ */}
+      {scrapbookPhotos.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="camera" size={18} color={colors.brand} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Scrapbook Photo Album</Text>
+            <Text style={[styles.sectionCount, { color: colors.textMuted }]}>({scrapbookPhotos.length})</Text>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.polaroidScroll}>
+            {scrapbookPhotos.map((photo: any, pIdx: number) => {
+              const rotation = pIdx % 3 === 0 ? '-1.5deg' : pIdx % 3 === 1 ? '1.5deg' : '-0.5deg';
+              return (
+                <View
+                  key={photo.id || pIdx}
+                  style={[
+                    styles.polaroidCard,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.cardBorder,
+                      transform: [{ rotate: rotation }],
+                    },
+                  ]}
+                >
+                  {/* Washi Tape Accent */}
+                  <View style={styles.washiTape} />
+
+                  <View style={styles.polaroidPhotoWrap}>
+                    <ScrapbookPhotoItem uri={photo.uri} defaultUri={defaultDestinationPhoto} />
+                  </View>
+
+                  <View style={styles.polaroidMeta}>
+                    <Text style={[styles.polaroidCaption, { color: colors.text }]} numberOfLines={1}>
+                      {photo.caption}
+                    </Text>
+                    {!!photo.sub && (
+                      <Text style={[styles.polaroidSub, { color: colors.textMuted }]} numberOfLines={1}>
+                        {photo.sub}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* ═══ 5. CHRONOLOGICAL ITINERARY TIMELINE ═══ */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -452,10 +558,9 @@ export default function TripScrapbookView({
                                 </Text>
                               )}
                             </View>
-                            <Image
-                              source={{ uri: getPlaceImageUrl(stop.title || stop.location || trip.destination) }}
-                              style={styles.stopThumbnail}
-                              resizeMode="cover"
+                            <TimelineThumbnail
+                              uri={getPlaceImageUrl(stop.title || stop.location || trip.destination)}
+                              defaultUri={defaultDestinationPhoto}
                             />
                           </View>
                         </View>
@@ -585,10 +690,12 @@ export default function TripScrapbookView({
         </Text>
       </View>
 
-      {/* Off-screen capture target */}
-      <View collapsable={false} style={styles.captureHost} pointerEvents="none">
-        <View ref={shareCardRef} collapsable={false}>
-          <TripShareCard trip={trip} />
+      {/* Off-screen capture target safely encapsulated */}
+      <View style={styles.captureHostWrapper} pointerEvents="none">
+        <View collapsable={false} style={styles.captureHost}>
+          <View ref={shareCardRef} collapsable={false}>
+            <TripShareCard trip={trip} />
+          </View>
         </View>
       </View>
 
@@ -815,12 +922,75 @@ const styles = StyleSheet.create({
   },
 
   // Share Actions Bar
+  captureHostWrapper: {
+    width: 0,
+    height: 0,
+    overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
   captureHost: {
     position: 'absolute',
     left: -9999,
     top: 0,
     width: SHARE_CARD_WIDTH,
     opacity: 0,
+  },
+  // Polaroid Photo Album
+  polaroidScroll: {
+    paddingHorizontal: space.sm,
+    paddingTop: space.md,
+    paddingBottom: space.md,
+    gap: 14,
+  },
+  polaroidCard: {
+    width: 154,
+    padding: 8,
+    paddingBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+    position: 'relative',
+  },
+  washiTape: {
+    width: 36,
+    height: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.55)',
+    borderRadius: 2,
+    position: 'absolute',
+    top: -5,
+    zIndex: 10,
+    transform: [{ rotate: '-3deg' }],
+  },
+  polaroidPhotoWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  polaroidPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  polaroidMeta: {
+    width: '100%',
+    marginTop: 8,
+    paddingHorizontal: 2,
+  },
+  polaroidCaption: {
+    ...T.emphasis,
+    fontSize: 13,
+  },
+  polaroidSub: {
+    ...T.micro,
+    marginTop: 2,
   },
   shareActionBar: {
     flexDirection: 'row',

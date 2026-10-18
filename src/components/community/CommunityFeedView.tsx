@@ -120,7 +120,19 @@ export default function CommunityFeedView({
         {/* ── 1. FACEBOOK-STYLE "WHAT'S ON YOUR MIND?" COMPOSER BOX ── */}
         <View style={[styles.composerCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.composerTopRow}>
-            <Image source={{ uri: currentUserAvatar }} style={styles.composerAvatar} />
+            {currentUserAvatar ? (
+              <Image
+                source={{ uri: currentUserAvatar }}
+                style={styles.composerAvatar}
+                onError={() => {}}
+              />
+            ) : (
+              <View style={[styles.composerAvatar, { backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
+                  {(currentUserName || 'T').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <TouchableOpacity
               onPress={() => setIsCreateModalVisible(true)}
               style={[styles.composerInputBtn, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
