@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { storageSet } from '../../services/storage';
 import { WalkthroughModal, shouldShowWalkthrough } from '../../components/WalkthroughModal';
 import { PreferencesOnboarding } from '../../components/PreferencesOnboarding';
+import NotificationSettingsModal from '../../components/notifications/NotificationSettingsModal';
 import ProfileInfoCard from '../../components/profile/ProfileInfoCard';
 import ProfileSettingRow from '../../components/profile/ProfileSettingRow';
 import { notify, confirmAction } from '../../components/ui/Feedback';
@@ -26,6 +27,7 @@ export default function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [name, setName] = useState(authProfile?.name || '');
   const [email, setEmail] = useState(authProfile?.email || '');
   const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
@@ -226,7 +228,7 @@ export default function ProfileScreen() {
               title="Push Notifications"
               subtitle="Manage alerts & reminders"
               colors={colors}
-              onPress={() => notify('Notification settings are coming soon.', 'info')}
+              onPress={() => setShowNotificationSettings(true)}
             />
 
             {/* GPS Tracking */}
@@ -327,6 +329,10 @@ export default function ProfileScreen() {
         colors={colors}
         isDark={isDark}
         onComplete={() => setShowPreferences(false)}
+      />
+      <NotificationSettingsModal
+        visible={showNotificationSettings}
+        onClose={() => setShowNotificationSettings(false)}
       />
     </SafeAreaView>
   );

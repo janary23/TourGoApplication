@@ -26,6 +26,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { storageSet } from '../../services/storage';
 import { WalkthroughModal } from '../WalkthroughModal';
 import { PreferencesOnboarding } from '../PreferencesOnboarding';
+import NotificationSettingsModal from '../notifications/NotificationSettingsModal';
 import ProfileInfoCard from './ProfileInfoCard';
 import ProfileSettingRow from './ProfileSettingRow';
 import { notify, confirmAction } from '../ui/Feedback';
@@ -55,6 +56,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
   const [isEditing, setIsEditing] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [name, setName] = useState(authProfile?.name || '');
   const [email, setEmail] = useState(authProfile?.email || '');
   const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
@@ -301,7 +303,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Push Notifications"
                 subtitle="Manage alerts & reminders"
                 colors={colors}
-                onPress={() => notify('Notification settings are coming soon.', 'info')}
+                onPress={() => setShowNotificationSettings(true)}
               />
 
               {/* GPS Tracking */}
@@ -414,6 +416,11 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
       isDark={isDark}
       visible={showPreferences}
       onComplete={() => setShowPreferences(false)}
+    />
+
+    <NotificationSettingsModal
+      visible={showNotificationSettings}
+      onClose={() => setShowNotificationSettings(false)}
     />
   </>
   );

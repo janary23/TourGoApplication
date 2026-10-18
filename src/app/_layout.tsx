@@ -31,6 +31,7 @@ import * as Notifications from 'expo-notifications';
 import {
   registerForPushNotificationsAsync,
   startTripActivityNotificationListener,
+  setupNotificationChannels,
 } from '../services/notificationService';
 import { getTrips } from '../services/tripService';
 import NotificationToast from '../components/notifications/NotificationToast';
@@ -1465,6 +1466,12 @@ function RootStack() {
       if (shouldShow) setShowWalkthrough(true);
     })();
   }, [session, isLoading, uid]);
+
+  // Set up Notification Channels & Permissions on initial mount
+  useEffect(() => {
+    setupNotificationChannels();
+    registerForPushNotificationsAsync();
+  }, []);
 
   // Set up Push Notifications and Realtime Trip Activity Listeners
   useEffect(() => {

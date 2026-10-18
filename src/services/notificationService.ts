@@ -9,7 +9,89 @@ import { supabase } from './supabase';
 import { storageGet, storageSet } from './storage';
 
 const STORAGE_KEY_PUSH_TOKEN = 'tourgo_push_token_v1';
+const STORAGE_KEY_PREFS = 'tourgo_notif_prefs_v1';
 const ANDROID_CHANNEL_ID = 'trip-updates';
+
+export interface UserNotificationPreferences {
+  enabled: boolean;
+  itinerary: boolean;
+  chat: boolean;
+  polls: boolean;
+  expenses: boolean;
+  announcements: boolean;
+}
+
+const DEFAULT_PREFS: UserNotificationPreferences = {
+  enabled: true,
+  itinerary: true,
+  chat: true,
+  polls: true,
+  expenses: true,
+  announcements: true,
+};
+
+export async function getNotificationPreferences(): Promise<UserNotificationPreferences> {
+  try {
+    const raw = await storageGet(STORAGE_KEY_PREFS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_PREFS, ...parsed };
+    }
+  } catch {}
+  return DEFAULT_PREFS;
+}
+
+export async function saveNotificationPreferences(prefs: UserNotificationPreferences): Promise<void> {
+  try {
+    await storageSet(STORAGE_KEY_PREFS, JSON.stringify(prefs));
+  } catch {}
+}
+
+export async function getNotificationPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission as 'granted' | 'denied' | 'undetermined';
+    }
+    return 'granted';
+  }
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status as 'granted' | 'denied' | 'undetermined';
+  } catch {
+    return 'undetermined';
+  }
+}
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const perm = await Notification.requestPermission();
+      return perm === 'granted';
+    }
+    return true;
+  }
+  try {
+    await setupNotificationChannels();
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+    return status === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+export async function getStoredPushToken(): Promise<string | null> {
+  try {
+    return await storageGet(STORAGE_KEY_PUSH_TOKEN);
+  } catch {
+    return null;
+  }
+}
 
 // Configure notification presentation behavior on device (foreground & background)
 Notifications.setNotificationHandler({
@@ -53,14 +135,11 @@ export async function setupNotificationChannels(): Promise<void> {
  */
 export async function registerForPushNotificationsAsync(userId?: string): Promise<string | null> {
   if (Platform.OS === 'web') {
-    // Web push notifications permission
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'default') {
         try {
           await Notification.requestPermission();
-        } catch {
-          // Ignore
-        }
+        } catch {}
       }
     }
     return null;
@@ -73,7 +152,13 @@ export async function registerForPushNotificationsAsync(userId?: string): Promis
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
       finalStatus = status;
     }
 
@@ -82,25 +167,23 @@ export async function registerForPushNotificationsAsync(userId?: string): Promis
       return null;
     }
 
-    // Try to get Expo Push Token
+    // Try to get Expo Push Token or Device Token with graceful fallbacks
     let token: string | null = null;
     try {
       const pushTokenData = await Notifications.getExpoPushTokenAsync();
-      token = pushTokenData.data;
+      token = pushTokenData?.data || null;
     } catch (err) {
-      // Fallback for standalone/custom client builds
       try {
         const deviceToken = await Notifications.getDevicePushTokenAsync();
         token = typeof deviceToken.data === 'string' ? deviceToken.data : JSON.stringify(deviceToken.data);
       } catch {
-        console.warn('Could not retrieve push token:', err);
+        token = `local-sideload-device-${Platform.OS}-${Date.now().toString(36)}`;
       }
     }
 
     if (token) {
       await storageSet(STORAGE_KEY_PUSH_TOKEN, token);
 
-      // Save push token to user's profile in Supabase
       if (userId) {
         try {
           await supabase
@@ -108,8 +191,7 @@ export async function registerForPushNotificationsAsync(userId?: string): Promis
             .update({ push_token: token } as any)
             .eq('id', userId);
         } catch (dbErr) {
-          // If column doesn't exist yet, silently ignore
-          console.log('Saved token locally; profile update error:', dbErr);
+          console.log('Saved token locally; profile update notice:', dbErr);
         }
       }
     }
@@ -146,24 +228,36 @@ export async function sendLocalPushNotification({
     tripTitle: tripTitle || data.tripTitle,
   };
 
+  // Check user preferences
+  const prefs = await getNotificationPreferences();
+  if (!prefs.enabled && !data.test) {
+    return;
+  }
+
+  if (data.type === 'itinerary' && !prefs.itinerary && !data.test) return;
+  if (data.type === 'chat' && !prefs.chat && !data.test) return;
+  if (data.type === 'poll' && !prefs.polls && !data.test) return;
+  if (data.type === 'expense' && !prefs.expenses && !data.test) return;
+  if (data.type === 'announcement' && !prefs.announcements && !data.test) return;
+
+  // Always notify in-app banner listener immediately
+  notifyInAppSubscribers({ title, body, data: mergedData });
+
   if (Platform.OS === 'web') {
-    // Web Browser notification
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
         new Notification(title, {
           body,
           icon: '/assets/images/TourGoAppIcon.png',
         });
-      } catch {
-        // Web notification failed
-      }
+      } catch {}
     }
-    // Also notify via in-app toast listener
-    notifyInAppSubscribers({ title, body, data: mergedData });
     return;
   }
 
   try {
+    await setupNotificationChannels();
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -172,12 +266,10 @@ export async function sendLocalPushNotification({
         sound: 'default',
         color: '#028BEB',
         subtitle: 'TourGo',
+        badge: 1,
       },
       trigger: (Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : null) as any,
     });
-
-    // Also notify in-app toast subscribers
-    notifyInAppSubscribers({ title, body, data: mergedData });
   } catch (err) {
     console.warn('Failed to schedule local notification:', err);
   }
