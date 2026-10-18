@@ -5,6 +5,9 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/env';
 
+const rawUrl = (SUPABASE_URL as string) || '';
+const rawKey = (SUPABASE_ANON_KEY as string) || '';
+
 const isValidUrl = (url?: string) => {
   try {
     return Boolean(url && new URL(url));
@@ -13,8 +16,8 @@ const isValidUrl = (url?: string) => {
   }
 };
 
-const safeUrl = isValidUrl(SUPABASE_URL) ? SUPABASE_URL : 'https://placeholder.supabase.co';
-const safeKey = SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY' ? SUPABASE_ANON_KEY : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+const safeUrl = isValidUrl(rawUrl) ? rawUrl : 'https://placeholder.supabase.co';
+const safeKey = rawKey && rawKey !== 'YOUR_SUPABASE_ANON_KEY' ? rawKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
 
 export const supabase = createClient(safeUrl, safeKey, {
   auth: {
@@ -24,4 +27,5 @@ export const supabase = createClient(safeUrl, safeKey, {
     detectSessionInUrl: false,
   },
 });
+
 
