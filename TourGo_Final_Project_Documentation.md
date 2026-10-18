@@ -147,6 +147,23 @@ The database architecture is designed in Supabase (PostgreSQL 15). A `profile` c
 | `last_location_time` | Timestamptz | Timestamp of most recent location update |
 | `joined_at` | Timestamptz | Timestamp when the user joined the trip |
 
+#### Table: `trip_poll_options`
+| Field | Type | Description |
+|:---|:---|:---|
+| `id` | UUID (PK) | Unique poll option ID |
+| `trip_id` | UUID (FK) | Trip being polled referencing `trips.id` |
+| `type` | Text | Poll category ('destination', 'date', or 'activity') |
+| `title` | Text | Proposed option title or description |
+| `created_by` | UUID (FK) | Member who proposed the option referencing `profiles.id` |
+
+#### Table: `trip_poll_votes`
+| Field | Type | Description |
+|:---|:---|:---|
+| `id` | UUID (PK) | Unique vote record ID |
+| `option_id` | UUID (FK) | Voted option referencing `trip_poll_options.id` |
+| `user_id` | UUID (FK) | Member who cast the vote referencing `profiles.id` |
+| `created_at` | Timestamptz | Timestamp when the vote was submitted |
+
 #### Table: `itinerary_items`
 | Field | Type | Description |
 |:---|:---|:---|
@@ -158,7 +175,7 @@ The database architecture is designed in Supabase (PostgreSQL 15). A `profile` c
 | `tag` | Text | Activity category (TRANSPORT, ACTIVITY, FOOD, MEETUP) |
 | `latitude / longitude`| Numeric | Verified geographic coordinates of the stop |
 | `cost` | Numeric | Estimated budget allocation for the activity |
-| `created_by` | UUID (FK) | Member who logged the stop |
+| `created_by` | UUID (FK) | Member who logged the stop referencing `profiles.id` |
 
 #### Table: `expenses`
 | Field | Type | Description |
@@ -172,11 +189,22 @@ The database architecture is designed in Supabase (PostgreSQL 15). A `profile` c
 | `split_mode` | Text | Split mode ('equal', 'custom', or 'solo') |
 | `created_at` | Timestamptz | Timestamp when expense was recorded |
 
-#### Table: `community_posts`
+#### Table: `expense_settlements`
 | Field | Type | Description |
 |:---|:---|:---|
-| `id` | UUID (PK) | Unique community post identifier |
-| `trip_id` | UUID (FK) | Optional referenced trip for itinerary posts |
+| `id` | UUID (PK) | Unique settlement transaction ID |
+| `trip_id` | UUID (FK) | Associated trip referencing `trips.id` |
+| `debtor_id` | UUID (FK) | Member who owed and paid referencing `profiles.id` |
+| `creditor_id` | UUID (FK) | Member who received the payment referencing `profiles.id` |
+| `amount` | Numeric | Settled amount in PHP |
+| `proof_url` | Text | URL of payment proof receipt screenshot |
+| `status` | Text | Settlement status ('pending', 'verified', 'rejected') |
+
+#### Table: `community_posts` (Trip Recaps)
+| Field | Type | Description |
+|:---|:---|:---|
+| `id` | UUID (PK) | Unique community post / recap identifier |
+| `trip_id` | UUID (FK) | Optional referenced trip for itinerary posts referencing `trips.id` |
 | `author_id` | UUID (FK) | Author user ID referencing `profiles.id` |
 | `author_name` | Text | Display name of the author |
 | `destination` | Text | Featured destination name |

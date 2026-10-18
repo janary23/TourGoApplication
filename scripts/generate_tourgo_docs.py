@@ -397,7 +397,28 @@ def create_tourgo_document(output_path="TourGo_Final_Project_Documentation.docx"
     ]
     build_table(["Field", "Type", "Description"], tbl_members, [1.5, 1.5, 3.5])
 
-    # Table 4: itinerary_items
+    # Table 4: trip_poll_options
+    add_sub_heading("Table: trip_poll_options")
+    tbl_poll_options = [
+        ("id", "UUID (PK)", "Unique poll option ID"),
+        ("trip_id", "UUID (FK)", "Trip being polled referencing trips.id"),
+        ("type", "Text", "Poll category ('destination', 'date', or 'activity')"),
+        ("title", "Text", "Proposed option title or description"),
+        ("created_by", "UUID (FK)", "Member who proposed the option referencing profiles.id"),
+    ]
+    build_table(["Field", "Type", "Description"], tbl_poll_options, [1.5, 1.5, 3.5])
+
+    # Table 5: trip_poll_votes
+    add_sub_heading("Table: trip_poll_votes")
+    tbl_poll_votes = [
+        ("id", "UUID (PK)", "Unique vote record ID"),
+        ("option_id", "UUID (FK)", "Voted option referencing trip_poll_options.id"),
+        ("user_id", "UUID (FK)", "Member who cast the vote referencing profiles.id"),
+        ("created_at", "Timestamptz", "Timestamp when the vote was submitted"),
+    ]
+    build_table(["Field", "Type", "Description"], tbl_poll_votes, [1.5, 1.5, 3.5])
+
+    # Table 6: itinerary_items
     add_sub_heading("Table: itinerary_items")
     tbl_itin = [
         ("id", "UUID (PK)", "Unique itinerary stop identifier"),
@@ -408,11 +429,11 @@ def create_tourgo_document(output_path="TourGo_Final_Project_Documentation.docx"
         ("tag", "Text", "Activity category (TRANSPORT, ACTIVITY, FOOD, MEETUP)"),
         ("latitude / longitude", "Numeric", "Verified geographic coordinates of the stop"),
         ("cost", "Numeric", "Estimated budget allocation for the activity"),
-        ("created_by", "UUID (FK)", "Member who logged the stop"),
+        ("created_by", "UUID (FK)", "Member who logged the stop referencing profiles.id"),
     ]
     build_table(["Field", "Type", "Description"], tbl_itin, [1.5, 1.5, 3.5])
 
-    # Table 5: expenses
+    # Table 7: expenses
     add_sub_heading("Table: expenses")
     tbl_exp = [
         ("id", "UUID (PK)", "Unique expense transaction identifier"),
@@ -426,11 +447,24 @@ def create_tourgo_document(output_path="TourGo_Final_Project_Documentation.docx"
     ]
     build_table(["Field", "Type", "Description"], tbl_exp, [1.5, 1.5, 3.5])
 
-    # Table 6: community_posts
-    add_sub_heading("Table: community_posts")
+    # Table 8: expense_settlements
+    add_sub_heading("Table: expense_settlements")
+    tbl_settlements = [
+        ("id", "UUID (PK)", "Unique settlement transaction ID"),
+        ("trip_id", "UUID (FK)", "Associated trip referencing trips.id"),
+        ("debtor_id", "UUID (FK)", "Member who owed and paid referencing profiles.id"),
+        ("creditor_id", "UUID (FK)", "Member who received the payment referencing profiles.id"),
+        ("amount", "Numeric", "Settled amount in PHP"),
+        ("proof_url", "Text", "URL of payment proof receipt screenshot"),
+        ("status", "Text", "Settlement status ('pending', 'verified', 'rejected')"),
+    ]
+    build_table(["Field", "Type", "Description"], tbl_settlements, [1.5, 1.5, 3.5])
+
+    # Table 9: community_posts (Trip Recaps)
+    add_sub_heading("Table: community_posts (Trip Recaps)")
     tbl_posts = [
-        ("id", "UUID (PK)", "Unique community post identifier"),
-        ("trip_id", "UUID (FK)", "Optional referenced trip for itinerary posts"),
+        ("id", "UUID (PK)", "Unique community post / recap identifier"),
+        ("trip_id", "UUID (FK)", "Optional referenced trip for itinerary posts referencing trips.id"),
         ("author_id", "UUID (FK)", "Author user ID referencing profiles.id"),
         ("author_name", "Text", "Display name of the author"),
         ("destination", "Text", "Featured destination name"),
@@ -584,8 +618,13 @@ def create_tourgo_document(output_path="TourGo_Final_Project_Documentation.docx"
     add_bullet("3. Direct E-Wallet Payment Gateway", "Integrate GCash and Maya QR Ph payment APIs to enable one-tap automated debt settlement directly within the shared expense ledger.")
     add_bullet("4. Multilingual Local Language Support", "Provide localized interfaces in Tagalog, Cebuano, and Ilocano to expand accessibility across diverse Philippine regional travel communities.")
 
-    doc.save(output_path)
-    print(f"Document successfully created and saved to: {output_path}")
+    try:
+        doc.save(output_path)
+        print(f"Document successfully created and saved to: {output_path}")
+    except PermissionError:
+        fallback_path = output_path.replace(".docx", "_Updated.docx")
+        doc.save(fallback_path)
+        print(f"Notice: '{output_path}' is currently open in Microsoft Word. Saved to '{fallback_path}'. Close Word to overwrite.")
 
 if __name__ == "__main__":
     create_tourgo_document()
