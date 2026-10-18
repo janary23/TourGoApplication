@@ -10,7 +10,10 @@ workflows:
     scripts:
       - name: Prepare environment configuration
         script: |
-          if [ ! -f "src/config/env.ts" ]; then
+          if [ -n "$ENV_FILE_BASE64" ]; then
+            echo "Injecting src/config/env.ts from Codemagic secret variable..."
+            echo "$ENV_FILE_BASE64" | base64 --decode > src/config/env.ts
+          elif [ ! -f "src/config/env.ts" ]; then
             echo "src/config/env.ts not found in git repository."
             if [ -f "src/config/env.example.ts" ]; then
               echo "Creating fallback src/config/env.ts from src/config/env.example.ts to ensure bundling succeeds..."
