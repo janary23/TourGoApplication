@@ -14,7 +14,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.janary23.tourgo",
+      "entitlements": {
+        "aps-environment": "development"
+      },
       "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
         "NSLocationWhenInUseUsageDescription": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\".",
         "NSCameraUsageDescription": "TourGo needs access to your camera to take photos for your profile, trip expenses, and community posts.",
         "NSPhotoLibraryUsageDescription": "TourGo needs access to your photos to select and save images for your profile, trip expenses, and community posts.",
@@ -40,7 +44,9 @@
         "expo-notifications",
         {
           "icon": "./assets/images/TourGoAppIcon.png",
-          "color": "#028BEB"
+          "color": "#028BEB",
+          "mode": "development",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "@react-native-community/datetimepicker",
@@ -71,6 +77,11 @@
       ],
       "expo-web-browser"
     ],
-    "scheme": "tourgo"
+    "scheme": "tourgo",
+    "extra": {
+      "eas": {
+        "projectId": "808bab91-d6b8-427f-8864-8d395bf58699"
+      }
+    }
   }
 }

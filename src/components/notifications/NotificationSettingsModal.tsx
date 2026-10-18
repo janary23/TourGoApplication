@@ -77,16 +77,24 @@ export default function NotificationSettingsModal({
     return () => sub.remove();
   }, [visible, loadData]);
 
-  // When user clicks enable or open settings, request permission and open system settings
+  // When user clicks enable or open settings, request permission or open system settings if denied
   const handleOpenDeviceSettings = async () => {
-    try {
-      await requestNotificationPermission();
-    } catch {}
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      Linking.openSettings().catch(() => {
-        notify('Unable to open device settings.', 'error');
-      });
+    if (permissionStatus === 'denied') {
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        Linking.openSettings().catch(() => {
+          notify('Unable to open device settings.', 'error');
+        });
+      }
+      return;
     }
+
+    try {
+      const granted = await requestNotificationPermission();
+      setPermissionStatus(granted ? 'granted' : 'denied');
+      if (!granted && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+        Linking.openSettings().catch(() => {});
+      }
+    } catch {}
   };
 
   const updatePref = (key: keyof UserNotificationPreferences, value: boolean) => {
@@ -97,8 +105,11 @@ export default function NotificationSettingsModal({
 
   const handleMasterToggle = async (val: boolean) => {
     if (val && permissionStatus !== 'granted') {
-      // Prompt and open device settings as requested
-      handleOpenDeviceSettings();
+      const granted = await requestNotificationPermission();
+      setPermissionStatus(granted ? 'granted' : 'denied');
+      if (!granted && permissionStatus === 'denied') {
+        handleOpenDeviceSettings();
+      }
     }
     updatePref('enabled', val);
   };
@@ -106,13 +117,22 @@ export default function NotificationSettingsModal({
   const handleTestNotification = async () => {
     setIsTesting(true);
     try {
+      if (permissionStatus !== 'granted') {
+        const granted = await requestNotificationPermission();
+        setPermissionStatus(granted ? 'granted' : 'denied');
+        if (!granted) {
+          notify('Please grant notification permission in iOS Settings to see system banners.', 'info');
+        }
+      }
+
       await sendLocalPushNotification({
         title: 'TourGo • Push Notifications Active',
         body: 'Push alerts and trip updates are working on your device! 🚀',
         data: { test: true },
       });
       notify('Test notification triggered!', 'success');
-    } catch {
+    } catch (err) {
+      console.warn('Test notification failed:', err);
       notify('Failed to trigger test notification.', 'error');
     } finally {
       setIsTesting(false);

@@ -5,6 +5,7 @@
 
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { supabase } from './supabase';
 import { storageGet, storageSet } from './storage';
 
@@ -77,10 +78,13 @@ export async function requestNotificationPermission(): Promise<boolean> {
         allowAlert: true,
         allowBadge: true,
         allowSound: true,
+        allowDisplayInCarPlay: true,
+        provideAppNotificationSettings: true,
       },
     });
     return status === 'granted';
-  } catch {
+  } catch (err) {
+    console.warn('requestNotificationPermission failed:', err);
     return false;
   }
 }
@@ -93,16 +97,22 @@ export async function getStoredPushToken(): Promise<string | null> {
   }
 }
 
-// Configure notification presentation behavior on device (foreground & background)
+// Configure notification presentation behavior on device (foreground banner & sounds)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
     priority: Notifications.AndroidNotificationPriority.MAX,
   }),
+  handleSuccess: (id) => {
+    // Presented successfully on device
+  },
+  handleError: (id, error) => {
+    console.warn(`Error handling notification ${id}:`, error);
+  },
 });
 
 /**
@@ -157,26 +167,38 @@ export async function registerForPushNotificationsAsync(userId?: string): Promis
           allowAlert: true,
           allowBadge: true,
           allowSound: true,
+          allowDisplayInCarPlay: true,
+          provideAppNotificationSettings: true,
         },
       });
       finalStatus = status;
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Push notification permission not granted');
+      console.log('Push notification permission not granted on device');
       return null;
     }
 
     // Try to get Expo Push Token or Device Token with graceful fallbacks
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      Constants?.easConfig?.projectId ??
+      (Constants as any)?.manifest2?.extra?.eas?.projectId ??
+      (Constants as any)?.manifest?.extra?.eas?.projectId;
+
     let token: string | null = null;
     try {
-      const pushTokenData = await Notifications.getExpoPushTokenAsync();
+      const pushTokenData = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
       token = pushTokenData?.data || null;
     } catch (err) {
+      console.log('Notice: Expo Push Token service not reachable or unsigned build, falling back:', err);
       try {
         const deviceToken = await Notifications.getDevicePushTokenAsync();
         token = typeof deviceToken.data === 'string' ? deviceToken.data : JSON.stringify(deviceToken.data);
-      } catch {
+      } catch (devErr) {
+        console.log('Notice: Native APNs token unavailable in unsigned/sideloaded build:', devErr);
         token = `local-sideload-device-${Platform.OS}-${Date.now().toString(36)}`;
       }
     }
@@ -257,6 +279,24 @@ export async function sendLocalPushNotification({
 
   try {
     await setupNotificationChannels();
+
+    // Verify permission on native device before scheduling
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const { status: reqStatus } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: true,
+          provideAppNotificationSettings: true,
+        },
+      });
+      if (reqStatus !== 'granted') {
+        console.log('Cannot display native notification: permission not granted');
+        return;
+      }
+    }
 
     await Notifications.scheduleNotificationAsync({
       content: {

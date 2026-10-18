@@ -54,9 +54,13 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const [isEditing, setIsEditing] = useState(false);
-  const [showWalkthrough, setShowWalkthrough] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  type SubModalType = 'walkthrough' | 'preferences' | 'notifications' | null;
+  const [activeSubModal, setActiveSubModal] = useState<SubModalType>(null);
+
+  const openSubModal = (modal: SubModalType) => {
+    setActiveSubModal(modal);
+    onClose();
+  };
   const [name, setName] = useState(authProfile?.name || '');
   const [email, setEmail] = useState(authProfile?.email || '');
   const [homeCity, setHomeCity] = useState(authProfile?.home_city || '');
@@ -146,11 +150,11 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
     }, 200);
   };
 
-  if (!visible && !showWalkthrough && !showPreferences) return null;
+  if (!visible && !activeSubModal) return null;
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Modal visible={visible && !activeSubModal} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <TouchableWithoutFeedback onPress={onClose}>
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} />
@@ -303,7 +307,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Push Notifications"
                 subtitle="Manage alerts & reminders"
                 colors={colors}
-                onPress={() => setShowNotificationSettings(true)}
+                onPress={() => openSubModal('notifications')}
               />
 
               {/* GPS Tracking */}
@@ -330,10 +334,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Travel Preferences"
                 subtitle="Pick what you love — powers recommendations"
                 colors={colors}
-                onPress={() => {
-                  onClose();
-                  setTimeout(() => setShowPreferences(true), 150);
-                }}
+                onPress={() => openSubModal('preferences')}
               />
 
               {/* Subscription */}
@@ -354,10 +355,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Replay App Tour"
                 subtitle="See the walkthrough again"
                 colors={colors}
-                onPress={() => {
-                  onClose();
-                  setTimeout(() => setShowWalkthrough(true), 150);
-                }}
+                onPress={() => openSubModal('walkthrough')}
               />
 
               {/* Help Center & FAQ */}
@@ -404,9 +402,9 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
 
     <WalkthroughModal
       colors={colors}
-      visible={showWalkthrough}
+      visible={activeSubModal === 'walkthrough'}
       onComplete={async () => {
-        setShowWalkthrough(false);
+        setActiveSubModal(null);
         await storageSet('tourgo_walkthrough_seen', 'true');
       }}
     />
@@ -414,13 +412,13 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
     <PreferencesOnboarding
       colors={colors}
       isDark={isDark}
-      visible={showPreferences}
-      onComplete={() => setShowPreferences(false)}
+      visible={activeSubModal === 'preferences'}
+      onComplete={() => setActiveSubModal(null)}
     />
 
     <NotificationSettingsModal
-      visible={showNotificationSettings}
-      onClose={() => setShowNotificationSettings(false)}
+      visible={activeSubModal === 'notifications'}
+      onClose={() => setActiveSubModal(null)}
     />
   </>
   );
