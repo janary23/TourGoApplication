@@ -21,8 +21,13 @@
         "NSPhotoLibraryAddUsageDescription": "TourGo needs permission to save trip photos to your device."
       }
     },
+    "notification": {
+      "icon": "./assets/images/TourGoAppIcon.png",
+      "color": "#028BEB"
+    },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/TourGoAppIcon.png",
         "backgroundColor": "#028BEB"
       },
       "package": "com.tourgo.app",

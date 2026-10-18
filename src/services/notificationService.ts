@@ -31,7 +31,7 @@ export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS === 'android') {
     try {
       await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-        name: 'Trip Updates & Group Activity',
+        name: 'TourGo Updates & Activity',
         description: 'Instant alerts when members add itinerary stops, chat, polls, or expenses.',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
@@ -152,7 +152,7 @@ export async function sendLocalPushNotification({
       try {
         new Notification(title, {
           body,
-          icon: '/favicon.ico',
+          icon: '/assets/images/TourGoAppIcon.png',
         });
       } catch {
         // Web notification failed
@@ -170,6 +170,8 @@ export async function sendLocalPushNotification({
         body,
         data: mergedData,
         sound: 'default',
+        color: '#028BEB',
+        subtitle: 'TourGo',
       },
       trigger: (Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : null) as any,
     });
