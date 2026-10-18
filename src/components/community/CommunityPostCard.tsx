@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
   },
   coverContainer: {
     height: 195,
-    width: '100%',
+    alignSelf: 'stretch',
     position: 'relative',
     justifyContent: 'space-between',
     padding: 12,
@@ -1090,13 +1090,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   coverImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
   coverTopBadges: {
     flexDirection: 'row',
