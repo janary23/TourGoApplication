@@ -25,11 +25,19 @@
       "adaptiveIcon": {
         "backgroundColor": "#028BEB"
       },
-      "package": "com.tourgo.app"
+      "package": "com.tourgo.app",
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "WAKE_LOCK"]
     },
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/TourGoAppIcon.png",
+          "color": "#028BEB"
+        }
+      ],
       "@react-native-community/datetimepicker",
       [
         "expo-location",

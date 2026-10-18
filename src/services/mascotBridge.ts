@@ -85,3 +85,24 @@ export function subscribeGlobalLoading(listener: (loading: boolean) => void) {
     globalLoadingListeners = globalLoadingListeners.filter(l => l !== listener);
   };
 }
+
+let splashScreenActive = false;
+let splashScreenListeners: ((active: boolean) => void)[] = [];
+
+export function setSplashScreenActive(active: boolean) {
+  splashScreenActive = active;
+  splashScreenListeners.forEach(l => l(active));
+}
+
+export function getIsSplashScreenActive(): boolean {
+  return splashScreenActive;
+}
+
+export function subscribeSplashScreenActive(listener: (active: boolean) => void) {
+  splashScreenListeners.push(listener);
+  listener(splashScreenActive);
+  return () => {
+    splashScreenListeners = splashScreenListeners.filter(l => l !== listener);
+  };
+}
+

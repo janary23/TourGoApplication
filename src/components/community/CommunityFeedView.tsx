@@ -255,6 +255,7 @@ export default function CommunityFeedView({
               currentUserAvatar={currentUserAvatar}
               onAdoptPress={(p) => setAdoptingPost(p)}
               onPostUpdated={handlePostUpdated}
+              onDeletePost={(deletedId) => setPosts((prev) => prev.filter((p) => p.id !== deletedId))}
               onViewTripDetail={(tripId) => router.push(`/trip/${tripId}` as any)}
             />
           ))

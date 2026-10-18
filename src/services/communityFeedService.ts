@@ -183,278 +183,9 @@ const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [
     sharesCount: 19,
     privacy: 'public',
   },
-  {
-    id: 'post-palawan-02',
-    authorId: 'user-maria',
-    authorName: 'Maria Santos',
-    authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    authorRole: 'Island Wanderer',
-    isVerified: true,
-    createdAt: '5 hours ago',
-    content: 'Still dreaming of Palawan! 🌴 4 days exploring El Nido without rushing: kayak through Big Lagoon, snorkel Secret Beach, and catch sunset cocktails at Las Cabañas. Here is our complete, tried-and-tested plan. Adopt it and embark on an unforgettable escape! ✨',
-    location: 'El Nido, Palawan',
-    photos: [
-      'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&auto=format&fit=crop&q=80',
-    ],
-    trip: {
-      tripId: 'seed-palawan-trip',
-      title: 'El Nido Turquoise Lagoons & Secret Beaches',
-      destination: 'El Nido, Palawan',
-      durationDays: 4,
-      estimatedBudget: '₱9,800 / pax',
-      coverImage: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&auto=format&fit=crop&q=80',
-      tags: ['Island Hopping', 'Beaches', 'Kayaking', 'Sunset'],
-      travelersCount: 4,
-      checklist: [
-        'Eco-Tourism Development Fee receipt',
-        'Dry bag & waterproof phone casing',
-        'Reef-friendly mineral sunscreen',
-        'Snorkel gear & fins',
-      ],
-      itinerary: [
-        {
-          dayIndex: 0,
-          time: '11:00 AM',
-          title: 'Arrival in El Nido & Hotel Check-in',
-          description: 'Settle in near Corong-Corong beach and rent scooters',
-          location: 'Corong-Corong',
-        },
-        {
-          dayIndex: 0,
-          time: '04:30 PM',
-          title: 'Sunset at Las Cabañas Beach',
-          description: 'Tiki cocktails, chill lounge beats, and breathtaking orange skies',
-          location: 'Las Cabañas Beach',
-        },
-        {
-          dayIndex: 1,
-          time: '08:30 AM',
-          title: 'Tour A: Big Lagoon Kayaking & Shimizu Island',
-          description: 'Gliding between towering limestone karsts and beach seafood lunch',
-          location: 'Bacuit Bay',
-        },
-        {
-          dayIndex: 1,
-          time: '02:00 PM',
-          title: 'Secret Lagoon & 7 Commandos Beach',
-          description: 'Crawl through small rock opening into emerald hidden pool',
-          location: 'Secret Lagoon',
-        },
-        {
-          dayIndex: 2,
-          time: '09:00 AM',
-          title: 'Nacpan Twin Beach Day Trip',
-          description: '4-kilometer golden sand stretch and fresh coconut refreshment',
-          location: 'Nacpan Beach',
-        },
-        {
-          dayIndex: 3,
-          time: '09:00 AM',
-          title: 'Tour C: Hidden Beach & Matinloc Shrine',
-          description: 'Pristine snorkeling spot enclosed by jagged cliffs',
-          location: 'Matinloc Island',
-        },
-      ],
-    },
-    reactions: {
-      likes: 215,
-      loves: 74,
-      wows: 18,
-      userReaction: null,
-    },
-    comments: [
-      {
-        id: 'c3',
-        authorId: 'user-bea',
-        authorName: 'Bea Alonzo',
-        authorAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-        text: 'Nacpan Beach at golden hour is literally perfection! Thanks for sharing this 🏖️',
-        createdAt: '3h ago',
-        likesCount: 8,
-      },
-    ],
-    adoptionsCount: 62,
-    hasAdopted: false,
-    sharesCount: 31,
-    privacy: 'public',
-  },
-  {
-    id: 'post-siargao-03',
-    authorId: 'user-bea',
-    authorName: 'Bea Alonzo',
-    authorAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-    authorRole: 'Surfer & Foodie',
-    isVerified: true,
-    createdAt: 'Yesterday at 3:15 PM',
-    content: 'Siargao feels like pure freedom. 🏄‍♀️ From early morning surf checks at Cloud 9 boardwalk to cliff jumping into Sugba Lagoon and coconut bowl cafe hopping in General Luna. Adopt our 3-day itinerary below and enjoy the good vibes! 🌴🥥',
-    location: 'General Luna, Siargao',
-    photos: [
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-    ],
-    trip: {
-      tripId: 'seed-siargao-trip',
-      title: 'Siargao Surf, Coves & Island Living',
-      destination: 'General Luna, Siargao',
-      durationDays: 3,
-      estimatedBudget: '₱7,800 / pax',
-      coverImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-      tags: ['Surfing', 'Island Life', 'Rock Pools', 'Cafe Crawl'],
-      travelersCount: 3,
-      checklist: [
-        'Zinc sunscreen & surf wax',
-        'Scooter rental driver license',
-        'Reusable water bottle',
-        'Waterproof dry pouch',
-      ],
-      itinerary: [
-        {
-          dayIndex: 0,
-          time: '06:00 AM',
-          title: 'Cloud 9 Boardwalk Sunrise & Surf Lesson',
-          description: 'Catch waves with local ISA-certified surf instructors',
-          location: 'Cloud 9, General Luna',
-        },
-        {
-          dayIndex: 0,
-          time: '11:00 AM',
-          title: 'Shaka Cafe Smoothie Bowls',
-          description: 'Fresh dragonfruit and acai bowls overlooking the reef break',
-          location: 'Tourism Road, GL',
-        },
-        {
-          dayIndex: 1,
-          time: '08:00 AM',
-          title: 'Coconut Palm Forest Road & Bent Palm Tree Rope Swing',
-          description: 'Iconic viewpoint photos and refreshing river dip',
-          location: 'Maasin River',
-        },
-        {
-          dayIndex: 1,
-          time: '01:00 PM',
-          title: 'Magpupungko Natural Tidal Rock Pools',
-          description: 'Swim in crystal natural saltwater pools during low tide',
-          location: 'Pilar, Siargao',
-        },
-        {
-          dayIndex: 2,
-          time: '08:30 AM',
-          title: 'Sugba Lagoon Day Trip',
-          description: 'Wooden diving board jumps, paddle boarding, and mangrove sanctuary',
-          location: 'Del Carmen',
-        },
-      ],
-    },
-    reactions: {
-      likes: 167,
-      loves: 52,
-      wows: 9,
-      userReaction: null,
-    },
-    comments: [
-      {
-        id: 'c4',
-        authorId: 'user-harry',
-        authorName: 'Harry Sevilla',
-        authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        text: 'The Shaka smoothie bowls alone make Siargao worth the flight! Great itinerary Bea! 🙌',
-        createdAt: 'Yesterday',
-        likesCount: 4,
-      },
-    ],
-    adoptionsCount: 45,
-    hasAdopted: false,
-    sharesCount: 14,
-    privacy: 'public',
-  },
-  {
-    id: 'post-batanes-04',
-    authorId: 'user-josh',
-    authorName: 'Joshua Dizon',
-    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    authorRole: 'Heritage Seeker',
-    isVerified: true,
-    createdAt: '2 days ago',
-    content: 'Batanes is poetry in motion. 🏔️ If you want a serene soul-recharging trip where emerald hills meet the roaring Pacific, this 4-day North & South Batan plan is for you. From Honesty Coffee Shop to Marlboro Hills and stone Ivatan houses, adopt it and experience the majesty of the north! 🚲🌾',
-    location: 'Basco, Batanes',
-    photos: [
-      'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop&q=80',
-    ],
-    trip: {
-      tripId: 'seed-batanes-trip',
-      title: 'Batanes Rolling Hills & Heritage Charm',
-      destination: 'Basco, Batanes',
-      durationDays: 4,
-      estimatedBudget: '₱14,500 / pax',
-      coverImage: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop&q=80',
-      tags: ['Heritage', 'Scenic Views', 'Lighthouses', 'Peaceful'],
-      travelersCount: 2,
-      checklist: [
-        'Windbreaker & light jacket (windy coastal climate)',
-        'Cash in PHP (limited ATMs on island)',
-        'Comfortable trail walking shoes',
-        'Camera with wide-angle lens',
-      ],
-      itinerary: [
-        {
-          dayIndex: 0,
-          time: '01:00 PM',
-          title: 'North Batan Tour & Basco Lighthouse',
-          description: 'Panoramic view of Mt. Iraya and the West Philippine Sea',
-          location: 'Naidi Hills',
-        },
-        {
-          dayIndex: 0,
-          time: '04:30 PM',
-          title: 'Vayang Rolling Hills Sunset',
-          description: 'Gentle green slopes grazing cattle against dramatic sunset horizon',
-          location: 'Vayang Hills',
-        },
-        {
-          dayIndex: 1,
-          time: '08:30 AM',
-          title: 'Marlboro Hills (Racuh a Payaman)',
-          description: 'Breathtaking landscape with Tayid Lighthouse in the distance',
-          location: 'Mahatao, Batanes',
-        },
-        {
-          dayIndex: 1,
-          time: '02:00 PM',
-          title: 'Honesty Coffee Shop & Ivana Church',
-          description: 'The world-famous store with no cashiers, rooted in Ivatan honesty',
-          location: 'Ivana, Batanes',
-        },
-        {
-          dayIndex: 2,
-          time: '09:00 AM',
-          title: 'Sabtang Island Faluwa Crossing',
-          description: 'Traditional stone houses in Chavayan village and Nakabuang Arch',
-          location: 'Sabtang Island',
-        },
-      ],
-    },
-    reactions: {
-      likes: 298,
-      loves: 93,
-      wows: 28,
-      userReaction: null,
-    },
-    comments: [
-      {
-        id: 'c5',
-        authorId: 'user-maria',
-        authorName: 'Maria Santos',
-        authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-        text: 'Batanes has been on my bucket list for 5 years! Definitely adopting this for summer. 🤍',
-        createdAt: '2 days ago',
-        likesCount: 11,
-      },
-    ],
-    adoptionsCount: 84,
-    hasAdopted: false,
-    sharesCount: 42,
-    privacy: 'public',
-  },
 ];
+
+const FAKE_POST_IDS = new Set(['post-palawan-02', 'post-siargao-03', 'post-batanes-04']);
 
 // ── Service Methods ──────────────────────────────────────────────────────────
 
@@ -469,6 +200,9 @@ export async function getCommunityPosts(): Promise<CommunityPost[]> {
         postsList = parsed;
       }
     }
+
+    // Filter out fake demo posts that the user requested to remove
+    postsList = postsList.filter(p => !FAKE_POST_IDS.has(p.id));
 
     // Sanitize every post so that the Itinerary Plan ALWAYS has a high-res cover image and stop images
     const sanitized: CommunityPost[] = postsList.map((post) => {
@@ -775,6 +509,19 @@ export async function addPostComment(
   posts[index].comments.push(newComment);
   await saveCommunityPosts(posts);
   return newComment;
+}
+
+/** Delete a post from the community feed. */
+export async function deleteCommunityPost(postId: string): Promise<boolean> {
+  try {
+    const posts = await getCommunityPosts();
+    const filtered = posts.filter(p => p.id !== postId);
+    await saveCommunityPosts(filtered);
+    return true;
+  } catch (err) {
+    console.error('Failed to delete community post:', err);
+    return false;
+  }
 }
 
 export interface AdoptItineraryOptions {

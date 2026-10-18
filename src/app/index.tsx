@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { setSplashScreenActive } from '../services/mascotBridge';
 
 const NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -20,6 +21,13 @@ export default function SplashScreen() {
   sessionRef.current = session;
   const isLoadingRef = useRef(isLoading);
   isLoadingRef.current = isLoading;
+
+  useEffect(() => {
+    setSplashScreenActive(true);
+    return () => {
+      setSplashScreenActive(false);
+    };
+  }, []);
 
   useEffect(() => {
     // Gentle entrance animation for the logo
@@ -44,6 +52,7 @@ export default function SplashScreen() {
 
     const proceed = () => {
       if (!isMounted) return;
+      setSplashScreenActive(false);
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 400,

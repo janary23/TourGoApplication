@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image, ActivityIndicator, View, Animated, Dimensions, Easing, TouchableOpacity, PanResponder, KeyboardAvoidingView, TextInput, Platform, Modal, SafeAreaView, Text, ScrollView } from 'react-native';
@@ -25,8 +25,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { GEMINI_API_KEY } from '../config/env';
 import { storageGet, storageSet } from '../services/storage';
-import { subscribeOnboardingActive, subscribeGlobalLoading } from '../services/mascotBridge';
+import { subscribeOnboardingActive, subscribeGlobalLoading, subscribeSplashScreenActive } from '../services/mascotBridge';
 import { WalkthroughModal, shouldShowWalkthrough, markWalkthroughDone, onboardingKeyFor } from '../components/WalkthroughModal';
+import * as Notifications from 'expo-notifications';
+import {
+  registerForPushNotificationsAsync,
+  startTripActivityNotificationListener,
+} from '../services/notificationService';
+import { getTrips } from '../services/tripService';
+import NotificationToast from '../components/notifications/NotificationToast';
 import { type as T } from '../components/ui/tokens';
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
@@ -286,6 +293,14 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
     return unsubscribe;
   }, []);
 
+  const segments = useSegments();
+  const [splashActiveState, setSplashActiveState] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeSplashScreenActive(setSplashActiveState);
+    return unsub;
+  }, []);
+
   useEffect(() => {
     let animLoop: any;
     if (showFlyingBird) {
@@ -294,12 +309,12 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
         Animated.sequence([
           Animated.timing(flapValue, {
             toValue: 1,
-            duration: 250,
+            duration: 380,
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flapValue, {
             toValue: 0,
-            duration: 250,
+            duration: 380,
             useNativeDriver: NATIVE_DRIVER,
           }),
         ])
@@ -320,10 +335,16 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
   const isDashboardRef = useRef(false);
   const isFirstRender = useRef(true);
 
-  const isDashboardPath = (path: string) => {
+  const isDashboardPath = (path: string, segs?: string[]) => {
+    if (segs && segs[0] === '(tabs)' && (!segs[1] || segs[1] === 'index')) {
+      return true;
+    }
     if (!path) return false;
     const p = path.trim();
     return (
+      p === '/' ||
+      p === '/index' ||
+      p === '' ||
       p === '(tabs)' ||
       p === '/(tabs)' ||
       p === '/(tabs)/' ||
@@ -334,7 +355,7 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
     );
   };
 
-  const isDashboard = isDashboardPath(pathname);
+  const isDashboard = isDashboardPath(pathname, segments);
   const isTripsPage = pathname.includes('/trip/');
 
   useEffect(() => {
@@ -711,19 +732,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.parallel([
           Animated.timing(birdX, {
             toValue: targetBirdX,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(birdY, {
             toValue: targetBirdY,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flightProgress, {
             toValue: 1,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
@@ -765,19 +786,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.parallel([
           Animated.timing(birdX, {
             toValue: dashPerchX,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(birdY, {
             toValue: dashPerchY,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flightProgress, {
             toValue: 1,
-            duration: 1800,
+            duration: 2400,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
@@ -825,19 +846,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.parallel([
           Animated.timing(birdX, {
             toValue: targetBirdX,
-            duration: 1500,
+            duration: 2200,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(birdY, {
             toValue: targetBirdY,
-            duration: 1500,
+            duration: 2200,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flightProgress, {
             toValue: 1,
-            duration: 1500,
+            duration: 2200,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE_DRIVER,
           }),
@@ -855,7 +876,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
 
   // Trigger initial flight when page finishes loading on Dashboard
   useEffect(() => {
-    const isSplash = !pathname || pathname === '/' || pathname === '/index';
+    const isSplash = splashActiveState;
     if (hide || globalLoading || isSplash) return; // wait until loading finishes and mascot is not hidden
     if (initialFlightDone.current) return;
     if (!isDashboard) {
@@ -893,19 +914,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
     Animated.parallel([
       Animated.timing(birdX, {
         toValue: dashPerchX,
-        duration: 2200,
+        duration: 2600,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(birdY, {
         toValue: dashPerchY,
-        duration: 2200,
+        duration: 2600,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: NATIVE_DRIVER,
       }),
       Animated.timing(flightProgress, {
         toValue: 1,
-        duration: 2200,
+        duration: 2600,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: NATIVE_DRIVER,
       }),
@@ -917,7 +938,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         }
       }
     });
-  }, [globalLoading, pathname, insets, hide, isDashboard]);
+  }, [globalLoading, pathname, insets, hide, isDashboard, splashActiveState]);
 
   // Flying bird opacity (fades out as it enters badge on sub-page)
   const flyingBirdOpacity = flightProgress.interpolate({
@@ -933,7 +954,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
   });
 
   // Hide the floating mascot entirely while on splash screen, onboarding, or loading
-  const isSplash = !pathname || pathname === '/' || pathname === '/index';
+  const isSplash = splashActiveState;
   if (hide || onboardingActive || globalLoading || isSplash) return <></>;
 
 
@@ -1406,23 +1427,32 @@ function RootStack() {
   const { session, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const segments = useSegments();
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [splashActive, setSplashActive] = useState(false);
+
+  useEffect(() => {
+    return subscribeSplashScreenActive(setSplashActive);
+  }, []);
 
   // The mascot and its floating control are companions for the signed-in app.
-  // On the auth screens they have nothing to accompany, and they overlap the
-  // form — the bird sat across the title and the floating button landed on top
-  const isSplashRoute = pathname === '/' || pathname === '/index' || pathname === '';
-  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || isSplashRoute;
+  // Hide mascot on auth screens and during the initial splash screen
+  const isAuthScreen =
+    (segments && segments[0] === '(auth)') ||
+    pathname.includes('login') ||
+    splashActive;
 
   // Redirect to login if unauthenticated and not already on an auth or splash screen
   useEffect(() => {
     if (isLoading) return;
-    const isSplashRoute = pathname === '/' || pathname === '/index' || pathname === '';
-    const isAuthRoute = pathname.startsWith('/(auth)') || pathname.includes('login') || isSplashRoute;
+    const isAuthRoute =
+      (segments && segments[0] === '(auth)') ||
+      pathname.includes('login') ||
+      splashActive;
     if (!session && !isAuthRoute) {
       router.replace('/(auth)/login');
     }
-  }, [session, isLoading, pathname]);
+  }, [session, isLoading, pathname, segments, splashActive]);
 
   // Show walkthrough for new users on first authenticated load (per-account)
   const uid = session?.user?.id;
@@ -1436,9 +1466,46 @@ function RootStack() {
     })();
   }, [session, isLoading, uid]);
 
+  // Set up Push Notifications and Realtime Trip Activity Listeners
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    registerForPushNotificationsAsync(session.user.id);
+
+    let cleanupListener: (() => void) | null = null;
+    (async () => {
+      try {
+        const trips = await getTrips();
+        const ids = trips.map((t) => t.id);
+        const map: Record<string, string> = {};
+        trips.forEach((t) => {
+          map[t.id] = t.title;
+        });
+        cleanupListener = startTripActivityNotificationListener(session.user.id, ids, map);
+      } catch (err) {
+        console.log('Failed to start trip notification listener:', err);
+      }
+    })();
+
+    // Listen to notification clicks/taps on physical device
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.tripId) {
+        router.push(`/trip/${data.tripId}` as any);
+      } else {
+        router.push('/(tabs)/activity' as any);
+      }
+    });
+
+    return () => {
+      cleanupListener?.();
+      sub.remove();
+    };
+  }, [session?.user?.id]);
+
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <NotificationToast />
       <Stack
         screenOptions={{
           headerStyle: {

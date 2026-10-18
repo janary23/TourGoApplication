@@ -15,6 +15,7 @@ import {
   Share as RNShare,
   Modal,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ import {
   CommunityItineraryStop,
   togglePostReaction,
   addPostComment,
+  deleteCommunityPost,
   isVideoUri,
 } from '../../services/communityFeedService';
 import { getPlaceImageUrl } from '../../services/destinations';
@@ -36,6 +38,7 @@ interface CommunityPostCardProps {
   currentUserAvatar?: string;
   onAdoptPress: (post: CommunityPost) => void;
   onPostUpdated: (updatedPost: CommunityPost) => void;
+  onDeletePost?: (postId: string) => void;
   onViewTripDetail?: (tripId: string) => void;
 }
 
@@ -126,6 +129,7 @@ export default function CommunityPostCard({
   currentUserAvatar,
   onAdoptPress,
   onPostUpdated,
+  onDeletePost,
   onViewTripDetail,
 }: CommunityPostCardProps) {
   const { colors, isDark } = useTheme();
@@ -148,27 +152,97 @@ export default function CommunityPostCard({
   const totalReactions = reactions.likes + reactions.loves + reactions.wows;
   const userReaction = reactions.userReaction;
 
-  const openPostPhotosLightbox = (startIndex: number) => {
-    if (!post.photos || post.photos.length === 0) return;
-    const media = post.photos.map(u => ({
-      uri: u,
-      caption: post.content || `${post.authorName}'s travel highlight in ${post.location || trip.destination}`,
-      isVideo: isVideoUri(u),
-    }));
-    setLightboxMedia(media);
-    setLightboxIndex(startIndex);
+  // Gather ALL itinerary media (Cover, Attached Photos, Stop Photos) into one expandable collection
+  const allItineraryMedia = React.useMemo(() => {
+    const list: { uri: string; caption?: string; isVideo?: boolean }[] = [];
+    const seen = new Set<string>();
+
+    const add = (uri?: string, caption?: string, isVideo = false) => {
+      if (uri && typeof uri === 'string' && uri.trim() !== '' && !seen.has(uri)) {
+        seen.add(uri);
+        list.push({ uri, caption, isVideo });
+      }
+    };
+
+    // 1. Cover photo
+    const coverUrl = trip.coverImage || getPlaceImageUrl(trip.destination || trip.title);
+    add(coverUrl, `${trip.title} · ${trip.destination}`);
+
+    // 2. Attached post photos/videos
+    if (post.photos && post.photos.length > 0) {
+      post.photos.forEach((u, i) => {
+        add(u, post.content || `${post.authorName}'s highlight ${i + 1} in ${post.location || trip.destination}`, isVideoUri(u));
+      });
+    }
+
+    // 3. Stop photos from itinerary schedule
+    stops.forEach((s) => {
+      const sImg = s.image || getPlaceImageUrl(s.title || s.location || trip.destination, [s.title]);
+      add(sImg, `${s.title} · Day ${(s.dayIndex ?? 0) + 1} (${s.location || trip.destination})`);
+    });
+
+    return list;
+  }, [post, trip, stops]);
+
+  const openLightboxAt = (startIndex: number) => {
+    if (allItineraryMedia.length === 0) return;
+    setLightboxMedia(allItineraryMedia);
+    setLightboxIndex(Math.max(0, Math.min(startIndex, allItineraryMedia.length - 1)));
     setLightboxVisible(true);
   };
 
-  const openSingleImageLightbox = (uri?: string, caption?: string) => {
-    if (!uri) return;
-    setLightboxMedia([{
-      uri,
-      caption: caption || trip.title,
-      isVideo: isVideoUri(uri),
-    }]);
-    setLightboxIndex(0);
-    setLightboxVisible(true);
+  const openLightboxForUri = (targetUri?: string, fallbackCaption?: string) => {
+    if (!targetUri) return;
+    const existingIndex = allItineraryMedia.findIndex((m) => m.uri === targetUri);
+    if (existingIndex !== -1) {
+      openLightboxAt(existingIndex);
+    } else {
+      setLightboxMedia([
+        ...allItineraryMedia,
+        { uri: targetUri, caption: fallbackCaption, isVideo: isVideoUri(targetUri) },
+      ]);
+      setLightboxIndex(allItineraryMedia.length);
+      setLightboxVisible(true);
+    }
+  };
+
+  const handleMenuPress = () => {
+    Alert.alert(
+      'Itinerary Post Options',
+      'Choose an action for this community itinerary post:',
+      [
+        {
+          text: 'Delete Post',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Itinerary Post',
+              'Are you sure you want to delete this itinerary post?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await deleteCommunityPost(post.id);
+                    onDeletePost?.(post.id);
+                  },
+                },
+              ]
+            );
+          },
+        },
+        {
+          text: 'View Full Trip',
+          onPress: () => {
+            if (trip.tripId && onViewTripDetail) {
+              onViewTripDetail(trip.tripId);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleToggleLike = async (type: 'like' | 'love' | 'wow' = 'like') => {
@@ -220,7 +294,7 @@ export default function CommunityPostCard({
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-      {/* ── 1. FACEBOOK POST HEADER ── */}
+      {/* ── 1. POST HEADER ── */}
       <View style={styles.header}>
         <View style={styles.avatarWrap}>
           <SafeAvatar uri={post.authorAvatar} name={post.authorName} style={styles.avatar} />
@@ -257,7 +331,7 @@ export default function CommunityPostCard({
           </View>
         </View>
 
-        <TouchableOpacity style={styles.menuBtn}>
+        <TouchableOpacity onPress={handleMenuPress} style={styles.menuBtn}>
           <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -281,153 +355,12 @@ export default function CommunityPostCard({
         </View>
       )}
 
-      {/* ── 2.5 PHOTO & VIDEO ATTACHMENTS (FACEBOOK STYLE) ── */}
-      {post.photos && post.photos.length > 0 && (
-        <View style={styles.postPhotosWrap}>
-          {post.photos.length === 1 ? (
-            isVideoUri(post.photos[0]) ? (
-              Platform.OS === 'web' ? (
-                <View style={styles.singleVideoWrap}>
-                  <video
-                    src={post.photos[0]}
-                    controls
-                    playsInline
-                    style={{
-                      width: '100%',
-                      maxHeight: 400,
-                      borderRadius: 12,
-                      backgroundColor: '#000000',
-                      objectFit: 'cover',
-                    }}
-                  />
-                </View>
-              ) : (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => openPostPhotosLightbox(0)}
-                  style={styles.singlePhoto}
-                >
-                  <SafeCommunityImage
-                    uri={post.photos[0]}
-                    destination={post.location || trip.destination}
-                    style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.videoPlayOverlay}>
-                    <Ionicons name="play" size={36} color="#FFFFFF" />
-                  </View>
-                </TouchableOpacity>
-              )
-            ) : (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => openPostPhotosLightbox(0)}
-                style={styles.singlePhoto}
-              >
-                <SafeCommunityImage
-                  uri={post.photos[0]}
-                  destination={post.location || trip.destination}
-                  style={StyleSheet.absoluteFillObject}
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-            )
-          ) : post.photos.length === 2 ? (
-            <View style={styles.twoPhotosRow}>
-              {post.photos.slice(0, 2).map((uri, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  activeOpacity={0.9}
-                  onPress={() => openPostPhotosLightbox(idx)}
-                  style={styles.halfPhoto}
-                >
-                  <SafeCommunityImage
-                    uri={uri}
-                    destination={post.location || trip.destination}
-                    style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
-                  />
-                  {isVideoUri(uri) && (
-                    <View style={styles.gridVideoBadge}>
-                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
-                      <Text style={styles.gridVideoBadgeText}>VIDEO</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.multiPhotosGrid}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => openPostPhotosLightbox(0)}
-                style={styles.mainGridPhoto}
-              >
-                <SafeCommunityImage
-                  uri={post.photos[0]}
-                  destination={post.location || trip.destination}
-                  style={StyleSheet.absoluteFillObject}
-                  resizeMode="cover"
-                />
-                {isVideoUri(post.photos[0]) && (
-                  <View style={styles.gridVideoBadge}>
-                    <Ionicons name="videocam" size={12} color="#FFFFFF" />
-                    <Text style={styles.gridVideoBadgeText}>VIDEO</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <View style={styles.sideGridCol}>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => openPostPhotosLightbox(1)}
-                  style={styles.subGridPhoto}
-                >
-                  <SafeCommunityImage
-                    uri={post.photos[1]}
-                    destination={post.location || trip.destination}
-                    style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
-                  />
-                  {isVideoUri(post.photos[1]) && (
-                    <View style={styles.gridVideoBadge}>
-                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => openPostPhotosLightbox(2)}
-                  style={styles.subGridPhotoWrap}
-                >
-                  <SafeCommunityImage
-                    uri={post.photos[2]}
-                    destination={post.location || trip.destination}
-                    style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
-                  />
-                  {isVideoUri(post.photos[2]) && (
-                    <View style={styles.gridVideoBadge}>
-                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
-                    </View>
-                  )}
-                  {post.photos.length > 3 && (
-                    <View style={styles.morePhotosOverlay}>
-                      <Text style={styles.morePhotosText}>+{post.photos.length - 3}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* ── 3. RICH TRIP ATTACHMENT CARD (FACEBOOK LINK/MEDIA STYLE) ── */}
-      <View style={[styles.tripAttachment, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
-        {/* Cover with Gradient & Badges — click to expand in Lightbox */}
+      {/* ── 3. UNIFIED ITINERARY HERO (THE 1 CARD FOR THE ITINERARY ITSELF) ── */}
+      <View style={styles.itineraryHeroSection}>
+        {/* Cover with Gradient & Badges — click to expand full photo gallery */}
         <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => openSingleImageLightbox(trip.coverImage || getPlaceImageUrl(trip.destination || trip.title), trip.title)}
+          activeOpacity={0.92}
+          onPress={() => openLightboxAt(0)}
           style={styles.coverContainer}
         >
           <SafeCommunityImage
@@ -437,19 +370,29 @@ export default function CommunityPostCard({
             resizeMode="cover"
           />
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.85)']}
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.88)']}
             style={StyleSheet.absoluteFillObject}
           />
 
           <View style={styles.coverTopBadges}>
-            <View style={[styles.tripTypeTag, { backgroundColor: 'rgba(0,0,0,0.65)' }]}>
-              <Ionicons name="sparkles" size={12} color="#FBBF24" style={{ marginRight: 4 }} />
-              <Text style={styles.tripTypeTagText}>ITINERARY PLAN</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={[styles.tripTypeTag, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+                <Ionicons name="sparkles" size={12} color="#FBBF24" style={{ marginRight: 4 }} />
+                <Text style={styles.tripTypeTagText}>ITINERARY PLAN</Text>
+              </View>
+
+              <View style={[styles.durationBadge, { backgroundColor: colors.brand }]}>
+                <Ionicons name="calendar-outline" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.durationBadgeText}>{trip.durationDays} Days</Text>
+              </View>
             </View>
 
-            <View style={[styles.durationBadge, { backgroundColor: colors.brand }]}>
-              <Ionicons name="calendar-outline" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.durationBadgeText}>{trip.durationDays} Days</Text>
+            {/* Expand Photos Badge */}
+            <View style={[styles.photoCountPill, { backgroundColor: 'rgba(0,0,0,0.72)' }]}>
+              <Ionicons name="images" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text style={styles.photoCountPillText}>
+                {allItineraryMedia.length} {allItineraryMedia.length === 1 ? 'Photo' : 'Photos'} · Expand ↗
+              </Text>
             </View>
           </View>
 
@@ -465,6 +408,55 @@ export default function CommunityPostCard({
             </View>
           </View>
         </TouchableOpacity>
+
+        {/* ── EXPANDABLE PHOTO THUMBNAILS STRIP ── */}
+        {allItineraryMedia.length > 1 && (
+          <View style={styles.expandableGalleryStrip}>
+            <View style={styles.expandableGalleryHeader}>
+              <Text style={[styles.expandableGalleryLabel, { color: colors.textSecondary }]}>
+                Itinerary Photos & Highlights ({allItineraryMedia.length})
+              </Text>
+              <TouchableOpacity
+                onPress={() => openLightboxAt(0)}
+                style={styles.expandGalleryLink}
+              >
+                <Ionicons name="expand-outline" size={13} color={colors.brand} />
+                <Text style={[styles.expandGalleryLinkText, { color: colors.brand }]}>View all in Lightbox</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbsRow}>
+              {allItineraryMedia.slice(0, 6).map((m, idx) => {
+                const isLast = idx === 5 && allItineraryMedia.length > 6;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    activeOpacity={0.85}
+                    onPress={() => openLightboxAt(idx)}
+                    style={styles.galleryThumbItem}
+                  >
+                    <SafeCommunityImage
+                      uri={m.uri}
+                      destination={trip.destination}
+                      style={styles.galleryThumbImg}
+                      resizeMode="cover"
+                    />
+                    {m.isVideo && (
+                      <View style={styles.galleryThumbVideoBadge}>
+                        <Ionicons name="videocam" size={11} color="#FFFFFF" />
+                      </View>
+                    )}
+                    {isLast && (
+                      <View style={styles.galleryMoreOverlay}>
+                        <Text style={styles.galleryMoreText}>+{allItineraryMedia.length - 5}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Quick Highlights Strip */}
         <View style={[styles.highlightsStrip, { borderBottomColor: colors.divider }]}>
@@ -493,7 +485,7 @@ export default function CommunityPostCard({
         {/* ── Accordion: Peek Itinerary Stops with Thumbnails ── */}
         <TouchableOpacity
           onPress={() => setIsItineraryExpanded(!isItineraryExpanded)}
-          style={[styles.accordionToggle, { backgroundColor: colors.card }]}
+          style={[styles.accordionToggle, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC' }]}
           activeOpacity={0.7}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -526,7 +518,7 @@ export default function CommunityPostCard({
 
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => openSingleImageLightbox(stopImg, `${stop.title} · Day ${stop.dayIndex + 1}`)}
+                    onPress={() => openLightboxForUri(stopImg, `${stop.title} · Day ${stop.dayIndex + 1}`)}
                     style={styles.peekStopThumbWrap}
                   >
                     <SafeCommunityImage
@@ -552,7 +544,7 @@ export default function CommunityPostCard({
         )}
 
         {/* ── THE ADOPT ITINERARY CTA BAR ── */}
-        <View style={[styles.adoptCtaBox, { backgroundColor: colors.card, borderTopColor: colors.cardBorder }]}>
+        <View style={[styles.adoptCtaBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderTopColor: colors.divider }]}>
           <View style={styles.adoptInfoRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Ionicons name="download-outline" size={16} color={colors.brand} />
@@ -1003,21 +995,99 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  itineraryHeroSection: {
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
   tripAttachment: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    marginHorizontal: 0,
+    marginBottom: 0,
     borderRadius: 14,
-    borderWidth: 1,
     overflow: 'hidden',
   },
   coverContainer: {
-    height: 175,
+    height: 195,
     width: '100%',
     position: 'relative',
     justifyContent: 'space-between',
     padding: 12,
     overflow: 'hidden',
+    borderRadius: 14,
     backgroundColor: '#0F172A',
+  },
+  photoCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  photoCountPillText: {
+    ...T.micro,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  expandableGalleryStrip: {
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  expandableGalleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  expandableGalleryLabel: {
+    ...T.micro,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  expandGalleryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  expandGalleryLinkText: {
+    ...T.micro,
+    fontWeight: '700',
+  },
+  galleryThumbsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  galleryThumbItem: {
+    width: 54,
+    height: 54,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+  galleryThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  galleryThumbVideoBadge: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 3,
+    padding: 2,
+  },
+  galleryMoreOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryMoreText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   coverImage: {
     position: 'absolute',
