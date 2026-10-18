@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
-import { TripFeatureSettings } from './mockData';
+import { TripFeatureSettings, mockService } from './mockData';
 import { GeneratedItineraryItem } from './aiService';
 import { getPlaceImageUrl } from './destinations';
-import { storageGet } from './storage';
+import { storageGet, storageSet } from './storage';
 
 export interface TripWithRole {
   id: string;
@@ -668,22 +668,40 @@ export async function updateTripFeatures(
 /** Delete a trip and its associated records. */
 export async function deleteTrip(tripId: string): Promise<{ error: string | null }> {
   try {
-    // Delete child records first (order matters for RLS: keep trip_members until trips row is gone)
-    await supabase.from('expenses').delete().eq('trip_id', tripId);
-    await supabase.from('itinerary_items').delete().eq('trip_id', tripId);
-    await supabase.from('checklist_items').delete().eq('trip_id', tripId);
-    await supabase.from('announcements').delete().eq('trip_id', tripId);
-    await supabase.from('chat_messages').delete().eq('trip_id', tripId);
-    await supabase.from('documents').delete().eq('trip_id', tripId);
-    await supabase.from('polls').delete().eq('trip_id', tripId);
-    await supabase.from('trip_features').delete().eq('trip_id', tripId);
+    // 1. Always remove from mockService in-memory store
+    mockService.deleteTrip(tripId);
 
-    // Delete the trip row BEFORE trip_members so RLS can still verify organizer role
-    const { error } = await supabase.from('trips').delete().eq('id', tripId);
-    if (error) return { error: error.message };
+    // 2. Remove from locally adopted trips if present
+    try {
+      const rawLocal = await storageGet('tourgo_local_adopted_trips');
+      if (rawLocal) {
+        const localTrips = JSON.parse(rawLocal);
+        if (Array.isArray(localTrips)) {
+          const updated = localTrips.filter((t: any) => t.id !== tripId);
+          await storageSet('tourgo_local_adopted_trips', JSON.stringify(updated));
+        }
+      }
+    } catch {}
 
-    // Now safe to remove members
-    await supabase.from('trip_members').delete().eq('trip_id', tripId);
+    // 3. If tripId is a valid UUID, delete from Supabase database
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tripId);
+    if (isUuid) {
+      await supabase.from('expenses').delete().eq('trip_id', tripId);
+      await supabase.from('itinerary_items').delete().eq('trip_id', tripId);
+      await supabase.from('checklist_items').delete().eq('trip_id', tripId);
+      await supabase.from('announcements').delete().eq('trip_id', tripId);
+      await supabase.from('chat_messages').delete().eq('trip_id', tripId);
+      await supabase.from('documents').delete().eq('trip_id', tripId);
+      await supabase.from('polls').delete().eq('trip_id', tripId);
+      await supabase.from('trip_features').delete().eq('trip_id', tripId);
+
+      // Delete the trip row BEFORE trip_members so RLS can still verify organizer role
+      const { error } = await supabase.from('trips').delete().eq('id', tripId);
+      if (error) return { error: error.message };
+
+      // Now safe to remove members
+      await supabase.from('trip_members').delete().eq('trip_id', tripId);
+    }
 
     return { error: null };
   } catch (err: any) {

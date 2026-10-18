@@ -270,11 +270,12 @@ export default function TripScrapbookView({
   }, [trip.photos, itinerary, trip.title, trip.destination, heroImageUri]);
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       {/* ═══ 1. VINTAGE SCRAPBOOK HERO COVER ═══ */}
       <View style={styles.heroOuterWrapper}>
         <View style={[styles.heroCardFrame, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -699,9 +700,11 @@ export default function TripScrapbookView({
         </View>
       </View>
 
+      </ScrollView>
+
       {/* ═══ 10. SHARE SHEET WITH CAPTION CUSTOMIZER ═══ */}
       <Sheet visible={shareOpen} onClose={() => setShareOpen(false)} title="Share Your Scrapbook">
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.75 }}>
+        <View style={{ width: '100%', paddingBottom: 16 }}>
           <View style={{ alignItems: 'center', marginVertical: space.sm }}>
             <TripShareCard trip={trip} scale={0.82} />
           </View>
@@ -808,9 +811,9 @@ export default function TripScrapbookView({
               fullWidth
             />
           </View>
-        </ScrollView>
+        </View>
       </Sheet>
-    </ScrollView>
+    </View>
   );
 }
 

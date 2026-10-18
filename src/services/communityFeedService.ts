@@ -6,6 +6,7 @@
 import { storageGet, storageSet } from './storage';
 import { createTrip, getTripById } from './tripService';
 import { getPlaceImageUrl } from './destinations';
+import { supabase } from './supabase';
 
 export interface CommunityItineraryStop {
   dayIndex: number;
@@ -13,6 +14,7 @@ export interface CommunityItineraryStop {
   title: string;
   description: string;
   location?: string;
+  image?: string;
 }
 
 export interface CommunityTripAttachment {
@@ -460,12 +462,48 @@ const INITIAL_COMMUNITY_POSTS: CommunityPost[] = [
 export async function getCommunityPosts(): Promise<CommunityPost[]> {
   try {
     const raw = await storageGet(STORAGE_KEY_COMMUNITY_POSTS);
-    if (!raw) {
-      await storageSet(STORAGE_KEY_COMMUNITY_POSTS, JSON.stringify(INITIAL_COMMUNITY_POSTS));
-      return INITIAL_COMMUNITY_POSTS;
+    let postsList: CommunityPost[] = INITIAL_COMMUNITY_POSTS;
+    if (raw) {
+      const parsed: CommunityPost[] = JSON.parse(raw);
+      if (parsed && parsed.length > 0) {
+        postsList = parsed;
+      }
     }
-    const parsed: CommunityPost[] = JSON.parse(raw);
-    return parsed.length > 0 ? parsed : INITIAL_COMMUNITY_POSTS;
+
+    // Sanitize every post so that the Itinerary Plan ALWAYS has a high-res cover image and stop images
+    const sanitized: CommunityPost[] = postsList.map((post) => {
+      const trip = post.trip;
+      const destination = trip?.destination || post.location || 'Philippines';
+      const rawCover = trip?.coverImage;
+      const isBadCover = !rawCover || typeof rawCover !== 'string' || rawCover.trim() === '' || rawCover.startsWith('file://') || rawCover.startsWith('blob:') || rawCover.includes('photo-1469854523086');
+      const validCover = isBadCover ? getPlaceImageUrl(destination, [trip?.title || 'Trip']) : rawCover;
+
+      const sanitizedStops = (trip?.itinerary || []).map((stop: any, idx: number) => {
+        let stopImg = stop.image || stop.image_url;
+        if (!stopImg && stop.description) {
+          const m = stop.description.match(/Image:\s*(https[^\n\s]+)/i);
+          if (m) stopImg = m[1];
+        }
+        if (!stopImg || stopImg.startsWith('file://') || stopImg.startsWith('blob:')) {
+          stopImg = getPlaceImageUrl(stop.title || stop.location || destination, [stop.title || 'Spot']);
+        }
+        return {
+          ...stop,
+          image: stopImg,
+        };
+      });
+
+      return {
+        ...post,
+        trip: {
+          ...trip,
+          coverImage: validCover,
+          itinerary: sanitizedStops,
+        },
+      };
+    });
+
+    return sanitized;
   } catch (err) {
     console.warn('Failed to load community posts from storage:', err);
     return INITIAL_COMMUNITY_POSTS;
@@ -503,6 +541,78 @@ export interface CreatePostParams {
   };
 }
 
+// ── Media helpers for Community photos and videos ─────────────────────────
+
+export function isVideoUri(uri?: string): boolean {
+  if (!uri || typeof uri !== 'string') return false;
+  const clean = uri.split('?')[0].toLowerCase();
+  return (
+    clean.endsWith('.mp4') ||
+    clean.endsWith('.mov') ||
+    clean.endsWith('.webm') ||
+    clean.endsWith('.m4v') ||
+    clean.endsWith('.avi') ||
+    clean.endsWith('.mkv') ||
+    clean.includes('video/') ||
+    uri.startsWith('data:video/')
+  );
+}
+
+/** Upload media (image or video) to Supabase Storage, or convert to base64 Data URL so it is always persistent and visible to others. */
+export async function processMediaForCommunity(localUri: string, isVideo = false): Promise<string> {
+  if (!localUri || typeof localUri !== 'string') return localUri;
+  // If already a remote CDN / HTTPS URL, keep as is
+  if (localUri.startsWith('http://') || localUri.startsWith('https://')) {
+    return localUri;
+  }
+
+  // 1. Attempt Supabase Storage upload to 'trip-media' bucket
+  try {
+    const ext = isVideo
+      ? (localUri.split('.').pop()?.toLowerCase() || 'mp4')
+      : (localUri.split('.').pop()?.toLowerCase() || 'jpg');
+    const safeExt = ext.replace(/[^a-z0-9]/gi, '') || (isVideo ? 'mp4' : 'jpg');
+    const fileName = `community/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${safeExt}`;
+    const contentType = isVideo
+      ? `video/${safeExt === 'mov' ? 'quicktime' : safeExt}`
+      : `image/${safeExt === 'jpg' ? 'jpeg' : safeExt}`;
+
+    const res = await fetch(localUri);
+    const blob = await res.blob();
+
+    const { error: uploadError } = await supabase.storage
+      .from('trip-media')
+      .upload(fileName, blob, { contentType, upsert: true });
+
+    if (!uploadError) {
+      const { data } = supabase.storage.from('trip-media').getPublicUrl(fileName);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+    }
+  } catch (err) {
+    console.warn('Storage upload attempt returned fallback:', err);
+  }
+
+  // 2. Base64 fallback (guarantees media persists locally and works across reloads)
+  try {
+    const res = await fetch(localUri);
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve((reader.result as string) || localUri);
+      };
+      reader.onerror = () => {
+        resolve(localUri);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return localUri;
+  }
+}
+
 /** Share an in-app trip to the Facebook-style Community Feed. */
 export async function shareTripToCommunity(params: CreatePostParams): Promise<CommunityPost> {
   const posts = await getCommunityPosts();
@@ -525,21 +635,32 @@ export async function shareTripToCommunity(params: CreatePostParams): Promise<Co
 
   // Format itinerary stops
   const defaultStops: CommunityItineraryStop[] = [
-    { dayIndex: 0, time: '08:00 AM', title: 'Arrival & Hotel Check-in', description: `Check in and orient with ${destination}`, location: destination },
-    { dayIndex: 0, time: '01:00 PM', title: 'Local Culture & Food Tour', description: 'Sample signature delicacies and historic landmarks', location: destination },
-    { dayIndex: 1, time: '07:30 AM', title: 'Scenic Highlights & Exploration', description: 'Visit premier nature spots and coastal wonders', location: destination },
-    { dayIndex: 1, time: '05:30 PM', title: 'Sunset Viewpoint & Dinner', description: 'Relax and unwind with panoramic views', location: destination },
-    { dayIndex: 2, time: '09:00 AM', title: 'Souvenir Shopping & Pasalubong', description: 'Pick up local crafts and souvenirs before departure', location: destination },
+    { dayIndex: 0, time: '08:00 AM', title: 'Arrival & Hotel Check-in', description: `Check in and orient with ${destination}`, location: destination, image: getPlaceImageUrl(`Hotel in ${destination}`, [destination]) },
+    { dayIndex: 0, time: '01:00 PM', title: 'Local Culture & Food Tour', description: 'Sample signature delicacies and historic landmarks', location: destination, image: getPlaceImageUrl(`Food in ${destination}`, ['Food', destination]) },
+    { dayIndex: 1, time: '07:30 AM', title: 'Scenic Highlights & Exploration', description: 'Visit premier nature spots and coastal wonders', location: destination, image: getPlaceImageUrl(`Scenic ${destination}`, ['Nature', destination]) },
+    { dayIndex: 1, time: '05:30 PM', title: 'Sunset Viewpoint & Dinner', description: 'Relax and unwind with panoramic views', location: destination, image: getPlaceImageUrl(`Sunset in ${destination}`, ['Sunset', destination]) },
+    { dayIndex: 2, time: '09:00 AM', title: 'Souvenir Shopping & Pasalubong', description: 'Pick up local crafts and souvenirs before departure', location: destination, image: getPlaceImageUrl(`Market in ${destination}`, ['Shopping', destination]) },
   ];
 
   const itineraryStops: CommunityItineraryStop[] = params.trip?.itinerary && params.trip.itinerary.length > 0
-    ? params.trip.itinerary.map((item: any, idx: number) => ({
-        dayIndex: item.day_index ?? item.dayIndex ?? Math.floor(idx / 3),
-        time: item.time_label ?? item.time ?? '09:00 AM',
-        title: item.title || `Stop ${idx + 1}`,
-        description: item.description || item.location || '',
-        location: item.location || destination,
-      }))
+    ? params.trip.itinerary.map((item: any, idx: number) => {
+        let stopImg = item.image || item.image_url;
+        if (!stopImg && item.description) {
+          const m = item.description.match(/Image:\s*(https[^\n\s]+)/i);
+          if (m) stopImg = m[1];
+        }
+        if (!stopImg) {
+          stopImg = getPlaceImageUrl(item.title || item.location || destination, [item.title || 'Spot']);
+        }
+        return {
+          dayIndex: item.day_index ?? item.dayIndex ?? Math.floor(idx / 3),
+          time: item.time_label ?? item.time ?? '09:00 AM',
+          title: item.title || `Stop ${idx + 1}`,
+          description: item.description || item.location || '',
+          location: item.location || destination,
+          image: stopImg,
+        };
+      })
     : defaultStops;
 
   // Format checklist items

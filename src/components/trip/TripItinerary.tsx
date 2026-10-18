@@ -35,6 +35,7 @@ import {
   getWishlistSuggestions,
   type WishlistSuggestion
 } from '../../services/wishlistSuggestions';
+import { getPlaceImageUrl } from '../../services/destinations';
 import { useTheme } from '../../context/ThemeContext';
 import { Txt, Press, IconButton, Badge, EmptyState, Sheet, Field, Button, Card, ListGroup, ListRow, Segmented, Loading, Avatar, Divider, Section, SectionLabel, InlineEmpty } from '../ui/primitives';
 import { space, radius, hairline, type as T, stateColor, shadow, stripEmoji } from '../ui/tokens';
@@ -146,6 +147,9 @@ export default function TripItinerary({
   const [customDescription, setCustomDescription] = useState('');
   const [customDayIndex, setCustomDayIndex] = useState(0);
   const [customDuration, setCustomDuration] = useState('90 mins');
+
+  // Stop Image Lightbox modal state
+  const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string; desc?: string } | null>(null);
 
   // Animated translation value for smooth iOS-style bottom sheet
   const slideAnim = useRef(new Animated.Value(SCREEN_H)).current;
@@ -904,7 +908,7 @@ export default function TripItinerary({
                   );
 
                   const [timeVal, ampm] = (act.time || 'TBD').split(' ');
-                  const imgUrl = getImgUrl(act);
+                  const imgUrl = getImgUrl(act, trip?.destination);
                   const categoryLabel = inferCategory(act.title);
                   const durationLabel = getDurationLabel(act);
                   const cleanDesc = getCleanDesc(act.description);
@@ -946,7 +950,19 @@ export default function TripItinerary({
                             shadow(1, isDark),
                           ]}>
                             {!!imgUrl && (
-                              <Image source={{ uri: imgUrl }} style={styles.stopThumb} resizeMode="cover" />
+                              <TouchableOpacity
+                                activeOpacity={0.88}
+                                onPress={(e) => {
+                                  e?.stopPropagation?.();
+                                  setPreviewImage({ uri: imgUrl, title: act.title, desc: cleanDesc });
+                                }}
+                                style={styles.stopThumbWrap}
+                              >
+                                <Image source={{ uri: imgUrl }} style={styles.stopThumb} resizeMode="cover" />
+                                <View style={styles.expandIconBadge}>
+                                  <Ionicons name="expand" size={10} color="#FFFFFF" />
+                                </View>
+                              </TouchableOpacity>
                             )}
 
                             <View style={styles.stopBody}>
@@ -1598,6 +1614,46 @@ export default function TripItinerary({
         />
       </Sheet>
 
+      {/* ── Stop Photo Lightbox Modal (Click to Expand like Facebook) ── */}
+      <Modal
+        visible={!!previewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.itineraryLightboxOverlay}>
+          <View style={styles.itineraryLightboxTopBar}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={styles.itineraryLightboxTitle} numberOfLines={1}>
+                {previewImage?.title || 'Itinerary Stop'}
+              </Text>
+              {!!previewImage?.desc && (
+                <Text style={styles.itineraryLightboxSubtitle} numberOfLines={2}>
+                  {previewImage.desc}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => setPreviewImage(null)}
+              style={styles.itineraryLightboxCloseBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.itineraryLightboxCenter}>
+            {previewImage?.uri && (
+              <Image
+                source={{ uri: previewImage.uri }}
+                style={styles.itineraryLightboxImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -1960,10 +2016,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: hairline,
   },
-  stopThumb: {
+  stopThumbWrap: {
+    position: 'relative',
     width: 66,
     height: 66,
     borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+  },
+  stopThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  expandIconBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 3,
+    padding: 2,
   },
   stopBody: {
     flex: 1,
@@ -2032,26 +2103,60 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingLeft: space.xs,
   },
+  // ── Lightbox for Itinerary Stops ──
+  itineraryLightboxOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.96)',
+    justifyContent: 'space-between',
+  },
+  itineraryLightboxTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 52 : 24,
+    paddingBottom: 16,
+    zIndex: 10,
+  },
+  itineraryLightboxTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  itineraryLightboxSubtitle: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  itineraryLightboxCloseBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itineraryLightboxCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 30,
+  },
+  itineraryLightboxImage: {
+    width: '100%',
+    height: '100%',
+  },
 });
-const getImgUrl = (item: any) => {
-  if (item.description) {
-    const match = item.description.match(/Image:\s*(https[^\n]+)/i);
+
+const getImgUrl = (item: any, destination?: string) => {
+  if (item?.image) return item.image;
+  if (item?.image_url) return item.image_url;
+  if (item?.description) {
+    const match = item.description.match(/Image:\s*(https[^\n\s]+)/i);
     if (match) return match[1];
   }
-  const title = (item.title || '').toLowerCase();
-  if (title.includes('coffee') || title.includes('cafe') || title.includes('starbucks')) {
-    return 'https://images.unsplash.com/photo-1507133750040-4a8f57021571?auto=format&fit=crop&w=300&q=80';
-  }
-  if (title.includes('food') || title.includes('lunch') || title.includes('dinner') || title.includes('eat') || title.includes('restaurant') || title.includes('lechon')) {
-    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=300&q=80';
-  }
-  if (title.includes('beach') || title.includes('island') || title.includes('sea') || title.includes('sardine') || title.includes('whale') || title.includes('snorkel') || title.includes('sumilon')) {
-    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80';
-  }
-  if (title.includes('falls') || title.includes('waterfall') || title.includes('kawasan') || title.includes('nature') || title.includes('hiking')) {
-    return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=300&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=300&q=80';
+  return getPlaceImageUrl(item?.title || item?.location || destination || 'Philippines', [item?.title, item?.location || 'Spot']);
 };
 
 const inferCategory = (title: string) => {

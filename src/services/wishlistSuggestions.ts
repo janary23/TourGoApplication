@@ -48,7 +48,11 @@ export async function getWishlistSuggestions(destination?: string): Promise<Wish
     const known = byId.get(id);
     const m = meta[id];
 
-    const name = known?.name ?? m?.name ?? id;
+    // Format raw OpenStreetMap IDs into friendly titles if metadata was not cached
+    const fallbackName = id.startsWith('osm-')
+      ? (m?.locationLabel ? `Saved Spot (${m.locationLabel})` : 'Saved Attraction')
+      : id;
+    const name = known?.name ?? m?.name ?? fallbackName;
     const latitude = known?.latitude ?? undefined;
     const longitude = known?.longitude ?? undefined;
     const locationLabel = known?.locationLabel ?? m?.locationLabel ?? '';

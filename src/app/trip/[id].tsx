@@ -174,16 +174,21 @@ export default function TripHomeScreen() {
 
   const handleDeleteTrip = () => {
     confirmAction({
-        title: 'Delete trip?',
-        message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
-        confirmLabel: 'Delete',
-        destructive: true,
-      }).then(async (ok) => {
-        if (!ok) return;
-        setEditModalVisible(false);
-        await dbDeleteTrip(trip.id);
-        router.replace('/trips');
-      });
+      title: 'Delete trip?',
+      message: `Are you sure you want to permanently delete "${trip.title}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    }).then(async (ok) => {
+      if (!ok) return;
+      setEditModalVisible(false);
+      const { error } = await dbDeleteTrip(trip.id);
+      if (error) {
+        notify(error, 'error');
+      } else {
+        notify('Trip deleted', 'info');
+        router.replace('/(tabs)/trips');
+      }
+    });
   };
 
   const getTripPhase = (): { phase: 'before' | 'during' | 'after'; label: string; icon: string } => {
@@ -217,7 +222,7 @@ export default function TripHomeScreen() {
       setPeopleView('hub');
       setMoreView('hub');
     } else {
-      router.replace('/trips');
+      router.replace('/(tabs)/trips');
     }
   };
 

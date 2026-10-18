@@ -15,6 +15,12 @@ export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
 
+  // Keep refs up-to-date so async timer always sees latest auth state
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const isLoadingRef = useRef(isLoading);
+  isLoadingRef.current = isLoading;
+
   useEffect(() => {
     // Gentle entrance animation for the logo
     Animated.parallel([
@@ -33,25 +39,45 @@ export default function SplashScreen() {
   }, [fadeAnim, scaleAnim]);
 
   useEffect(() => {
-    if (isLoading) return;
+    let isMounted = true;
+    const MINIMUM_SPLASH_MS = 3000; // Exactly 3 seconds
 
-    // Display splash screen briefly for a premium feel, then navigate
-    const timer = setTimeout(() => {
+    const proceed = () => {
+      if (!isMounted) return;
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 400,
         useNativeDriver: NATIVE_DRIVER,
       }).start(() => {
-        if (session) {
+        if (!isMounted) return;
+        if (sessionRef.current) {
           router.replace('/(tabs)');
         } else {
           router.replace('/(auth)/login');
         }
       });
-    }, 1800);
+    };
 
-    return () => clearTimeout(timer);
-  }, [isLoading, session, router, fadeAnim]);
+    // Guarantee the splash screen displays for full 3 seconds
+    const timer = setTimeout(() => {
+      if (!isLoadingRef.current) {
+        proceed();
+      } else {
+        // If auth verification takes longer than 3s, proceed as soon as it completes
+        const interval = setInterval(() => {
+          if (!isLoadingRef.current) {
+            clearInterval(interval);
+            proceed();
+          }
+        }, 100);
+      }
+    }, MINIMUM_SPLASH_MS);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [router, fadeAnim]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

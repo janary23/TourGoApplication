@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { space, radius, type as T } from '../ui/tokens';
 import { CommunityPost, adoptPostItinerary } from '../../services/communityFeedService';
+import { getPlaceImageUrl } from '../../services/destinations';
 
 interface AdoptItineraryModalProps {
   visible: boolean;
@@ -120,7 +121,11 @@ export default function AdoptItineraryModal({
           <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
             {/* Trip Preview Banner */}
             <View style={[styles.tripHeroPreview, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
-              <Image source={{ uri: trip.coverImage }} style={styles.heroThumbnail} resizeMode="cover" />
+              <Image
+                source={{ uri: trip.coverImage || getPlaceImageUrl(trip.destination || trip.title) }}
+                style={styles.heroThumbnail}
+                resizeMode="cover"
+              />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.heroTripTitle, { color: colors.text }]} numberOfLines={1}>
                   {trip.title}
@@ -224,33 +229,37 @@ export default function AdoptItineraryModal({
                 </Text>
                 <Text style={{ ...T.micro, color: colors.brand }}>All stops cloned</Text>
               </View>
-              {stops.map((stop, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.stopRow,
-                    {
-                      backgroundColor: colors.background,
-                      borderLeftColor: colors.brand,
-                    },
-                  ]}
-                >
-                  <View style={styles.stopTimeCol}>
-                    <Text style={[styles.stopTimeText, { color: colors.brand }]}>{stop.time}</Text>
-                    <Text style={[styles.stopDayText, { color: colors.textMuted }]}>
-                      Day {stop.dayIndex + 1}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.stopTitleText, { color: colors.text }]}>{stop.title}</Text>
-                    {!!stop.description && (
-                      <Text style={[styles.stopDescText, { color: colors.textMuted }]} numberOfLines={2}>
-                        {stop.description}
+              {stops.map((stop, idx) => {
+                const stopImg = stop.image || getPlaceImageUrl(stop.title || stop.location || trip.destination, [stop.title]);
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.stopRow,
+                      {
+                        backgroundColor: colors.background,
+                        borderLeftColor: colors.brand,
+                      },
+                    ]}
+                  >
+                    <Image source={{ uri: stopImg }} style={styles.stopThumb} resizeMode="cover" />
+                    <View style={styles.stopTimeCol}>
+                      <Text style={[styles.stopTimeText, { color: colors.brand }]}>{stop.time}</Text>
+                      <Text style={[styles.stopDayText, { color: colors.textMuted }]}>
+                        Day {stop.dayIndex + 1}
                       </Text>
-                    )}
+                    </View>
+                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                      <Text style={[styles.stopTitleText, { color: colors.text }]}>{stop.title}</Text>
+                      {!!stop.description && (
+                        <Text style={[styles.stopDescText, { color: colors.textMuted }]} numberOfLines={2}>
+                          {stop.description}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
 
             {!!errorMsg && (
@@ -422,14 +431,21 @@ const styles = StyleSheet.create({
   },
   stopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     padding: 10,
     borderRadius: 12,
     borderLeftWidth: 3.5,
     marginBottom: 8,
-    gap: 12,
+    gap: 10,
+  },
+  stopThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
   },
   stopTimeCol: {
-    width: 72,
+    width: 68,
   },
   stopTimeText: {
     ...T.caption,

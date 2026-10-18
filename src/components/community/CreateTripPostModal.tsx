@@ -20,7 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { space, radius, type as T } from '../ui/tokens';
 import { getTrips, getTripById, TripWithRole } from '../../services/tripService';
-import { shareTripToCommunity } from '../../services/communityFeedService';
+import { shareTripToCommunity, processMediaForCommunity, isVideoUri } from '../../services/communityFeedService';
+import { getPlaceImageUrl } from '../../services/destinations';
 import { notify } from '../ui/Feedback';
 
 interface CreateTripPostModalProps {
@@ -37,7 +38,9 @@ const SCENIC_PHOTOS = [
   { id: 'scenic-cebu', name: 'Cebu Falls', url: 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=800&auto=format&fit=crop&q=80' },
   { id: 'scenic-elnido', name: 'El Nido Lagoon', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80' },
   { id: 'scenic-siargao', name: 'Siargao Surf', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80' },
+  { id: 'scenic-vid-waves', name: 'Ocean Waves (Video)', url: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-waves-breaking-on-the-shoreline-42997-large.mp4', isVideo: true },
   { id: 'scenic-boracay', name: 'Boracay Beach', url: 'https://images.unsplash.com/photo-1512100356356-de1b84283e18?w=800&auto=format&fit=crop&q=80' },
+  { id: 'scenic-vid-lagoon', name: 'Palawan Coast (Video)', url: 'https://assets.mixkit.co/videos/preview/mixkit-top-aerial-shot-of-seashore-with-turquoise-water-43004-large.mp4', isVideo: true },
   { id: 'scenic-batanes', name: 'Batanes Hills', url: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop&q=80' },
   { id: 'scenic-baguio', name: 'Baguio Fog', url: 'https://images.unsplash.com/photo-1523908511403-7fc7b25592f4?w=800&auto=format&fit=crop&q=80' },
   { id: 'scenic-bohol', name: 'Bohol Hills', url: 'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800&auto=format&fit=crop&q=80' },
@@ -212,7 +215,7 @@ export default function CreateTripPostModal({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -249,6 +252,14 @@ export default function CreateTripPostModal({
     setErrorMsg(null);
 
     try {
+      // 1. Process and upload media so others can see it (cloud upload or persistent base64)
+      let processedPhotos: string[] = [];
+      if (selectedPhotos.length > 0) {
+        processedPhotos = await Promise.all(
+          selectedPhotos.map(uri => processMediaForCommunity(uri, isVideoUri(uri)))
+        );
+      }
+
       const activeTrip = selectedTrip || POPULAR_TEMPLATES[0];
       const activeLocation = customLocation.trim() || activeTrip?.destination || 'Philippines';
 
@@ -267,6 +278,7 @@ export default function CreateTripPostModal({
         destination: activeLocation,
         estimatedBudget: selectedBudget,
         itinerary: tripItinerary,
+        image: activeTrip?.image || activeTrip?.image_url || getPlaceImageUrl(activeLocation),
       };
 
       await shareTripToCommunity({
@@ -275,7 +287,7 @@ export default function CreateTripPostModal({
         authorAvatar: currentUserAvatar,
         content: caption.trim(),
         location: activeLocation,
-        photos: selectedPhotos.length > 0 ? selectedPhotos : undefined,
+        photos: processedPhotos.length > 0 ? processedPhotos : undefined,
         trip: preparedTrip,
       });
 
@@ -365,12 +377,12 @@ export default function CreateTripPostModal({
               autoFocus
             />
 
-            {/* ── Photo Attachments Preview Strip ── */}
+            {/* ── Photo & Video Attachments Preview Strip ── */}
             {selectedPhotos.length > 0 && (
               <View style={{ marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={[styles.subSectionTitle, { color: colors.textSecondary }]}>
-                    ATTACHED PHOTOS ({selectedPhotos.length})
+                    ATTACHED MEDIA ({selectedPhotos.length})
                   </Text>
                   <TouchableOpacity onPress={() => setSelectedPhotos([])}>
                     <Text style={{ fontSize: 12, color: colors.brand, fontWeight: '600' }}>Clear all</Text>
@@ -381,6 +393,12 @@ export default function CreateTripPostModal({
                     {selectedPhotos.map((uri, idx) => (
                       <View key={idx} style={styles.photoThumbWrap}>
                         <Image source={{ uri }} style={styles.photoThumb} />
+                        {isVideoUri(uri) && (
+                          <View style={styles.videoIndicatorBadge}>
+                            <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                            <Text style={styles.videoIndicatorText}>VIDEO</Text>
+                          </View>
+                        )}
                         <TouchableOpacity
                           onPress={() => handleRemovePhoto(idx)}
                           style={styles.removePhotoBtn}
@@ -405,7 +423,7 @@ export default function CreateTripPostModal({
                   activeOpacity={0.7}
                 >
                   <Ionicons name="images" size={18} color="#10B981" />
-                  <Text style={[styles.toolbarActionText, { color: colors.text }]}>Device Photo</Text>
+                  <Text style={[styles.toolbarActionText, { color: colors.text }]}>Photo / Video</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -761,6 +779,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoIndicatorBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  videoIndicatorText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   composerToolbar: {
     flexDirection: 'row',

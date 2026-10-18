@@ -324,8 +324,6 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
     if (!path) return false;
     const p = path.trim();
     return (
-      p === '/' ||
-      p === '/index' ||
       p === '(tabs)' ||
       p === '/(tabs)' ||
       p === '/(tabs)/' ||
@@ -794,11 +792,62 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         });
       }
     } else if (!isNowDashboard && !isTripsPage) {
-      // Navigating between subpages (e.g. explore -> community)
-      setShowBadge(true);
-      setShowBirdInBadge(true);
-      badgeX.setValue(floatX);
-      badgeY.setValue(floatY);
+      // ===== NAVIGATING BETWEEN SUB-PAGES (e.g. Explore -> Trips) =====
+      if (!mascotFlightEnabled) {
+        setShowFlyingBird(false);
+        setShowBadge(true);
+        setShowBirdInBadge(true);
+        badgeX.setValue(floatX);
+        badgeY.setValue(floatY);
+      } else {
+        flightProgress.setValue(0);
+        setShowBirdInBadge(false);
+        setShowBadge(true);
+        setShowFlyingBird(true);
+
+        badgeX.setValue(floatX);
+        badgeY.setValue(floatY);
+
+        const targetBirdX = floatX - 6;
+        const targetBirdY = floatY - 6;
+
+        // Swoop in smoothly from the opposite side of the screen towards the badge
+        const startBirdX = floatX > SCREEN_WIDTH / 2 ? -60 : SCREEN_WIDTH + 60;
+        const startBirdY = Math.max(80, Math.min(SCREEN_HEIGHT * 0.4, floatY - 120));
+
+        const dx = targetBirdX - startBirdX;
+        const dy = targetBirdY - startBirdY;
+        setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
+
+        birdX.setValue(startBirdX);
+        birdY.setValue(startBirdY);
+
+        Animated.parallel([
+          Animated.timing(birdX, {
+            toValue: targetBirdX,
+            duration: 1500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+          Animated.timing(birdY, {
+            toValue: targetBirdY,
+            duration: 1500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+          Animated.timing(flightProgress, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+        ]).start(({ finished }) => {
+          if (finished) {
+            setShowFlyingBird(false);
+            setShowBirdInBadge(true);
+          }
+        });
+      }
     }
 
     return () => { };
@@ -806,7 +855,8 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
 
   // Trigger initial flight when page finishes loading on Dashboard
   useEffect(() => {
-    if (hide || globalLoading) return; // wait until loading finishes and mascot is not hidden
+    const isSplash = !pathname || pathname === '/' || pathname === '/index';
+    if (hide || globalLoading || isSplash) return; // wait until loading finishes and mascot is not hidden
     if (initialFlightDone.current) return;
     if (!isDashboard) {
       // If we are not on the dashboard, we don't play the perch flight
@@ -882,8 +932,9 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
       : [1, 1, 0.4, 0.2],  // going to badge: shrinks into circle
   });
 
-  // Hide the floating mascot entirely while onboarding is active or page is loading
-  if (hide || onboardingActive || globalLoading) return <></>;
+  // Hide the floating mascot entirely while on splash screen, onboarding, or loading
+  const isSplash = !pathname || pathname === '/' || pathname === '/index';
+  if (hide || onboardingActive || globalLoading || isSplash) return <></>;
 
 
   return (
@@ -1360,13 +1411,14 @@ function RootStack() {
   // The mascot and its floating control are companions for the signed-in app.
   // On the auth screens they have nothing to accompany, and they overlap the
   // form — the bird sat across the title and the floating button landed on top
-  // of the password field.
-  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || (!session && (pathname === '/' || pathname === '/index' || pathname === ''));
+  const isSplashRoute = pathname === '/' || pathname === '/index' || pathname === '';
+  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || isSplashRoute;
 
-  // Redirect to login if unauthenticated and not already on an auth screen
+  // Redirect to login if unauthenticated and not already on an auth or splash screen
   useEffect(() => {
     if (isLoading) return;
-    const isAuthRoute = pathname.startsWith('/(auth)') || pathname.includes('login');
+    const isSplashRoute = pathname === '/' || pathname === '/index' || pathname === '';
+    const isAuthRoute = pathname.startsWith('/(auth)') || pathname.includes('login') || isSplashRoute;
     if (!session && !isAuthRoute) {
       router.replace('/(auth)/login');
     }

@@ -13,6 +13,8 @@ import {
   Animated,
   Platform,
   Share as RNShare,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,9 +22,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { space, radius, type as T } from '../ui/tokens';
 import {
   CommunityPost,
+  CommunityItineraryStop,
   togglePostReaction,
   addPostComment,
+  isVideoUri,
 } from '../../services/communityFeedService';
+import { getPlaceImageUrl } from '../../services/destinations';
 
 interface CommunityPostCardProps {
   post: CommunityPost;
@@ -68,18 +73,26 @@ function SafeCommunityImage({
   style?: any;
   resizeMode?: any;
 }) {
-  const fallbackSource = getFallbackForText(destination);
-  const isInvalid = !uri || typeof uri !== 'string' || uri.trim() === '' || uri.startsWith('file://') || uri.startsWith('blob:');
-  const [hasError, setHasError] = useState(isInvalid);
+  const fallbackUrl = getPlaceImageUrl(destination || 'Philippines');
+  const isBad = !uri || typeof uri !== 'string' || uri.trim() === '';
+  const [hasError, setHasError] = useState(isBad);
 
-  const source = hasError || isInvalid ? fallbackSource : { uri };
+  React.useEffect(() => {
+    setHasError(!uri || typeof uri !== 'string' || uri.trim() === '');
+  }, [uri]);
+
+  const source = hasError || isBad
+    ? { uri: fallbackUrl }
+    : { uri };
 
   return (
     <Image
       source={source}
       style={style}
       resizeMode={resizeMode}
-      onError={() => setHasError(true)}
+      onError={() => {
+        setHasError(true);
+      }}
     />
   );
 }
@@ -124,11 +137,39 @@ export default function CommunityPostCard({
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
 
+  // Facebook-style Lightbox Modal state
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxMedia, setLightboxMedia] = useState<{ uri: string; caption?: string; isVideo?: boolean }[]>([]);
+
   const trip = post.trip;
   const stops = trip.itinerary || [];
   const reactions = post.reactions;
   const totalReactions = reactions.likes + reactions.loves + reactions.wows;
   const userReaction = reactions.userReaction;
+
+  const openPostPhotosLightbox = (startIndex: number) => {
+    if (!post.photos || post.photos.length === 0) return;
+    const media = post.photos.map(u => ({
+      uri: u,
+      caption: post.content || `${post.authorName}'s travel highlight in ${post.location || trip.destination}`,
+      isVideo: isVideoUri(u),
+    }));
+    setLightboxMedia(media);
+    setLightboxIndex(startIndex);
+    setLightboxVisible(true);
+  };
+
+  const openSingleImageLightbox = (uri?: string, caption?: string) => {
+    if (!uri) return;
+    setLightboxMedia([{
+      uri,
+      caption: caption || trip.title,
+      isVideo: isVideoUri(uri),
+    }]);
+    setLightboxIndex(0);
+    setLightboxVisible(true);
+  };
 
   const handleToggleLike = async (type: 'like' | 'love' | 'wow' = 'like') => {
     setShowReactionPicker(false);
@@ -240,59 +281,141 @@ export default function CommunityPostCard({
         </View>
       )}
 
-      {/* ── 2.5 PHOTO ATTACHMENTS (FACEBOOK STYLE) ── */}
+      {/* ── 2.5 PHOTO & VIDEO ATTACHMENTS (FACEBOOK STYLE) ── */}
       {post.photos && post.photos.length > 0 && (
         <View style={styles.postPhotosWrap}>
           {post.photos.length === 1 ? (
-            <SafeCommunityImage
-              uri={post.photos[0]}
-              destination={post.location || trip.destination}
-              style={styles.singlePhoto}
-              resizeMode="cover"
-            />
+            isVideoUri(post.photos[0]) ? (
+              Platform.OS === 'web' ? (
+                <View style={styles.singleVideoWrap}>
+                  <video
+                    src={post.photos[0]}
+                    controls
+                    playsInline
+                    style={{
+                      width: '100%',
+                      maxHeight: 400,
+                      borderRadius: 12,
+                      backgroundColor: '#000000',
+                      objectFit: 'cover',
+                    }}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => openPostPhotosLightbox(0)}
+                  style={styles.singlePhoto}
+                >
+                  <SafeCommunityImage
+                    uri={post.photos[0]}
+                    destination={post.location || trip.destination}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.videoPlayOverlay}>
+                    <Ionicons name="play" size={36} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+              )
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => openPostPhotosLightbox(0)}
+                style={styles.singlePhoto}
+              >
+                <SafeCommunityImage
+                  uri={post.photos[0]}
+                  destination={post.location || trip.destination}
+                  style={StyleSheet.absoluteFillObject}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            )
           ) : post.photos.length === 2 ? (
             <View style={styles.twoPhotosRow}>
-              <SafeCommunityImage
-                uri={post.photos[0]}
-                destination={post.location || trip.destination}
-                style={styles.halfPhoto}
-                resizeMode="cover"
-              />
-              <SafeCommunityImage
-                uri={post.photos[1]}
-                destination={post.location || trip.destination}
-                style={styles.halfPhoto}
-                resizeMode="cover"
-              />
+              {post.photos.slice(0, 2).map((uri, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  activeOpacity={0.9}
+                  onPress={() => openPostPhotosLightbox(idx)}
+                  style={styles.halfPhoto}
+                >
+                  <SafeCommunityImage
+                    uri={uri}
+                    destination={post.location || trip.destination}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                  />
+                  {isVideoUri(uri) && (
+                    <View style={styles.gridVideoBadge}>
+                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                      <Text style={styles.gridVideoBadgeText}>VIDEO</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
             </View>
           ) : (
             <View style={styles.multiPhotosGrid}>
-              <SafeCommunityImage
-                uri={post.photos[0]}
-                destination={post.location || trip.destination}
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => openPostPhotosLightbox(0)}
                 style={styles.mainGridPhoto}
-                resizeMode="cover"
-              />
-              <View style={styles.sideGridCol}>
+              >
                 <SafeCommunityImage
-                  uri={post.photos[1]}
+                  uri={post.photos[0]}
                   destination={post.location || trip.destination}
-                  style={styles.subGridPhoto}
+                  style={StyleSheet.absoluteFillObject}
                   resizeMode="cover"
                 />
-                <View style={styles.subGridPhotoWrap}>
+                {isVideoUri(post.photos[0]) && (
+                  <View style={styles.gridVideoBadge}>
+                    <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                    <Text style={styles.gridVideoBadgeText}>VIDEO</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <View style={styles.sideGridCol}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => openPostPhotosLightbox(1)}
+                  style={styles.subGridPhoto}
+                >
+                  <SafeCommunityImage
+                    uri={post.photos[1]}
+                    destination={post.location || trip.destination}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                  />
+                  {isVideoUri(post.photos[1]) && (
+                    <View style={styles.gridVideoBadge}>
+                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => openPostPhotosLightbox(2)}
+                  style={styles.subGridPhotoWrap}
+                >
                   <SafeCommunityImage
                     uri={post.photos[2]}
                     destination={post.location || trip.destination}
-                    style={styles.subGridPhoto}
+                    style={StyleSheet.absoluteFillObject}
                     resizeMode="cover"
                   />
+                  {isVideoUri(post.photos[2]) && (
+                    <View style={styles.gridVideoBadge}>
+                      <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                    </View>
+                  )}
                   {post.photos.length > 3 && (
                     <View style={styles.morePhotosOverlay}>
                       <Text style={styles.morePhotosText}>+{post.photos.length - 3}</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -301,8 +424,12 @@ export default function CommunityPostCard({
 
       {/* ── 3. RICH TRIP ATTACHMENT CARD (FACEBOOK LINK/MEDIA STYLE) ── */}
       <View style={[styles.tripAttachment, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
-        {/* Cover with Gradient & Badges */}
-        <View style={styles.coverContainer}>
+        {/* Cover with Gradient & Badges — click to expand in Lightbox */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => openSingleImageLightbox(trip.coverImage || getPlaceImageUrl(trip.destination || trip.title), trip.title)}
+          style={styles.coverContainer}
+        >
           <SafeCommunityImage
             uri={trip.coverImage}
             destination={trip.destination || trip.title}
@@ -337,7 +464,7 @@ export default function CommunityPostCard({
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Quick Highlights Strip */}
         <View style={[styles.highlightsStrip, { borderBottomColor: colors.divider }]}>
@@ -363,7 +490,7 @@ export default function CommunityPostCard({
           </View>
         </View>
 
-        {/* ── Accordion: Peek Itinerary Stops ── */}
+        {/* ── Accordion: Peek Itinerary Stops with Thumbnails ── */}
         <TouchableOpacity
           onPress={() => setIsItineraryExpanded(!isItineraryExpanded)}
           style={[styles.accordionToggle, { backgroundColor: colors.card }]}
@@ -384,26 +511,43 @@ export default function CommunityPostCard({
 
         {isItineraryExpanded && (
           <View style={[styles.accordionBody, { borderTopColor: colors.divider }]}>
-            {stops.map((stop, idx) => (
-              <View key={idx} style={[styles.peekStopRow, { borderBottomColor: colors.divider }]}>
-                <View style={styles.peekStopDayBadge}>
-                  <Text style={[styles.peekStopDayText, { color: colors.brand }]}>
-                    D{stop.dayIndex + 1}
-                  </Text>
-                  <Text style={[styles.peekStopTimeText, { color: colors.textMuted }]}>
-                    {stop.time}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.peekStopTitle, { color: colors.text }]}>{stop.title}</Text>
-                  {!!stop.description && (
-                    <Text style={[styles.peekStopDesc, { color: colors.textMuted }]} numberOfLines={2}>
-                      {stop.description}
+            {stops.map((stop, idx) => {
+              const stopImg = stop.image || getPlaceImageUrl(stop.title || stop.location || trip.destination, [stop.title]);
+              return (
+                <View key={idx} style={[styles.peekStopRow, { borderBottomColor: colors.divider }]}>
+                  <View style={styles.peekStopDayBadge}>
+                    <Text style={[styles.peekStopDayText, { color: colors.brand }]}>
+                      D{stop.dayIndex + 1}
                     </Text>
-                  )}
+                    <Text style={[styles.peekStopTimeText, { color: colors.textMuted }]}>
+                      {stop.time}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => openSingleImageLightbox(stopImg, `${stop.title} · Day ${stop.dayIndex + 1}`)}
+                    style={styles.peekStopThumbWrap}
+                  >
+                    <SafeCommunityImage
+                      uri={stopImg}
+                      destination={stop.title || stop.location || trip.destination}
+                      style={styles.peekStopThumb}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <Text style={[styles.peekStopTitle, { color: colors.text }]}>{stop.title}</Text>
+                    {!!stop.description && (
+                      <Text style={[styles.peekStopDesc, { color: colors.textMuted }]} numberOfLines={2}>
+                        {stop.description}
+                      </Text>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -600,6 +744,163 @@ export default function CommunityPostCard({
           </View>
         </View>
       )}
+
+      {/* ── 7. FACEBOOK-STYLE FULLSCREEN LIGHTBOX MODAL ── */}
+      <Modal
+        visible={lightboxVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxVisible(false)}
+      >
+        <View style={styles.lightboxContainer}>
+          {/* Top Bar */}
+          <View style={styles.lightboxTopBar}>
+            <View style={styles.lightboxAuthorRow}>
+              <SafeAvatar uri={post.authorAvatar} name={post.authorName} style={styles.lightboxAvatar} />
+              <View style={{ marginLeft: 10 }}>
+                <Text style={styles.lightboxAuthorName}>{post.authorName}</Text>
+                <Text style={styles.lightboxMetaText}>
+                  {post.location ? `${post.location} · ` : ''}{post.createdAt}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {lightboxMedia.length > 1 && (
+                <View style={styles.lightboxCounterBadge}>
+                  <Text style={styles.lightboxCounterText}>
+                    {lightboxIndex + 1} / {lightboxMedia.length}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => setLightboxVisible(false)}
+                style={styles.lightboxCloseBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Center Media Area with Navigation Arrows */}
+          <View style={styles.lightboxMediaArea}>
+            {lightboxMedia.length > 1 && lightboxIndex > 0 && (
+              <TouchableOpacity
+                onPress={() => setLightboxIndex(prev => Math.max(0, prev - 1))}
+                style={[styles.lightboxNavArrow, styles.lightboxNavLeft]}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              >
+                <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.lightboxMediaWrapper}>
+              {lightboxMedia[lightboxIndex]?.isVideo ? (
+                Platform.OS === 'web' ? (
+                  <video
+                    src={lightboxMedia[lightboxIndex]?.uri}
+                    controls
+                    autoPlay
+                    playsInline
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '75vh',
+                      borderRadius: 8,
+                      outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Image
+                      source={{ uri: lightboxMedia[lightboxIndex]?.uri }}
+                      style={styles.lightboxFullImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.videoPlayOverlay}>
+                      <Ionicons name="play" size={48} color="#FFFFFF" />
+                    </View>
+                  </View>
+                )
+              ) : (
+                <Image
+                  source={{ uri: lightboxMedia[lightboxIndex]?.uri || getPlaceImageUrl(post.location || trip.destination) }}
+                  style={styles.lightboxFullImage}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
+
+            {lightboxMedia.length > 1 && lightboxIndex < lightboxMedia.length - 1 && (
+              <TouchableOpacity
+                onPress={() => setLightboxIndex(prev => Math.min(lightboxMedia.length - 1, prev + 1))}
+                style={[styles.lightboxNavArrow, styles.lightboxNavRight]}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              >
+                <Ionicons name="chevron-forward" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Bottom Bar: Caption + Facebook reactions + Thumbnail Carousel */}
+          <View style={styles.lightboxBottomBar}>
+            {!!lightboxMedia[lightboxIndex]?.caption && (
+              <Text style={styles.lightboxCaptionText} numberOfLines={2}>
+                {lightboxMedia[lightboxIndex].caption}
+              </Text>
+            )}
+
+            {/* Thumbnail selector strip if multiple photos */}
+            {lightboxMedia.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lightboxThumbsRow}>
+                {lightboxMedia.map((item, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setLightboxIndex(i)}
+                    style={[
+                      styles.lightboxThumbBtn,
+                      lightboxIndex === i && styles.lightboxThumbActive,
+                    ]}
+                  >
+                    <Image source={{ uri: item.uri }} style={styles.lightboxThumbImg} />
+                    {item.isVideo && (
+                      <View style={styles.lightboxThumbVideoTag}>
+                        <Ionicons name="play" size={10} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={styles.lightboxActionsRow}>
+              <TouchableOpacity
+                onPress={() => handleToggleLike(userReaction ? userReaction : 'like')}
+                style={styles.lightboxActionBtn}
+              >
+                <Ionicons name={reactionMeta.icon as any} size={18} color={reactionMeta.color} />
+                <Text style={[styles.lightboxActionText, { color: reactionMeta.color }]}>
+                  {reactionMeta.label}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setLightboxVisible(false);
+                  setShowComments(true);
+                }}
+                style={styles.lightboxActionBtn}
+              >
+                <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.lightboxActionText}>Comment</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleShare} style={styles.lightboxActionBtn}>
+                <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.lightboxActionText}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -710,13 +1011,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   coverContainer: {
-    height: 170,
+    height: 175,
+    width: '100%',
     position: 'relative',
     justifyContent: 'space-between',
     padding: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
   },
   coverImage: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   coverTopBadges: {
     flexDirection: 'row',
@@ -806,9 +1116,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
+    alignItems: 'center',
   },
   peekStopDayBadge: {
-    width: 60,
+    width: 52,
   },
   peekStopDayText: {
     ...T.caption,
@@ -816,6 +1127,17 @@ const styles = StyleSheet.create({
   },
   peekStopTimeText: {
     ...T.micro,
+  },
+  peekStopThumbWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+  },
+  peekStopThumb: {
+    width: '100%',
+    height: '100%',
   },
   peekStopTitle: {
     ...T.caption,
@@ -1074,5 +1396,185 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  singleVideoWrap: {
+    width: '100%',
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: '#000000',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridVideoBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  gridVideoBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  // ── Facebook-style Fullscreen Lightbox Styles ──
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.96)',
+    justifyContent: 'space-between',
+  },
+  lightboxTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 48 : 20,
+    paddingBottom: 12,
+    zIndex: 10,
+  },
+  lightboxAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lightboxAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  lightboxAuthorName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  lightboxMetaText: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 12,
+    marginTop: 1,
+  },
+  lightboxCounterBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  lightboxCounterText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  lightboxCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxMediaArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    paddingHorizontal: 12,
+  },
+  lightboxMediaWrapper: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxFullImage: {
+    width: '100%',
+    height: '100%',
+  },
+  lightboxNavArrow: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  lightboxNavLeft: {
+    left: 14,
+  },
+  lightboxNavRight: {
+    right: 14,
+  },
+  lightboxBottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  },
+  lightboxCaptionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  lightboxThumbsRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  lightboxThumbBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  lightboxThumbActive: {
+    borderColor: '#028BEB',
+  },
+  lightboxThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  lightboxThumbVideoTag: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 3,
+    padding: 2,
+  },
+  lightboxActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    paddingTop: 10,
+  },
+  lightboxActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  lightboxActionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

@@ -1096,11 +1096,25 @@ export default function CreateTripScreen() {
                 value={destination === 'TBD' ? '' : destination}
                 onChangeText={setDestination}
                 placeholder="e.g. El Nido, Palawan"
-                style={[styles.inputField, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
+                style={[
+                  styles.inputField,
+                  {
+                    backgroundColor: colors.card,
+                    color: colors.text,
+                    borderColor: colors.cardBorder,
+                    paddingRight: destination && destination !== 'TBD' ? 42 : 14,
+                  },
+                ]}
                 placeholderTextColor={colors.textMuted}
               />
               {destination && destination !== 'TBD' ? (
-                <TouchableOpacity onPress={() => setDestination('')} style={{ padding: 4, marginRight: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setDestination('')}
+                  style={styles.searchClearBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Clear destination"
+                  accessibilityRole="button"
+                >
                   <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               ) : null}
@@ -1817,7 +1831,15 @@ const styles = StyleSheet.create({
   searchIcon: {
     position: 'absolute',
     left: 14,
+    top: 15,
     zIndex: 1,
+  },
+  searchClearBtn: {
+    position: 'absolute',
+    right: 12,
+    top: 13,
+    padding: 2,
+    zIndex: 2,
   },
   inputField: {
     width: '100%',

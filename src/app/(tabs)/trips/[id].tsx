@@ -159,8 +159,13 @@ export default function TripHomeScreen() {
     }).then(async (ok) => {
       if (!ok) return;
       setEditModalVisible(false);
-      await dbDeleteTrip(trip.id);
-      router.back();
+      const { error } = await dbDeleteTrip(trip.id);
+      if (error) {
+        notify(error, 'error');
+      } else {
+        notify('Trip deleted', 'info');
+        router.replace('/(tabs)/trips');
+      }
     });
   };
 

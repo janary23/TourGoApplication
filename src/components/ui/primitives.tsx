@@ -11,7 +11,7 @@ import {
   View, Text, TouchableOpacity, Pressable, Animated, StyleSheet,
   TextInput, ScrollView, ActivityIndicator, Modal, ViewStyle, TextStyle,
   KeyboardAvoidingView, Platform, StyleProp, Switch, Image, ImageSourcePropType,
-  AccessibilityInfo,
+  AccessibilityInfo, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -928,29 +928,36 @@ interface SheetProps {
 /** Bottom sheet used for every create/edit flow, replacing full-screen modals. */
 export function Sheet({ visible, onClose, title, children, primaryAction }: SheetProps) {
   const { colors, isDark } = useTheme();
-  // The sheet is anchored to the very bottom of the window, so its own content
-  // has to clear the home indicator / gesture bar. Without this the primary
-  // button sits under it and the sheet looks like it stops short of the edge.
   const insets = useSafeAreaInsets();
-  const safeBottom = Math.max(insets.bottom, space.sm);
+  const safeBottom = Math.max(insets.bottom, 16);
+  const screenHeight = Dimensions.get('window').height;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' }}>
+        {/* Full-screen backdrop overlay */}
+        <Pressable
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.overlay }]}
+          onPress={onClose}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%', justifyContent: 'flex-end' }}
+        >
           <View
             style={{
               backgroundColor: colors.background,
               borderTopLeftRadius: radius.xxl,
               borderTopRightRadius: radius.xxl,
-              maxHeight: '88%',
+              maxHeight: screenHeight * 0.9,
+              width: '100%',
               borderTopWidth: hairline,
               borderColor: colors.cardBorder,
+              overflow: 'hidden',
             }}
           >
             {/* Grabber */}
-            <View style={{ alignItems: 'center', paddingTop: space.md }}>
+            <View style={{ alignItems: 'center', paddingTop: space.md, paddingBottom: space.xs }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.cardBorder }} />
             </View>
 
@@ -963,12 +970,13 @@ export function Sheet({ visible, onClose, title, children, primaryAction }: Shee
 
             <ScrollView
               contentContainerStyle={{
-                padding: space.xl,
-                paddingTop: title ? 0 : space.lg,
-                paddingBottom: primaryAction ? space.xl : space.xl + safeBottom,
+                paddingHorizontal: space.xl,
+                paddingTop: title ? space.xs : space.lg,
+                paddingBottom: primaryAction ? space.xl : space.xl + safeBottom + 28,
               }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              bounces={false}
             >
               {children}
             </ScrollView>
@@ -979,7 +987,7 @@ export function Sheet({ visible, onClose, title, children, primaryAction }: Shee
                 {
                   borderTopColor: colors.divider,
                   backgroundColor: colors.background,
-                  paddingBottom: space.xl + safeBottom - space.sm,
+                  paddingBottom: space.xl + safeBottom,
                 },
               ]}>
                 <Button
