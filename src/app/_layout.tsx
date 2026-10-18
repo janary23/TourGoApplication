@@ -267,8 +267,9 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
   const isFirstLaunchRef = useRef(true);
   const initialFlightDone = useRef(false);
 
-  // Ref to track previous pathname — only animate flight on actual navigation
+  // Ref to track previous pathname & dashboard status — only animate flight on actual navigation
   const prevPathnameRef = useRef(pathname);
+  const prevIsDashboardRef = useRef<boolean | null>(null);
 
   // Track coordinates of the floating icon (remembers last dragged position!)
   const floatingPosRef = useRef({ x: SCREEN_WIDTH - 80, y: SCREEN_HEIGHT / 2 - 32 });
@@ -319,7 +320,23 @@ function GlobalMascot({ hide }: { hide?: boolean }) {
   const isDashboardRef = useRef(false);
   const isFirstRender = useRef(true);
 
-  const isDashboard = pathname === '/' || pathname === '/index' || pathname === '(tabs)' || pathname === '/(tabs)';
+  const isDashboardPath = (path: string) => {
+    if (!path) return false;
+    const p = path.trim();
+    return (
+      p === '/' ||
+      p === '/index' ||
+      p === '(tabs)' ||
+      p === '/(tabs)' ||
+      p === '/(tabs)/' ||
+      p === '/(tabs)/index' ||
+      p === '(tabs)/index' ||
+      p === '/tabs' ||
+      p === '/tabs/index'
+    );
+  };
+
+  const isDashboard = isDashboardPath(pathname);
   const isTripsPage = pathname.includes('/trip/');
 
   useEffect(() => {
@@ -631,27 +648,35 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
   ).current;
 
   useEffect(() => {
-    // Only run flight animation when pathname actually changes (not on toggle changes)
+    // Only run flight animation when pathname actually changes
+    const wasDashboard = prevIsDashboardRef.current;
+    const isNowDashboard = isDashboard;
+
     if (isFirstRender.current) {
       isFirstRender.current = false;
-    } else if (pathname === prevPathnameRef.current) {
+      prevPathnameRef.current = pathname;
+      prevIsDashboardRef.current = isNowDashboard;
+      if (!isNowDashboard && !isTripsPage) {
+        setShowBadge(true);
+        setShowBirdInBadge(true);
+        badgeX.setValue(floatingPosRef.current.x);
+        badgeY.setValue(floatingPosRef.current.y);
+      }
+      return;
+    }
+
+    if (pathname === prevPathnameRef.current && wasDashboard === isNowDashboard) {
       return;
     }
     prevPathnameRef.current = pathname;
+    prevIsDashboardRef.current = isNowDashboard;
 
-    const dashPerchX = 6;
-    const dashPerchY = (insets?.top || 0) + 136;
+    const dashPerchX = 10;
+    const dashPerchY = (insets?.top || 0) + 56;
     const floatX = floatingPosRef.current.x;
     const floatY = floatingPosRef.current.y;
-    const spawnX = SCREEN_WIDTH * 0.8;
-    const spawnY = SCREEN_HEIGHT * 0.7;
 
-    if (isFirstLaunchRef.current) {
-      // Entrance flight animation is delayed until the home screen finishes skeletal loading.
-      return;
-    }
-
-    if (!isDashboard) {
+    if (wasDashboard && !isNowDashboard) {
       // ===== GOING TO SUB-PAGE =====
       if (typeof (globalThis as any).onMascotLeave === 'function') {
         (globalThis as any).onMascotLeave();
@@ -688,19 +713,19 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         Animated.parallel([
           Animated.timing(birdX, {
             toValue: targetBirdX,
-            duration: 2000,
+            duration: 1800,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(birdY, {
             toValue: targetBirdY,
-            duration: 2000,
+            duration: 1800,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
           Animated.timing(flightProgress, {
             toValue: 1,
-            duration: 2000,
+            duration: 1800,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: NATIVE_DRIVER,
           }),
@@ -713,7 +738,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         });
       }
 
-    } else {
+    } else if (!wasDashboard && isNowDashboard) {
       // ===== GOING BACK TO DASHBOARD =====
       if (!mascotFlightEnabled) {
         // Flight disabled — skip animation, just hide badge and show static mascot
@@ -724,71 +749,82 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
           (globalThis as any).onMascotLand();
         }
       } else {
-      flightProgress.setValue(0);
-      setShowBirdInBadge(false);  // Remove bird from badge
-      setShowFlyingBird(true);
+        flightProgress.setValue(0);
+        setShowBirdInBadge(false);  // Remove bird from badge
+        setShowFlyingBird(true);
 
-      // Bird starts from badge center
-      const startBirdX = floatX - 6;
-      const startBirdY = floatY - 6;
+        // Bird starts from badge center
+        const startBirdX = floatX - 6;
+        const startBirdY = floatY - 6;
 
-      const dx = dashPerchX - startBirdX;
-      const dy = dashPerchY - startBirdY;
-      setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
+        const dx = dashPerchX - startBirdX;
+        const dy = dashPerchY - startBirdY;
+        setTravelAngle(Math.atan2(dx, -dy) * (180 / Math.PI));
 
-      birdX.setValue(startBirdX);
-      birdY.setValue(startBirdY);
+        birdX.setValue(startBirdX);
+        birdY.setValue(startBirdY);
 
-      Animated.parallel([
-        Animated.timing(birdX, {
-          toValue: dashPerchX,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: NATIVE_DRIVER,
-        }),
-        Animated.timing(birdY, {
-          toValue: dashPerchY,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: NATIVE_DRIVER,
-        }),
-        Animated.timing(flightProgress, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: NATIVE_DRIVER,
-        }),
-      ]).start(({ finished }) => {
-        if (finished) {
-          setShowFlyingBird(false);
-          setShowBadge(false); // Hide badge when back on dashboard
-          if (typeof (globalThis as any).onMascotLand === 'function') {
-            (globalThis as any).onMascotLand();
+        Animated.parallel([
+          Animated.timing(birdX, {
+            toValue: dashPerchX,
+            duration: 1800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+          Animated.timing(birdY, {
+            toValue: dashPerchY,
+            duration: 1800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+          Animated.timing(flightProgress, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: NATIVE_DRIVER,
+          }),
+        ]).start(({ finished }) => {
+          if (finished) {
+            setShowFlyingBird(false);
+            setShowBadge(false); // Hide badge when back on dashboard
+            if (typeof (globalThis as any).onMascotLand === 'function') {
+              (globalThis as any).onMascotLand();
+            }
           }
-        }
-      });
+        });
       }
+    } else if (!isNowDashboard && !isTripsPage) {
+      // Navigating between subpages (e.g. explore -> community)
+      setShowBadge(true);
+      setShowBirdInBadge(true);
+      badgeX.setValue(floatX);
+      badgeY.setValue(floatY);
     }
 
     return () => { };
-  }, [pathname, insets, mascotFlightEnabled]);
+  }, [pathname, insets, mascotFlightEnabled, isDashboard, hide]);
 
-  // Trigger initial flight when page finishes loading
+  // Trigger initial flight when page finishes loading on Dashboard
   useEffect(() => {
-    if (globalLoading) return; // wait until loading finishes
+    if (hide || globalLoading) return; // wait until loading finishes and mascot is not hidden
     if (initialFlightDone.current) return;
     if (!isDashboard) {
       // If we are not on the dashboard, we don't play the perch flight
       initialFlightDone.current = true;
+      if (!isTripsPage) {
+        setShowBadge(true);
+        setShowBirdInBadge(true);
+        badgeX.setValue(floatingPosRef.current.x);
+        badgeY.setValue(floatingPosRef.current.y);
+      }
       return;
     }
     
     // Play the entrance flight!
     initialFlightDone.current = true;
-    isFirstLaunchRef.current = false;
     
-    const dashPerchX = 6;
-    const dashPerchY = (insets?.top || 0) + 136;
+    const dashPerchX = 10;
+    const dashPerchY = (insets?.top || 0) + 56;
     const spawnX = SCREEN_WIDTH * 0.8;
     const spawnY = SCREEN_HEIGHT * 0.7;
 
@@ -831,7 +867,7 @@ Never say you're an AI model — you are Aguilito, TourGo's eagle companion. Alw
         }
       }
     });
-  }, [globalLoading, pathname, insets]);
+  }, [globalLoading, pathname, insets, hide, isDashboard]);
 
   // Flying bird opacity (fades out as it enters badge on sub-page)
   const flyingBirdOpacity = flightProgress.interpolate({
@@ -1325,12 +1361,12 @@ function RootStack() {
   // On the auth screens they have nothing to accompany, and they overlap the
   // form — the bird sat across the title and the floating button landed on top
   // of the password field.
-  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || pathname === '/' || pathname === '/index' || pathname === '';
+  const isAuthScreen = pathname.startsWith('/(auth)') || pathname.includes('login') || (!session && (pathname === '/' || pathname === '/index' || pathname === ''));
 
   // Redirect to login if unauthenticated and not already on an auth screen
   useEffect(() => {
     if (isLoading) return;
-    const isAuthRoute = isAuthScreen;
+    const isAuthRoute = pathname.startsWith('/(auth)') || pathname.includes('login');
     if (!session && !isAuthRoute) {
       router.replace('/(auth)/login');
     }

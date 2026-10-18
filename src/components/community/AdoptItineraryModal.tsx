@@ -253,7 +253,7 @@ export default function AdoptItineraryModal({
               ))}
             </View>
 
-            {errorMsg && (
+            {!!errorMsg && (
               <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
                 <Ionicons name="alert-circle" size={16} color="#DC2626" />
                 <Text style={[styles.errorText, { color: '#B91C1C' }]}>{errorMsg}</Text>

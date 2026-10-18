@@ -50,14 +50,22 @@ export default function SubscriptionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+      <View style={[styles.header, { borderBottomColor: colors.cardBorder, zIndex: 10 }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)');
+            }
+          }}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, alignSelf: 'flex-start' }}
+          activeOpacity={0.7}
+          accessibilityLabel="Go back"
         >
           <Ionicons name="chevron-back" size={22} color={colors.brand} />
-          <Text style={{ ...T.body, color: colors.brand }}>Settings</Text>
+          <Text style={{ ...T.body, color: colors.brand, fontWeight: '600' }}>Back</Text>
         </TouchableOpacity>
       </View>
 

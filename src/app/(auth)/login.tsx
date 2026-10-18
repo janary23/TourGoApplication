@@ -25,7 +25,7 @@ const NATIVE_DRIVER = Platform.OS !== 'web';
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { signIn, signUp, signInWithGoogle, session } = useAuth();
+  const { signIn, signUp, session } = useAuth();
   const { toast } = useFeedback();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -34,7 +34,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
@@ -50,16 +49,6 @@ export default function LoginScreen() {
   useEffect(() => {
     if (session) router.replace('/(tabs)');
   }, [session]);
-
-  const handleGoogleSignIn = async () => {
-    setIsGoogleLoading(true);
-    try {
-      const { error } = await signInWithGoogle();
-      if (error) toast(error, 'error');
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -260,7 +249,7 @@ export default function LoginScreen() {
                   isLoading && { opacity: 0.75 },
                 ]}
                 onPress={handleSubmit}
-                disabled={isLoading || isGoogleLoading}
+                disabled={isLoading}
               >
                 {isLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -268,39 +257,6 @@ export default function LoginScreen() {
                   <Text style={styles.primaryButtonText}>
                     {isSignUp ? 'Create account' : 'Log In'}
                   </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View style={styles.dividerRow}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
-                <Text style={[styles.dividerText, { color: colors.textMuted }]}>OR</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.cardBorder }]} />
-              </View>
-
-              {/* Google Social Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[
-                  styles.socialButton,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.cardBorder,
-                  },
-                  isGoogleLoading && { opacity: 0.75 },
-                ]}
-                onPress={handleGoogleSignIn}
-                disabled={isLoading || isGoogleLoading}
-              >
-                {isGoogleLoading ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={18} color="#EA4335" />
-                    <Text style={[styles.socialButtonText, { color: colors.text }]}>
-                      Continue with Google
-                    </Text>
-                  </>
                 )}
               </TouchableOpacity>
 

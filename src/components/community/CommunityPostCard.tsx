@@ -163,7 +163,7 @@ export default function CommunityPostCard({
     try {
       const message = `Check out this itinerary: "${trip.title}" on TourGo!\n${stops.length} stops in ${trip.destination}.\nAdopt it inside the TourGo app!`;
       await RNShare.share({ message });
-    } catch {
+    } catch (_err) {
       // share dismissed
     }
   };
@@ -193,7 +193,7 @@ export default function CommunityPostCard({
         <View style={styles.headerInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={[styles.authorName, { color: colors.text }]}>{post.authorName}</Text>
-            {post.authorRole && (
+            {!!post.authorRole && (
               <View style={[styles.roleTag, { backgroundColor: colors.brandLight }]}>
                 <Text style={[styles.roleTagText, { color: colors.brand }]}>{post.authorRole}</Text>
               </View>
@@ -201,7 +201,7 @@ export default function CommunityPostCard({
           </View>
 
           <View style={styles.metaRow}>
-            {post.location && (
+            {!!post.location && (
               <>
                 <Ionicons name="location-sharp" size={12} color={colors.brand} />
                 <Text style={[styles.locationText, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -346,7 +346,7 @@ export default function CommunityPostCard({
             <Text style={[styles.highlightValue, { color: colors.text }]}>{stops.length} Stops</Text>
           </View>
           <View style={[styles.highlightDivider, { backgroundColor: colors.divider }]} />
-          {trip.estimatedBudget && (
+          {!!trip.estimatedBudget && (
             <>
               <View style={styles.highlightCol}>
                 <Ionicons name="cash-outline" size={15} color="#10B981" />
@@ -416,7 +416,7 @@ export default function CommunityPostCard({
                 <Text style={{ fontWeight: '700', color: colors.text }}>{post.adoptionsCount}</Text> travelers adopted this plan
               </Text>
             </View>
-            {post.hasAdopted && (
+            {!!post.hasAdopted && (
               <View style={[styles.adoptedPill, { backgroundColor: '#DEF7EC' }]}>
                 <Ionicons name="checkmark-circle" size={12} color="#03543F" style={{ marginRight: 3 }} />
                 <Text style={styles.adoptedPillText}>Adopted</Text>

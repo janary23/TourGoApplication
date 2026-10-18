@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Modal, Image, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Modal,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PREFERENCE_TOPICS, savePreferences } from '../services/preferences';
-import { space, radius, hairline, shadow } from './ui/tokens';
-import { Txt, Press, Button } from './ui/primitives';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PREFERENCE_TOPICS, savePreferences, loadPreferences } from '../services/preferences';
+import { type as T, space, radius } from './ui/tokens';
 
 interface Props {
   visible: boolean;
@@ -13,7 +22,18 @@ interface Props {
 }
 
 export function PreferencesOnboarding({ visible, onComplete, colors, isDark = false }: Props) {
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (visible) {
+      loadPreferences().then((saved) => {
+        if (saved && Array.isArray(saved)) {
+          setSelected(saved);
+        }
+      });
+    }
+  }, [visible]);
 
   const toggle = (id: string) => {
     setSelected((prev) =>
@@ -27,110 +47,127 @@ export function PreferencesOnboarding({ visible, onComplete, colors, isDark = fa
   };
 
   return (
-    <Modal visible={visible} animationType="slide" statusBarTranslucent>
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onComplete}>
       <View style={[styles.root, { backgroundColor: colors.background }]}>
+        {/* Top Header Bar with Close Button & Centered Mascot */}
+        <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
+          <View style={{ width: 38 }} />
+
+          <View style={[styles.mascotBadge, { backgroundColor: colors.brandLight }]}>
+            <Image
+              source={require('../../assets/images/EagleMascotS5.png')}
+              style={styles.mascotSmall}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.closeIconBtn, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+            onPress={onComplete}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Close"
+          >
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Top banner + mascot. A tinted banner behind the whole header reads as
-              a brand moment, not the per-item icon-tile pattern Direction A bans
-              below — the distinction is scale: one banner per screen, never one
-              per row. */}
-          <View style={[styles.header, { backgroundColor: colors.brandLight }]}>
-            <Image
-              source={require('../../assets/images/EagleMascotS5.png')}
-              style={styles.mascot}
-            />
-            <Txt variant="emphasis" tone="accent">Tell us what you love</Txt>
-          </View>
+          {/* Title & Subtitle (Consistent with Onboarding Walkthrough) */}
+          <Text style={[styles.prefTitle, { color: colors.text }]}>
+            Tell us what you love
+          </Text>
+          <Text style={[styles.prefSubtitle, { color: colors.textSecondary }]}>
+            Choose categories to customize your personalized travel recommendations.
+          </Text>
 
-          <Txt variant="display" align="center" style={styles.title}>
-            What kind of trips get you excited?
-          </Txt>
-          <Txt variant="subhead" tone="secondary" align="center" style={styles.subtitle}>
-            Pick a few favorites — we'll use them to surface spots across the Philippines
-            you'll actually like. You can change these anytime.
-          </Txt>
-
-          {/* Topic grid. No tinted icon square per tile (Direction A Hard Rule) —
-              the icon sits bare, sized up so it still carries weight, and the
-              border colour + check mark are what tell selected from not. */}
+          {/* 2-Column Responsive Grid matching Onboarding Step 3 */}
           <View style={styles.grid}>
             {PREFERENCE_TOPICS.map((topic) => {
               const active = selected.includes(topic.id);
               return (
-                <Press
-                  key={topic.id}
-                  onPress={() => toggle(topic.id)}
-                  style={[
-                    styles.topicCard,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: active ? colors.brand : colors.cardBorder,
-                      borderWidth: active ? 1.5 : hairline,
-                    },
-                    !isDark && shadow(1, isDark),
-                  ]}
-                >
-                  <Ionicons
-                    name={topic.icon as any}
-                    size={26}
-                    color={active ? colors.brand : colors.textSecondary}
-                    style={{ marginBottom: space.sm }}
-                  />
-                  <Txt
-                    variant="headline"
-                    tone={active ? 'accent' : 'primary'}
-                    numberOfLines={2}
-                  >
-                    {topic.label}
-                  </Txt>
-                  <Txt variant="caption" tone="muted" numberOfLines={2} style={{ marginTop: 3 }}>
-                    {topic.description}
-                  </Txt>
-
-                  <View
+                <View key={topic.id} style={styles.topicCardWrap}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => toggle(topic.id)}
                     style={[
-                      styles.checkCircle,
+                      styles.topicCard,
                       {
+                        backgroundColor: colors.card,
                         borderColor: active ? colors.brand : colors.cardBorder,
-                        backgroundColor: active ? colors.brand : 'transparent',
+                        shadowColor: active ? colors.brand : '#000000',
+                        shadowOpacity: isDark ? 0 : active ? 0.08 : 0.03,
                       },
                     ]}
                   >
-                    {active && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                  </View>
-                </Press>
+                    <Ionicons
+                      name={topic.icon as any}
+                      size={26}
+                      color={active ? colors.brand : colors.textSecondary}
+                      style={styles.topicIcon}
+                    />
+
+                    <Text
+                      style={[
+                        styles.topicLabel,
+                        { color: active ? colors.brand : colors.text },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {topic.label}
+                    </Text>
+
+                    <Text
+                      style={[styles.topicDescText, { color: colors.textMuted }]}
+                      numberOfLines={2}
+                    >
+                      {topic.description}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.checkCircle,
+                        {
+                          borderColor: active ? colors.brand : colors.cardBorder,
+                          backgroundColor: active ? colors.brand : 'transparent',
+                        },
+                      ]}
+                    >
+                      {active && <Ionicons name="checkmark" size={11} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer with Selection Count & Primary Action Button */}
         <View
           style={[
             styles.footer,
             {
               backgroundColor: colors.card,
               borderTopColor: colors.divider,
-              paddingBottom: Platform.OS === 'ios' ? 30 : space.lg,
+              paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 16),
             },
           ]}
         >
-          <Txt variant="label" tone="muted" align="center" style={{ marginBottom: space.sm }}>
-            {selected.length} selected
-          </Txt>
-          <Button
-            // Always enabled: 0 selections finishes onboarding via skip, any
-            // count above that finishes via "Show my picks". The previous
-            // version disabled the button whenever selections were below 1
-            // while also labelling it "Skip" at that same count — Skip was
-            // unclickable.
-            label={selected.length === 0 ? 'Skip for now' : 'Show my picks'}
+          <Text style={[styles.selectionCount, { color: colors.textMuted }]}>
+            {selected.length > 0 ? `${selected.length} selected` : 'Pick as many as you like'}
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
             onPress={finish}
-            fullWidth
-          />
+            style={[styles.doneBtn, { backgroundColor: colors.brand }]}
+          >
+            <Text style={[styles.doneTxt, { color: '#FFFFFF' }]}>
+              {selected.length === 0 ? 'Skip for now' : 'Save preferences'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -141,58 +178,111 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: space.xl,
-  },
-  header: {
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: space.xxl,
-    borderBottomLeftRadius: radius.xxl,
-    borderBottomRightRadius: radius.xxl,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
   },
-  mascot: {
-    width: 90,
-    height: 90,
+  mascotBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mascotSmall: {
+    width: 34,
+    height: 34,
     resizeMode: 'contain',
-    marginBottom: space.sm,
   },
-  title: {
-    marginTop: space.xxl,
-    paddingHorizontal: space.xl,
+  closeIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  subtitle: {
-    lineHeight: 20,
-    paddingHorizontal: space.xxl + space.xs,
-    marginTop: space.sm,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  prefTitle: {
+    ...T.display,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  prefSubtitle: {
+    ...T.emphasis,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: space.xl,
-    marginTop: space.xl,
-    gap: space.md,
+    gap: 12,
+  },
+  topicCardWrap: {
+    width: '48%',
   },
   topicCard: {
-    width: '47%',
-    borderRadius: radius.lg,
-    padding: space.lg,
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
     position: 'relative',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  topicIcon: {
+    marginBottom: 12,
+  },
+  topicLabel: {
+    ...T.bodyStrong,
+    marginBottom: 2,
+  },
+  topicDescText: {
+    ...T.caption,
+    lineHeight: 15,
   },
   checkCircle: {
     position: 'absolute',
-    top: space.md,
-    right: space.md,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    top: 14,
+    right: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
   },
   footer: {
-    paddingHorizontal: space.xl,
-    paddingTop: space.md + 2,
-    borderTopWidth: hairline,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  selectionCount: {
+    ...T.caption,
+    textAlign: 'center',
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  doneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 20,
+  },
+  doneTxt: {
+    ...T.titleSm,
+    fontWeight: '700',
   },
 });

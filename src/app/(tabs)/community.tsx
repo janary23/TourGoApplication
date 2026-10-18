@@ -36,10 +36,17 @@ export default function CommunityTabScreen() {
             activeOpacity={0.8}
             accessibilityLabel="Open Profile Sidebar"
           >
-            <Image source={{ uri: currentUserAvatar }} style={styles.headerAvatar} />
+            <Image
+              source={{
+                uri:
+                  currentUserAvatar ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+              }}
+              style={styles.headerAvatar}
+            />
           </TouchableOpacity>
 
-          <View style={styles.headerBrandRow}>
+          <View style={styles.headerBrandContainer}>
             <Image
               source={require('../../../assets/images/TourGoLogo.png')}
               style={[styles.headerLogoImage, { tintColor: colors.brand }]}
@@ -84,10 +91,9 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
     borderBottomWidth: 0,
   },
-  headerBrandRow: {
+  headerBrandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
   headerLogoImage: {
     width: 26,

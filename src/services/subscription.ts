@@ -82,6 +82,8 @@ function isMissingColumn(error: any): boolean {
   return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
 }
 
+import { storageGet } from './storage';
+
 /**
  * The current user's subscription. Falls back to Free whenever there's no
  * plan recorded, no plan column, or no signed-in user — never throws, so the
@@ -91,28 +93,11 @@ export async function getSubscription(): Promise<SubscriptionState> {
   const free: SubscriptionState = { planId: 'free', status: 'active' };
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return free;
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('plan, plan_status, plan_renews_on, plan_billing_period')
-      .eq('id', user.id)
-      .single();
-
-    if (error) {
-      // No plan columns provisioned yet — everyone is on Free, which is true.
-      if (isMissingColumn(error)) return free;
-      return free;
+    const localPlan = await storageGet('tourgo_user_plan');
+    if (localPlan === 'premium') {
+      return { planId: 'premium', status: 'active', renewsOn: null, billingPeriod: 'yearly' };
     }
-
-    const planId: PlanId = data?.plan === 'premium' ? 'premium' : 'free';
-    return {
-      planId,
-      status: (data?.plan_status as SubscriptionState['status']) || 'active',
-      renewsOn: data?.plan_renews_on ?? null,
-      billingPeriod: data?.plan_billing_period ?? null,
-    };
+    return free;
   } catch {
     return free;
   }

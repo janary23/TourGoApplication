@@ -19,7 +19,7 @@ import { loadExploreLog, saveExploreLog, type ExploreLog, type SavedSpotMeta } f
 import { NATIONAL_SPOTS, FALLBACK_SPOTS, HOME_SPOTS, type SpotInfo } from '../../services/homeSpots';
 import { loadPreferences, getRecommendedSpots } from '../../services/preferences';
 import { parseSearchIntentWithAi, type AiSearchIntent } from '../../services/aiService';
-import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobalLoading } from '../../services/mascotBridge';
+import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobalLoading, getIsMascotLanded } from '../../services/mascotBridge';
 import { withTimeout } from '../../lib/async';
 import { EmptyState, PhotoWithFallback, Chip } from '../../components/ui/primitives';
 import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
@@ -481,7 +481,7 @@ export default function HomeScreen() {
   const [aiSearchInput, setAiSearchInput] = useState('');
   const [isSearchByAi, setIsSearchByAi] = useState(false);
 
-  const [isBirdLanded, setIsBirdLanded] = useState(true);
+  const [isBirdLanded, setIsBirdLanded] = useState(() => getIsMascotLanded());
   const [isOnboardingActive, setIsOnboardingActive] = useState(false);
 
 
@@ -494,6 +494,7 @@ export default function HomeScreen() {
   }, [loading, searchLoading]);
 
   useEffect(() => {
+    setIsBirdLanded(getIsMascotLanded());
     setOnMascotLand(() => {
       setIsBirdLanded(true);
     });

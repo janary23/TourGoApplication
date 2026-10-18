@@ -127,23 +127,28 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
     }
   };
 
-  const handleSignOut = async () => {
-    confirmAction({
-      title: 'Log out',
-      message: 'Are you sure you want to log out of TourGo?',
-      confirmLabel: 'Log out',
-      destructive: true,
-    }).then(async (ok) => {
-      if (!ok) return;
-      onClose();
-      await signOut();
-    });
+  const handleSignOut = () => {
+    onClose();
+    setTimeout(async () => {
+      const ok = await confirmAction({
+        title: 'Log out',
+        message: 'Are you sure you want to log out of TourGo?',
+        confirmLabel: 'Log out',
+        cancelLabel: 'Cancel',
+        destructive: true,
+      });
+      if (ok) {
+        await signOut();
+        router.replace('/(auth)/login');
+      }
+    }, 200);
   };
 
-  if (!visible) return null;
+  if (!visible && !showWalkthrough && !showPreferences) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+    <>
+      <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <TouchableWithoutFeedback onPress={onClose}>
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} />
@@ -323,7 +328,10 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Travel Preferences"
                 subtitle="Pick what you love — powers recommendations"
                 colors={colors}
-                onPress={() => setShowPreferences(true)}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => setShowPreferences(true), 150);
+                }}
               />
 
               {/* Subscription */}
@@ -334,7 +342,7 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 colors={colors}
                 onPress={() => {
                   onClose();
-                  router.push('/subscription');
+                  setTimeout(() => router.push('/subscription'), 100);
                 }}
               />
 
@@ -344,7 +352,10 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
                 title="Replay App Tour"
                 subtitle="See the walkthrough again"
                 colors={colors}
-                onPress={() => setShowWalkthrough(true)}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => setShowWalkthrough(true), 150);
+                }}
               />
 
               {/* Help Center & FAQ */}
@@ -387,23 +398,24 @@ export default function ProfileSideDrawer({ visible, onClose }: ProfileSideDrawe
           </ScrollView>
         </Animated.View>
       </View>
-
-      <WalkthroughModal
-        colors={colors}
-        visible={showWalkthrough}
-        onComplete={async () => {
-          setShowWalkthrough(false);
-          await storageSet('tourgo_walkthrough_seen', 'true');
-        }}
-      />
-
-      <PreferencesOnboarding
-        colors={colors}
-        isDark={isDark}
-        visible={showPreferences}
-        onComplete={() => setShowPreferences(false)}
-      />
     </Modal>
+
+    <WalkthroughModal
+      colors={colors}
+      visible={showWalkthrough}
+      onComplete={async () => {
+        setShowWalkthrough(false);
+        await storageSet('tourgo_walkthrough_seen', 'true');
+      }}
+    />
+
+    <PreferencesOnboarding
+      colors={colors}
+      isDark={isDark}
+      visible={showPreferences}
+      onComplete={() => setShowPreferences(false)}
+    />
+  </>
   );
 }
 

@@ -476,7 +476,7 @@ export default function CreateTripPostModal({
             )}
 
             {/* ── Location Input & Quick Chips ── */}
-            {(showLocationInput || customLocation) && (
+            {!!(showLocationInput || customLocation) && (
               <View style={[styles.locationInputSection, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
                 <View style={styles.locationInputRow}>
                   <Ionicons name="location" size={18} color="#EF4444" style={{ marginRight: 8 }} />
@@ -574,7 +574,7 @@ export default function CreateTripPostModal({
               )}
 
               {/* Selected Trip Attachment Preview */}
-              {selectedTrip && (
+              {!!selectedTrip && (
                 <View style={[styles.attachmentPreview, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
                   <Image
                     source={{
@@ -644,7 +644,7 @@ export default function CreateTripPostModal({
               </View>
             </View>
 
-            {errorMsg && (
+            {!!errorMsg && (
               <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
                 <Ionicons name="alert-circle" size={16} color="#DC2626" />
                 <Text style={[styles.errorText, { color: '#B91C1C' }]}>{errorMsg}</Text>

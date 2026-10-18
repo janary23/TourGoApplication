@@ -117,6 +117,14 @@ export default function CommunityFeedView({
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
         }
       >
+        {/* Title Section (Consistent with Activity and My Trips) */}
+        <View style={{ marginTop: space.sm, marginBottom: space.md, paddingHorizontal: 4 }}>
+          <Text style={[T.largeTitle, { color: colors.text }]}>Community</Text>
+          <Text style={[T.subhead, { color: colors.textMuted, marginTop: space.xxs }]}>
+            Share itineraries, explore stories, and connect with travelers.
+          </Text>
+        </View>
+
         {/* ── 1. FACEBOOK-STYLE "WHAT'S ON YOUR MIND?" COMPOSER BOX ── */}
         <View style={[styles.composerCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.composerTopRow}>
@@ -280,7 +288,7 @@ export default function CommunityFeedView({
       />
 
       {/* ── CELEBRATION SUCCESS POPUP ── */}
-      {adoptedSuccess && (
+      {!!adoptedSuccess && (
         <Modal visible transparent animationType="fade">
           <View style={styles.celebrationOverlay}>
             <View style={[styles.celebrationCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>

@@ -25,6 +25,10 @@ function applyMascotLeave() {
   mascotLeaveCallback?.();
 }
 
+export function getIsMascotLanded(): boolean {
+  return mascotLanded;
+}
+
 // Wired up immediately at module load, not inside setOnMascotLand — the
 // flight animation must be able to record a landing even before any screen
 // has registered a listener at all.
