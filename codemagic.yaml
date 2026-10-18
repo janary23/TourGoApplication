@@ -1,0 +1,69 @@
+workflows:
+  ios-unsigned:
+    name: iOS Unsigned Build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Prepare environment configuration
+        script: |
+          if [ ! -f "src/config/env.ts" ]; then
+            echo "src/config/env.ts not found in git repository."
+            if [ -f "src/config/env.example.ts" ]; then
+              echo "Creating fallback src/config/env.ts from src/config/env.example.ts to ensure bundling succeeds..."
+              cp src/config/env.example.ts src/config/env.ts
+            fi
+          fi
+      - name: Install npm dependencies
+        script: |
+          npm install
+      - name: Expo prebuild iOS
+        script: |
+          npx expo prebuild --platform ios --clean
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+      - name: Build unsigned iOS app
+        script: |
+          WORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "Error: No .xcworkspace found in ios directory"
+            exit 1
+          fi
+          echo "Found workspace: $WORKSPACE"
+
+          SCHEME=$(python3 -c "import json, subprocess; out = json.loads(subprocess.check_output(['xcodebuild', '-workspace', '$WORKSPACE', '-list', '-json'])); print(out['workspace']['schemes'][0])" 2>/dev/null)
+          if [ -z "$SCHEME" ]; then
+            SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          fi
+          echo "Detected scheme: $SCHEME"
+
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Package unsigned IPA
+        script: |
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" -maxdepth 1 | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: No .app file found in build products"
+            exit 1
+          fi
+          echo "Packaging application from: $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr app-unsigned.ipa Payload
+          rm -rf Payload
+          echo "Generated app-unsigned.ipa successfully!"
+    artifacts:
+      - app-unsigned.ipa

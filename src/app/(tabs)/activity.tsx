@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, Image, RefreshControl, Animated, Platform } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Image, RefreshControl, Animated, Platform, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { getTrips } from '../../services/tripService';
 import { supabase } from '../../services/supabase';
 import ActivityItemCard from '../../components/activity/ActivityItemCard';
+import ProfileSideDrawer from '../../components/profile/ProfileSideDrawer';
 import { EmptyState, Chip } from '../../components/ui/primitives';
 import { space, radius, type as T } from '../../components/ui/tokens';
 
@@ -145,6 +147,8 @@ function ActivitySkeletonLoader({ colors }: { colors: any }) {
 export default function ActivityScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { profile } = useAuth();
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [activities, setActivities] = useState<FeedItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | FeedItem['type']>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -513,13 +517,34 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      {/* Branded App Header Row (Borderless & Minimalist) */}
-      <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
-        <View style={styles.headerBrandContainer}>
-          <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
-          <Text style={[styles.appName, { color: colors.brand }]}>
-            TourGo
-          </Text>
+      {/* Branded App Header Row (Consistent with Trips layout) */}
+      <View style={[styles.headerRow, { borderBottomWidth: 0, justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Header Profile Button -> Opens Profile as Left Side Tab */}
+          <TouchableOpacity
+            onPress={() => setShowProfileDrawer(true)}
+            style={[styles.headerProfileBtn, { borderColor: colors.brand }]}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={{
+                uri:
+                  profile?.avatar_url ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+              }}
+              style={styles.headerProfileAvatar}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.headerBrandContainer}>
+            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+          </View>
+        </View>
+
+        {/* Right side indicator: Activity badge */}
+        <View style={[styles.badgePill, { backgroundColor: colors.brandLight }]}>
+          <Text style={[styles.badgePillText, { color: colors.brand }]}>Activity</Text>
         </View>
       </View>
 
@@ -587,6 +612,12 @@ export default function ActivityScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Profile Side Tab / Drawer */}
+      <ProfileSideDrawer
+        visible={showProfileDrawer}
+        onClose={() => setShowProfileDrawer(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -598,22 +629,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
   headerBrandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerLogoImage: {
-    width: 30,
-    height: 30,
-    marginRight: 8,
+    width: 26,
+    height: 26,
+    marginRight: 6,
     resizeMode: 'contain',
   },
   appName: {
     ...T.title,
-    fontWeight: '800',
     letterSpacing: -0.5,
+  },
+  headerProfileBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  headerProfileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  badgePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgePillText: {
+    ...T.microStrong,
   },
   categoryChipsContainer: {
     paddingVertical: 6,

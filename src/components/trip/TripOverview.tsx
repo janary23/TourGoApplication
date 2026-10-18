@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Animated, Easing, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   toggleCheckIn as dbToggleCheckIn,
@@ -100,6 +101,7 @@ export default function TripOverview({
   trip, currentUserName, tripPhase, colors, isDark: isDarkProp, isOrganizer, isScrapbook: isScrapbookProp,
   handleShareCode, goToPlan, goToPeople, goToMoney, goToMore, loadTrip,
 }: TripOverviewProps) {
+  const router = useRouter();
   const { isDark: themeIsDark } = useTheme();
   const isDark = isDarkProp ?? themeIsDark;
   const sc = stateColor(isDark);
@@ -761,6 +763,15 @@ export default function TripOverview({
                         {sharingFacebookImage ? 'Preparing image…' : 'Share to Facebook'}
                       </Text>
                     </TouchableOpacity>
+
+                    {/* In-App Social Share */}
+                    <Button
+                      label="Share to Community Feed"
+                      icon="earth"
+                      variant="primary"
+                      onPress={() => router.push(`/community-feed?shareTripId=${trip.id}` as any)}
+                      fullWidth
+                    />
 
                     {/* General Share */}
                     <Button

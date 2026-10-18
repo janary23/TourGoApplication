@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/TourGoLogo.png",
     "splash": {
       "image": "./assets/images/TourGoLogo.png",
       "resizeMode": "contain",
@@ -12,9 +13,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tourgo.app",
+      "bundleIdentifier": "com.janary23.tourgo",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\"."
+        "NSLocationWhenInUseUsageDescription": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\".",
+        "NSCameraUsageDescription": "TourGo needs access to your camera to take photos for your profile, trip expenses, and community posts.",
+        "NSPhotoLibraryUsageDescription": "TourGo needs access to your photos to select and save images for your profile, trip expenses, and community posts.",
+        "NSPhotoLibraryAddUsageDescription": "TourGo needs permission to save trip photos to your device."
       }
     },
     "android": {
@@ -31,6 +35,25 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "TourGo uses your location to show nearby places on the map and to share your position with your trip group when you tap \"Share my location\"."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TourGo needs access to your camera to take photos for your profile, trip expenses, and community posts."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TourGo needs access to your photos to select and save images for your profile, trip expenses, and community posts."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "TourGo needs access to your photo library to save and view trip photos.",
+          "savePhotosPermission": "TourGo needs permission to save trip photos to your device."
         }
       ],
       "expo-web-browser"

@@ -94,7 +94,7 @@ const TABS = [
   { name: 'explore', label: 'Explore', icon: 'compass', iconOutline: 'compass-outline' },
   { name: 'trips', label: 'Trips', icon: 'briefcase', iconOutline: 'briefcase-outline' },
   { name: 'activity', label: 'Activity', icon: 'notifications', iconOutline: 'notifications-outline' },
-  { name: 'profile', label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
+  { name: 'community', label: 'Community', icon: 'people', iconOutline: 'people-outline' },
 ];
 
 function CustomTabBar({ state, descriptors, navigation }: CustomTabBarProps) {
@@ -112,36 +112,44 @@ function CustomTabBar({ state, descriptors, navigation }: CustomTabBarProps) {
         },
       ]}
     >
-      {state.routes.map((route, index) => {
-        const isFocused = state.index === index;
-        const tab = TABS.find(t => t.name === route.name) ?? TABS[0];
+      {state.routes
+        .filter((route) => {
+          const options = descriptors[route.key]?.options as any;
+          if (options && options.href === null) return false;
+          return TABS.some((t) => t.name === route.name);
+        })
+        .map((route) => {
+          const index = state.routes.findIndex((r) => r.key === route.key);
+          const isFocused = state.index === index;
+          const tab = TABS.find((t) => t.name === route.name);
+          if (!tab) return null;
 
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
 
-        const onLongPress = () => {
-          navigation.emit({ type: 'tabLongPress', target: route.key });
-        };
+          const onLongPress = () => {
+            navigation.emit({ type: 'tabLongPress', target: route.key });
+          };
 
-        return (
-          <TabButton
-            key={route.key}
-            label={tab.label}
-            iconName={isFocused ? tab.icon : tab.iconOutline}
-            isFocused={isFocused}
-            onPress={onPress}
-            onLongPress={onLongPress}
-          />
-        );
-      })}
+          return (
+            <TabButton
+              key={route.key}
+              label={tab.label}
+              iconName={isFocused ? tab.icon : tab.iconOutline}
+              isFocused={isFocused}
+              onPress={onPress}
+              onLongPress={onLongPress}
+            />
+          );
+        })}
     </View>
   );
 }
@@ -208,7 +216,8 @@ export default function TabLayout() {
       <Tabs.Screen name="explore" options={{ title: 'Explore', headerShown: false }} />
       <Tabs.Screen name="trips" options={{ title: 'Trips', headerShown: false }} />
       <Tabs.Screen name="activity" options={{ title: 'Activity', headerShown: false }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', headerShown: false }} />
+      <Tabs.Screen name="community" options={{ title: 'Community', headerShown: false }} />
+      <Tabs.Screen name="profile" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }

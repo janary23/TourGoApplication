@@ -10,11 +10,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getTrips, TripWithRole, getTripById } from '../../../services/tripService';
 import { isTripCompleted, deriveTripStatus } from '../../../services/tripStatus';
 import { useTheme } from '../../../context/ThemeContext';
+import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/ui/Button';
 import { subscribeOnboardingActive } from '../../../services/mascotBridge';
 import FeaturedTripCard from '../../../components/trips/FeaturedTripCard';
 import OtherTripCard from '../../../components/trips/OtherTripCard';
 import CalendarWidget from '../../../components/home/CalendarWidget';
+import ProfileSideDrawer from '../../../components/profile/ProfileSideDrawer';
 import { space, radius, type as T, shadow } from '../../../components/ui/tokens';
 import { EmptyState } from '../../../components/ui/primitives';
 import { fetchLiveTripForecast, type RealTripForecast } from '../../../services/weatherService';
@@ -723,6 +725,8 @@ function ForecastBody({
 export default function TripsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { profile, session } = useAuth();
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [isOnboardingActive, setIsOnboardingActive] = useState(false);
   const [trips, setTrips] = useState<TripWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -951,10 +955,29 @@ export default function TripsScreen() {
       {/* Top bar — brand on the left, join + create on the right */}
       <View style={{ backgroundColor: colors.background, zIndex: 10 }}>
         <View style={styles.headerRow}>
-          <View style={styles.headerBrandRow}>
-            <Image source={require('../../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
-            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Header Profile Button -> Opens Profile as Left Side Tab */}
+            <TouchableOpacity
+              onPress={() => setShowProfileDrawer(true)}
+              style={[styles.headerProfileBtn, { borderColor: colors.brand }]}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{
+                  uri:
+                    profile?.avatar_url ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+                }}
+                style={styles.headerProfileAvatar}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.headerBrandRow}>
+              <Image source={require('../../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+              <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+            </View>
           </View>
+
           <View style={styles.headerRight}>
             <InteractiveButton onPress={() => router.push('/trip/join')} style={[styles.smallActionButton, { backgroundColor: colors.brandLight, borderColor: colors.brandLight }]}>
               <Ionicons name="enter-outline" size={14} color={colors.brand} style={{ marginRight: 4 }} />
@@ -1277,6 +1300,12 @@ export default function TripsScreen() {
           </View>
         </Modal>
       )}
+
+      {/* Profile Side Tab / Drawer */}
+      <ProfileSideDrawer
+        visible={showProfileDrawer}
+        onClose={() => setShowProfileDrawer(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1288,6 +1317,18 @@ const styles = StyleSheet.create({
   headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
   appName: { ...T.title, letterSpacing: -0.5 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerProfileBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    marginLeft: 2,
+  },
+  headerProfileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
   smallActionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 32, paddingHorizontal: space.md, borderRadius: radius.sm },
   smallActionButtonText: { ...T.label },
   listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },

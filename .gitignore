@@ -11,6 +11,16 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Native prebuild output (managed workflow)
+ios/
+android/
+
+# Build artifacts
+build/
+Payload/
+*.ipa
+*.xcarchive
+
 # Credentials and Local Configs
 src/config/env.ts
 test_photos_only.js

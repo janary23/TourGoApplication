@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { TripFeatureSettings } from './mockData';
 import { GeneratedItineraryItem } from './aiService';
 import { getPlaceImageUrl } from './destinations';
+import { storageGet } from './storage';
 
 export interface TripWithRole {
   id: string;
@@ -107,7 +108,7 @@ export async function getTrips(): Promise<TripWithRole[]> {
 
     if (!fallbackData) return [];
 
-    return fallbackData
+    let fallbackDataList = fallbackData
       .map(t => ({
         id: t.id,
         title: t.title,
@@ -122,9 +123,23 @@ export async function getTrips(): Promise<TripWithRole[]> {
         created_by: t.created_by,
         created_at: t.created_at,
       }));
+
+    try {
+      const rawLocal = await storageGet('tourgo_local_adopted_trips');
+      if (rawLocal) {
+        const localTrips = JSON.parse(rawLocal);
+        if (Array.isArray(localTrips)) {
+          const ids = new Set(fallbackDataList.map(t => t.id));
+          const missing = localTrips.filter((t: any) => !ids.has(t.id));
+          fallbackDataList = [...missing, ...fallbackDataList];
+        }
+      }
+    } catch {}
+
+    return fallbackDataList;
   }
 
-  return (data || [])
+  let tripsList = (data || [])
     .filter(t => t.trip_members?.some((m: any) => m.user_id === uid))
     .map(t => {
       const myMembership = t.trip_members?.find((m: any) => m.user_id === uid);
@@ -144,6 +159,20 @@ export async function getTrips(): Promise<TripWithRole[]> {
         created_at: t.created_at,
       };
     });
+
+  try {
+    const rawLocal = await storageGet('tourgo_local_adopted_trips');
+    if (rawLocal) {
+      const localTrips = JSON.parse(rawLocal);
+      if (Array.isArray(localTrips)) {
+        const ids = new Set(tripsList.map(t => t.id));
+        const missing = localTrips.filter((t: any) => !ids.has(t.id));
+        tripsList = [...missing, ...tripsList];
+      }
+    }
+  } catch {}
+
+  return tripsList;
 }
 
 /** Fetch a full trip with all related data (features, members, itinerary, expenses, etc.). */
@@ -177,9 +206,74 @@ export async function getTripById(tripId: string): Promise<Trip> {
     supabase.from('member_locations').select('*').eq('trip_id', tripId),
   ]);
 
-  if (tripRes.error) throw new Error(`Trip load failed: ${tripRes.error.message}`);
-  if (membersRes.error) throw new Error(`Members load failed: ${membersRes.error.message}`);
-  if (!tripRes.data) throw new Error('Trip not found');
+  if (tripRes.error || !tripRes.data) {
+    try {
+      const rawLocal = await storageGet('tourgo_local_adopted_trips');
+      if (rawLocal) {
+        const localTrips = JSON.parse(rawLocal);
+        const match = localTrips.find((t: any) => t.id === tripId);
+        if (match) {
+          return {
+            id: match.id,
+            title: match.title,
+            destination: match.destination,
+            startDate: match.startDate,
+            endDate: match.endDate,
+            code: match.code,
+            image: match.image,
+            role: match.role || 'organizer',
+            status: match.status || 'upcoming',
+            trip_status: match.trip_status || 'upcoming',
+            geofenceRadiusMeters: null,
+            features: {
+              itinerary: true, split_expenses: true, attendance: true,
+              guardian_mode: false, announcements: true, documents: true,
+              polls: true, group_chat: true, checklist: true,
+            },
+            members: [{
+              id: 'local-member-1',
+              userId: uid,
+              name: 'Harry Sevilla',
+              email: 'harry@example.com',
+              avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+              role: 'organizer',
+            }],
+            itinerary: (match.itinerary || []).map((it: any, idx: number) => ({
+              id: `itin-${idx}`,
+              day_index: it.dayIndex ?? 0,
+              time_label: it.time || '09:00 AM',
+              title: it.title || `Stop ${idx + 1}`,
+              description: it.description || '',
+              location: it.location || match.destination,
+            })),
+            expenses: [],
+            announcements: [{
+              id: 'ann-1',
+              title: 'Adopted Itinerary',
+              content: `Welcome to ${match.title}! All itinerary stops have been imported from the community.`,
+              is_important: true,
+              created_at: new Date().toISOString(),
+              profiles: { name: 'TourGo Pioneer', avatar_url: '' },
+            }],
+            polls: [],
+            chatMessages: [],
+            checklist: (match.checklist || []).map((c: any, idx: number) => ({
+              id: `chk-${idx}`,
+              text: typeof c === 'string' ? c : c.text,
+              completed: false,
+              assignedTo: null,
+              assignedToId: null,
+              scope: 'group',
+            })),
+            documents: [],
+          };
+        }
+      }
+    } catch {}
+
+    if (tripRes.error) throw new Error(`Trip load failed: ${tripRes.error.message}`);
+    throw new Error('Trip not found');
+  }
 
   const trip = tripRes.data;
   const features: TripFeatureSettings = featuresRes.data

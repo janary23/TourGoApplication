@@ -669,6 +669,16 @@ export default function TripScrapbookView({
               fullWidth
             />
             <Button
+              label="Share to Community Feed"
+              variant="primary"
+              icon="earth"
+              onPress={() => {
+                setShareOpen(false);
+                router.push(`/community-feed?shareTripId=${trip.id}` as any);
+              }}
+              fullWidth
+            />
+            <Button
               label="Share to Facebook"
               variant="secondary"
               icon="logo-facebook"

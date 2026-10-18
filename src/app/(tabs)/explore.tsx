@@ -32,6 +32,8 @@ import type * as MediaLibraryType from 'expo-media-library';
 const MediaLibrary: typeof MediaLibraryType | null =
   Platform.OS !== 'web' ? require('expo-media-library') : null;
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import ProfileSideDrawer from '../../components/profile/ProfileSideDrawer';
 import { validateProvinceMapping } from '../../lib/provinceValidation';
 import { PHILIPPINES_PROVINCES } from '../../services/philippinesMapData';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -130,6 +132,8 @@ const getProvinceImage = (provinceId: string, region: string) => {
 export default function ExploreScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { profile } = useAuth();
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const params = useLocalSearchParams<{ selectProvinceId?: string; tab?: string }>();
 
@@ -689,10 +693,35 @@ export default function ExploreScreen() {
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
 
         {/* Branded App Header Row */}
-        <View style={[styles.headerRow, { borderBottomWidth: 0 }]}>
-          <View style={styles.headerBrandContainer}>
-            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
-            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+        <View style={[styles.headerRow, { borderBottomWidth: 0, justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Header Profile Button -> Opens Profile as Left Side Tab */}
+            <TouchableOpacity
+              onPress={() => setShowProfileDrawer(true)}
+              style={[styles.headerProfileBtn, { borderColor: colors.brand }]}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{
+                  uri:
+                    profile?.avatar_url ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+                }}
+                style={styles.headerProfileAvatar}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.headerBrandContainer}>
+              <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+              <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+            </View>
+          </View>
+
+          <View style={[styles.headerRightBadge, { backgroundColor: colors.brandLight }]}>
+            <Ionicons name="map-outline" size={13} color={colors.brand} style={{ marginRight: 4 }} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>
+              {totalRegionsExplored} Regions
+            </Text>
           </View>
         </View>
 
@@ -1902,6 +1931,11 @@ export default function ExploreScreen() {
           </SafeAreaProvider>
         </Modal>
 
+        {/* Profile Side Tab / Drawer */}
+        <ProfileSideDrawer
+          visible={showProfileDrawer}
+          onClose={() => setShowProfileDrawer(false)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -1910,10 +1944,28 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   screen: { flex: 1 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 2 },
   headerBrandContainer: { flexDirection: 'row', alignItems: 'center' },
-  headerLogoImage: { width: 30, height: 30, marginRight: 8, resizeMode: 'contain' },
+  headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
   appName: { ...T.title, letterSpacing: -0.5 },
+  headerProfileBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  headerProfileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  headerRightBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   statBox: { flex: 1, borderRadius: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   noMatchingText: { textAlign: 'center', width: '100%', ...T.label, marginVertical: 40 },

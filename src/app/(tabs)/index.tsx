@@ -23,6 +23,7 @@ import { setOnMascotLand, setOnMascotLeave, subscribeOnboardingActive, setGlobal
 import { withTimeout } from '../../lib/async';
 import { EmptyState, PhotoWithFallback, Chip } from '../../components/ui/primitives';
 import ActiveDayPlanFloatingWidget from '../../components/home/ActiveDayPlanFloatingWidget';
+import ProfileSideDrawer from '../../components/profile/ProfileSideDrawer';
 
 
 // react-native-web has no native animated module, so `useNativeDriver: true`
@@ -424,6 +425,7 @@ export default function HomeScreen() {
   const { colors, isDark } = useTheme();
   const { profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
 
   const subPageScrollRef = useRef<ScrollView>(null);
   const sectionYPositions = useRef<Record<string, number>>({});
@@ -1188,24 +1190,34 @@ export default function HomeScreen() {
     <View style={{ flex: 1 }}>
       <View style={{ backgroundColor: colors.background, zIndex: 10 }}>
         <View style={styles.headerRow}>
-          <View style={styles.headerBrandRow}>
-            <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
-            <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Header Profile Button -> Opens Profile as Left Side Tab */}
+            <TouchableOpacity
+              onPress={() => setShowProfileDrawer(true)}
+              style={[styles.headerProfileBtn, { borderColor: colors.brand }]}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{
+                  uri:
+                    profile?.avatar_url ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+                }}
+                style={styles.headerProfileAvatar}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.headerBrandRow}>
+              <Image source={require('../../../assets/images/TourGoLogo.png')} style={[styles.headerLogoImage, { tintColor: colors.brand }]} />
+              <Text style={[styles.appName, { color: colors.brand }]}>TourGo</Text>
+            </View>
           </View>
+
           <View style={styles.headerRight}>
             <InteractiveButton onPress={() => setLocationPickerVisible(true)} style={[styles.headerLocationPill, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
               <Ionicons name="location-sharp" size={13} color={colors.brand} style={{ marginRight: 2 }} />
               <Text style={[styles.headerLocationText, { color: colors.textSecondary }]} numberOfLines={1}>{locationName}</Text>
               <Ionicons name="chevron-down" size={11} color={colors.textMuted} />
-            </InteractiveButton>
-            <InteractiveButton onPress={() => router.push('/profile')} style={[styles.headerAvatarBtn, { backgroundColor: colors.brandLight, borderColor: colors.brand }]}>
-              {profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatarImage} />
-              ) : (
-                <Text style={[styles.headerAvatarText, { color: colors.brand }]}>
-                  {profile?.name ? profile.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : 'TG'}
-                </Text>
-              )}
             </InteractiveButton>
           </View>
         </View>
@@ -1850,6 +1862,12 @@ export default function HomeScreen() {
 
       {/* ── ACTIVE 1-DAY ITINERARY FLOATING WIDGET ── */}
       <ActiveDayPlanFloatingWidget />
+
+      {/* Profile Side Tab / Drawer */}
+      <ProfileSideDrawer
+        visible={showProfileDrawer}
+        onClose={() => setShowProfileDrawer(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1860,6 +1878,17 @@ const styles = StyleSheet.create({
   headerBrandRow: { flexDirection: 'row', alignItems: 'center' },
   headerLogoImage: { width: 26, height: 26, marginRight: 6, resizeMode: 'contain' },
   appName: { ...T.title, letterSpacing: -0.5 },
+  headerProfileBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  headerProfileAvatar: {
+    width: '100%',
+    height: '100%',
+  },
   headerLocationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, maxWidth: 160 },
   headerLocationText: { ...T.label, maxWidth: 100 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
