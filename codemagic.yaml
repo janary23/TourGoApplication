@@ -28,18 +28,21 @@ workflows:
           cd ios && pod install
       - name: Build and package unsigned iOS IPA
         script: |
-          WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
+          WORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
           if [ -z "$WORKSPACE" ]; then
             echo "Error: No .xcworkspace found in ios directory"
             exit 1
           fi
           echo "Found workspace: $WORKSPACE"
 
-          SCHEME=$(python3 -c "import json, subprocess; out = json.loads(subprocess.check_output(['xcodebuild', '-workspace', '$WORKSPACE', '-list', '-json'])); print(out['workspace']['schemes'][0])" 2>/dev/null)
-          if [ -z "$SCHEME" ]; then
-            SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          APP_PROJECT=$(find ios -maxdepth 1 -name "*.xcodeproj" | head -n 1)
+          if [ -z "$APP_PROJECT" ]; then
+            echo "Error: No .xcodeproj found in ios directory"
+            exit 1
           fi
-          echo "Detected scheme: $SCHEME"
+          SCHEME=$(basename "$APP_PROJECT" .xcodeproj)
+          echo "Application Project: $APP_PROJECT"
+          echo "Building Scheme: $SCHEME"
 
           BUILD_DIR="$PWD/build"
           rm -rf "$BUILD_DIR"
@@ -57,14 +60,17 @@ workflows:
             build
 
           echo "Searching for compiled .app bundle..."
-          APP_PATH=$(find "$BUILD_DIR" ~/Library/Developer/Xcode/DerivedData -name "*.app" 2>/dev/null | grep "Release-iphoneos" | grep -v "/Pods" | head -n 1)
+          APP_PATH=$(find "$BUILD_DIR" -name "${SCHEME}.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            APP_PATH=$(find "$BUILD_DIR" ~/Library/Developer/Xcode/DerivedData -name "*.app" 2>/dev/null | grep -v "/Pods" | head -n 1)
+            APP_PATH=$(find "$BUILD_DIR" -name "*.app" -type d | grep "Release-iphoneos" | head -n 1)
+          fi
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find "$BUILD_DIR" ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d 2>/dev/null | head -n 1)
           fi
 
           if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not locate .app file. Searching build and DerivedData directories:"
-            find "$BUILD_DIR" ~/Library/Developer/Xcode/DerivedData -type d 2>/dev/null | head -n 100
+            echo "Error: Could not locate .app file. Listing build directory contents:"
+            find "$BUILD_DIR" -maxdepth 4 -ls 2>/dev/null || true
             exit 1
           fi
 
