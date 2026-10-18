@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/images/TourGoLogo.png",
+    "icon": "./assets/images/TourGoAppIcon.png",
     "splash": {
       "image": "./assets/images/TourGoLogo.png",
       "resizeMode": "contain",
